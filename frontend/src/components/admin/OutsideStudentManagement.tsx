@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Trash2 } from 'lucide-react';
+import { Search, Plus, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { HostelOutsideStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -41,7 +41,7 @@ export const OutsideStudentManagement: React.FC = () => {
   const fetchData = async () => {
     try {
       const [studentsRes, hostelsRes] = await Promise.all([
-        apiClient.get<HostelOutsideStudent[]>('/student/outside-students/'),
+        apiClient.get<HostelOutsideStudent[]>('/hms/outside-students/'),
         apiClient.get<Hostel[]>('/hms/hostels/'),
       ]);
       setStudents(studentsRes.data);
@@ -55,7 +55,7 @@ export const OutsideStudentManagement: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await apiClient.post('/student/outside-students/', {
+      await apiClient.post('/hms/outside-students/', {
         name,
         usn,
         outside_college_name: college,
@@ -78,10 +78,21 @@ export const OutsideStudentManagement: React.FC = () => {
     }
   };
 
+  const handleToggleDues = async (student: HostelOutsideStudent) => {
+    try {
+      await apiClient.patch(`/hms/outside-students/${student.id}/`, {
+        dues_cleared: !(student as any).dues_cleared,
+      });
+      fetchData();
+    } catch (err) {
+      alert('Failed to toggle fee dues');
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to remove this outside resident record?')) return;
     try {
-      await apiClient.delete(`/student/outside-students/${id}/`);
+      await apiClient.delete(`/hms/outside-students/${id}/`);
       fetchData();
     } catch (err) {
       alert('Failed to delete outside student');
@@ -133,50 +144,67 @@ export const OutsideStudentManagement: React.FC = () => {
                 <th className="py-3.5 px-4">Course</th>
                 <th className="py-3.5 px-4">Contact Phone</th>
                 <th className="py-3.5 px-4">Allotted Room</th>
+                <th className="py-3.5 px-4">Guest Dues</th>
                 <th className="py-3.5 pr-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400">
+                  <td colSpan={7} className="py-10 text-center text-slate-400">
                     No outside students registered yet.
                   </td>
                 </tr>
               ) : (
-                filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-4 pl-6 font-semibold text-slate-800">
-                      <div>{s.name}</div>
-                      <div className="text-[11px] font-normal text-slate-400">ID: {s.usn}</div>
-                    </td>
-                    <td className="py-4 px-4 text-xs font-semibold text-slate-700">
-                      {s.outside_college_name}
-                    </td>
-                    <td className="py-4 px-4 text-xs text-slate-600">
-                      {s.outside_course_name}
-                    </td>
-                    <td className="py-4 px-4 text-xs font-mono text-slate-700">
-                      {s.phone}
-                    </td>
-                    <td className="py-4 px-4 text-xs">
-                      {s.room ? (
-                        <span className="font-bold text-slate-800">Room {s.room_no || 'Guest'}</span>
-                      ) : (
-                        <span className="text-slate-400 italic">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="py-4 pr-6 text-right">
-                      <button
-                        onClick={() => handleDelete(s.id)}
-                        className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
-                        title="Delete record"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((s) => {
+                  const isPaid = (s as any).dues_cleared;
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-4 pl-6 font-semibold text-slate-800">
+                        <div>{s.name}</div>
+                        <div className="text-[11px] font-normal text-slate-400">ID: {s.usn}</div>
+                      </td>
+                      <td className="py-4 px-4 text-xs font-semibold text-slate-700">
+                        {s.outside_college_name}
+                      </td>
+                      <td className="py-4 px-4 text-xs text-slate-600">
+                        {s.outside_course_name}
+                      </td>
+                      <td className="py-4 px-4 text-xs font-mono text-slate-700">
+                        {s.phone}
+                      </td>
+                      <td className="py-4 px-4 text-xs">
+                        {s.room ? (
+                          <span className="font-bold text-slate-800">Room {s.room_no || 'Guest'}</span>
+                        ) : (
+                          <span className="text-slate-400 italic">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <button
+                          onClick={() => handleToggleDues(s)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                            isPaid
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                          }`}
+                        >
+                          {isPaid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                          <span>{isPaid ? 'PAID' : 'PENDING'}</span>
+                        </button>
+                      </td>
+                      <td className="py-4 pr-6 text-right">
+                        <button
+                          onClick={() => handleDelete(s.id)}
+                          className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                          title="Delete record"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -215,13 +243,15 @@ export const OutsideStudentManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone (10 Digits)</label>
                   <input
-                    type="text"
+                    type="tel"
                     required
+                    maxLength={10}
+                    pattern="[0-9]{10}"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98..."
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="9876543210"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
                   />
                 </div>

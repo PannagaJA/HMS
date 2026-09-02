@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Download } from 'lucide-react';
 import type { HostelStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -37,7 +37,7 @@ export const StudentManagement: React.FC = () => {
   const fetchData = async () => {
     try {
       const [studentsRes, hostelsRes] = await Promise.all([
-        apiClient.get<HostelStudent[]>('/student/students/'),
+        apiClient.get<HostelStudent[]>('/hms/students/'),
         apiClient.get<Hostel[]>('/hms/hostels/'),
       ]);
       setStudents(studentsRes.data);
@@ -61,7 +61,7 @@ export const StudentManagement: React.FC = () => {
     if (!selectedStudent || !selectedRoomId) return;
 
     try {
-      await apiClient.post('/student/students/allocate_room/', {
+      await apiClient.post('/hms/students/allocate_room/', {
         student_id: selectedStudent.id,
         room_id: Number(selectedRoomId),
         bed_number: bedNo,
@@ -76,11 +76,15 @@ export const StudentManagement: React.FC = () => {
   const handleVacate = async (studentId: number) => {
     if (!confirm('Are you sure you want to vacate this student from their assigned room?')) return;
     try {
-      await apiClient.post(`/student/students/${studentId}/vacate_room/`);
+      await apiClient.post(`/hms/students/${studentId}/vacate_room/`);
       fetchData();
     } catch (err) {
       alert('Failed to vacate student');
     }
+  };
+
+  const handleExportPDF = () => {
+    window.print();
   };
 
   const filteredStudents = students.filter((s) => {
@@ -98,6 +102,13 @@ export const StudentManagement: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Resident Directory</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage student enrollments, room allotments, and resident records</p>
         </div>
+        <button
+          onClick={handleExportPDF}
+          className="px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Export Resident Roster</span>
+        </button>
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">

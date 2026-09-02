@@ -1,8 +1,9 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
-import { Login } from './components/auth/Login';
+import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { Login } from './components/auth/Login';
+
+// Admin Pages
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { HostelManagement } from './components/admin/HostelManagement';
 import { RoomManagement } from './components/admin/RoomManagement';
@@ -13,64 +14,71 @@ import { MenuManagement } from './components/admin/MenuManagement';
 import { MessBillingManagement } from './components/admin/MessBillingManagement';
 import { IssueTracking } from './components/admin/IssueTracking';
 import { VisitorLogsManagement } from './components/admin/VisitorLogsManagement';
+import { HMSProfile } from './components/admin/HMSProfile';
+
+// Warden Pages
 import { WardenGatePassManagement } from './components/warden/WardenGatePassManagement';
+
+// Security Pages
 import { GatePassScanner } from './components/security/GatePassScanner';
+
+// Student Pages
 import { StudentDashboard } from './components/student/StudentDashboard';
 
-export const App: React.FC = () => {
-  const { user } = useAuth();
-
-  const getDefaultRedirect = () => {
-    if (!user) return <Navigate to="/login" replace />;
-    if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
-    if (user.role === 'WARDEN') return <Navigate to="/warden/dashboard" replace />;
-    if (user.role === 'SECURITY') return <Navigate to="/security/scanner" replace />;
-    return <Navigate to="/student/dashboard" replace />;
-  };
-
+function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={user ? getDefaultRedirect() : <Login />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Auth Route */}
+          <Route path="/login" element={<Login />} />
 
-        {/* HMS Admin Suite */}
-        <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/hostels" element={<HostelManagement />} />
-          <Route path="/admin/rooms" element={<RoomManagement />} />
-          <Route path="/admin/students" element={<StudentManagement />} />
-          <Route path="/admin/outside-students" element={<OutsideStudentManagement />} />
-          <Route path="/admin/staff" element={<StaffManagement />} />
-          <Route path="/admin/menu" element={<MenuManagement />} />
-          <Route path="/admin/billing" element={<MessBillingManagement />} />
-          <Route path="/admin/issues" element={<IssueTracking />} />
-          <Route path="/admin/gatepass" element={<WardenGatePassManagement />} />
-          <Route path="/admin/visitors" element={<VisitorLogsManagement />} />
-        </Route>
+          {/* Root Redirect to Login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Warden Portal */}
-        <Route element={<ProtectedRoute allowedRoles={['WARDEN', 'ADMIN']} />}>
-          <Route path="/warden/dashboard" element={<AdminDashboard />} />
-          <Route path="/warden/gatepass" element={<WardenGatePassManagement />} />
-          <Route path="/warden/rooms" element={<RoomManagement />} />
-        </Route>
+          {/* Admin Protected Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/hostels" element={<HostelManagement />} />
+            <Route path="/admin/rooms" element={<RoomManagement />} />
+            <Route path="/admin/students" element={<StudentManagement />} />
+            <Route path="/admin/outside-students" element={<OutsideStudentManagement />} />
+            <Route path="/admin/staff" element={<StaffManagement />} />
+            <Route path="/admin/menu" element={<MenuManagement />} />
+            <Route path="/admin/billing" element={<MessBillingManagement />} />
+            <Route path="/admin/issues" element={<IssueTracking />} />
+            <Route path="/admin/gatepass" element={<WardenGatePassManagement />} />
+            <Route path="/admin/visitors" element={<VisitorLogsManagement />} />
+            <Route path="/admin/profile" element={<HMSProfile />} />
+          </Route>
 
-        {/* Security Gate Terminal */}
-        <Route element={<ProtectedRoute allowedRoles={['SECURITY', 'ADMIN']} />}>
-          <Route path="/security/scanner" element={<GatePassScanner />} />
-        </Route>
+          {/* Warden Protected Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['WARDEN']} />}>
+            <Route path="/warden/dashboard" element={<AdminDashboard />} />
+            <Route path="/warden/passes" element={<WardenGatePassManagement />} />
+            <Route path="/warden/issues" element={<IssueTracking />} />
+            <Route path="/warden/profile" element={<HMSProfile />} />
+          </Route>
 
-        {/* Student Resident Portal */}
-        <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
-          <Route path="/student/dashboard" element={<StudentDashboard />} />
-        </Route>
+          {/* Security Guard Protected Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['SECURITY']} />}>
+            <Route path="/security/scanner" element={<GatePassScanner />} />
+            <Route path="/security/visitors" element={<VisitorLogsManagement />} />
+            <Route path="/security/profile" element={<HMSProfile />} />
+          </Route>
 
-        {/* Root Fallback */}
-        <Route path="*" element={getDefaultRedirect()} />
-      </Routes>
-    </BrowserRouter>
+          {/* Student Resident Protected Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
+            <Route path="/student/dashboard" element={<StudentDashboard />} />
+            <Route path="/student/profile" element={<HMSProfile />} />
+          </Route>
+
+          {/* Catch-all Wildcard Route */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
-};
+}
 
 export default App;

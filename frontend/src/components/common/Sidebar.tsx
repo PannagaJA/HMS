@@ -1,125 +1,159 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Building2, 
-  BedDouble, 
-  Users, 
-  UserCheck, 
-  UtensilsCrossed, 
-  CreditCard, 
-  Wrench, 
-  ShieldCheck, 
-  KeyRound, 
+import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Building2,
+  BedDouble,
+  Users,
+  UserPlus,
+  UserCheck,
+  UtensilsCrossed,
+  Receipt,
+  Wrench,
+  Ticket,
+  ClipboardList,
+  ShieldCheck,
+  QrCode,
+  User,
   LogOut,
-  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { NavLink, useNavigate } from 'react-router-dom';
 
 export const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const role = user?.role || 'ADMIN';
 
-  const renderNavSection = (title: string, items: { path: string; label: string; icon: React.ReactNode }[]) => (
-    <div className="mb-5">
-      <div className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-        {title}
-      </div>
-      <div className="space-y-1">
-        {items.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) =>
-              `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition-all duration-150 ${
-                isActive
-                  ? 'bg-[#0D3833] text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                  isActive ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  {item.icon}
-                </div>
-                <span>{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
-    </div>
-  );
+  const adminNavSections = [
+    {
+      title: 'OVERVIEW',
+      items: [
+        { path: '/admin/dashboard', name: 'Dashboard', icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: 'FACILITIES & RESIDENTS',
+      items: [
+        { path: '/admin/hostels', name: 'Hostels & Blocks', icon: Building2 },
+        { path: '/admin/rooms', name: 'Rooms & Beds', icon: BedDouble },
+        { path: '/admin/students', name: 'Resident Directory', icon: Users },
+        { path: '/admin/outside-students', name: 'Outside Residents', icon: UserPlus },
+        { path: '/admin/staff', name: 'Staff Management', icon: UserCheck },
+      ],
+    },
+    {
+      title: 'OPERATIONS & DINING',
+      items: [
+        { path: '/admin/menu', name: 'Mess & Menu', icon: UtensilsCrossed },
+        { path: '/admin/billing', name: 'Mess Billing', icon: Receipt },
+        { path: '/admin/issues', name: 'Issue Board', icon: Wrench },
+        { path: '/admin/gatepass', name: 'Gate Passes', icon: Ticket },
+        { path: '/admin/visitors', name: 'Visitor Logs', icon: ClipboardList },
+      ],
+    },
+    {
+      title: 'SETTINGS',
+      items: [
+        { path: '/admin/profile', name: 'Account & Security', icon: User },
+      ],
+    },
+  ];
 
-  let mainItems: { path: string; label: string; icon: React.ReactNode }[] = [];
-  let residentialItems: { path: string; label: string; icon: React.ReactNode }[] = [];
-  let diningAndOpsItems: { path: string; label: string; icon: React.ReactNode }[] = [];
+  const wardenNavSections = [
+    {
+      title: 'MAIN MENU',
+      items: [
+        { path: '/warden/dashboard', name: 'Warden Dashboard', icon: LayoutDashboard },
+        { path: '/warden/passes', name: 'Gate Pass Review', icon: Ticket },
+        { path: '/warden/issues', name: 'Hostel Issues', icon: Wrench },
+        { path: '/warden/profile', name: 'My Profile', icon: User },
+      ],
+    },
+  ];
 
-  if (role === 'ADMIN') {
-    mainItems = [
-      { path: '/admin/dashboard', label: 'Overview', icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
-    ];
-    residentialItems = [
-      { path: '/admin/hostels', label: 'Hostel Master', icon: <Building2 className="w-3.5 h-3.5" /> },
-      { path: '/admin/rooms', label: 'Room Matrix', icon: <BedDouble className="w-3.5 h-3.5" /> },
-      { path: '/admin/students', label: 'Residents', icon: <Users className="w-3.5 h-3.5" /> },
-      { path: '/admin/outside-students', label: 'Outside Residents', icon: <Users className="w-3.5 h-3.5" /> },
-      { path: '/admin/staff', label: 'Staff & Wardens', icon: <UserCheck className="w-3.5 h-3.5" /> },
-    ];
-    diningAndOpsItems = [
-      { path: '/admin/menu', label: 'Mess Planner', icon: <UtensilsCrossed className="w-3.5 h-3.5" /> },
-      { path: '/admin/billing', label: 'Mess Billing', icon: <CreditCard className="w-3.5 h-3.5" /> },
-      { path: '/admin/issues', label: 'Issue Tracker', icon: <Wrench className="w-3.5 h-3.5" /> },
-      { path: '/admin/gatepass', label: 'Gate Passes', icon: <KeyRound className="w-3.5 h-3.5" /> },
-      { path: '/admin/visitors', label: 'Visitor Logs', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-    ];
-  } else if (role === 'WARDEN') {
-    mainItems = [{ path: '/warden/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-3.5 h-3.5" /> }];
-    residentialItems = [
-      { path: '/warden/gatepass', label: 'Gate Pass Approvals', icon: <KeyRound className="w-3.5 h-3.5" /> },
-      { path: '/warden/rooms', label: 'Hostel Rooms', icon: <BedDouble className="w-3.5 h-3.5" /> },
-    ];
-  } else if (role === 'SECURITY') {
-    mainItems = [{ path: '/security/scanner', label: 'Pass Scanner', icon: <KeyRound className="w-3.5 h-3.5" /> }];
-  } else {
-    mainItems = [{ path: '/student/dashboard', label: 'My Portal', icon: <LayoutDashboard className="w-3.5 h-3.5" /> }];
-  }
+  const securityNavSections = [
+    {
+      title: 'GATE OPERATIONS',
+      items: [
+        { path: '/security/scanner', name: 'Pass Scanner Terminal', icon: QrCode },
+        { path: '/security/visitors', name: 'Visitor Register', icon: ClipboardList },
+        { path: '/security/profile', name: 'My Profile', icon: User },
+      ],
+    },
+  ];
 
-  const handleSignOut = async () => {
-    await logout();
-    navigate('/login');
+  const studentNavSections = [
+    {
+      title: 'STUDENT PORTAL',
+      items: [
+        { path: '/student/dashboard', name: 'My Residence & Pass', icon: LayoutDashboard },
+        { path: '/student/profile', name: 'My Profile', icon: User },
+      ],
+    },
+  ];
+
+  const getSections = () => {
+    switch (user?.role) {
+      case 'ADMIN': return adminNavSections;
+      case 'WARDEN': return wardenNavSections;
+      case 'SECURITY': return securityNavSections;
+      case 'STUDENT': return studentNavSections;
+      default: return [];
+    }
   };
 
   return (
-    <aside className="w-60 min-h-screen bg-white border-r border-slate-200/80 p-4 flex flex-col justify-between select-none">
+    <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 h-screen select-none">
+      {/* Brand Header */}
       <div>
-        <div className="flex items-center gap-2.5 px-3 py-2 mb-6">
-          <div className="w-9 h-9 rounded-2xl bg-[#0D3833] text-white flex items-center justify-center font-bold text-base shadow-sm">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
+        <div className="h-16 px-6 flex items-center gap-3 border-b border-slate-100">
+          <div className="w-9 h-9 rounded-xl bg-[#0D3833] text-white flex items-center justify-center font-bold text-base shadow-sm">
+            <ShieldCheck className="w-5 h-5 text-emerald-300" />
           </div>
           <div>
-            <div className="font-bold text-slate-900 leading-tight text-sm">HostelDesk</div>
-            <div className="text-[11px] text-slate-400 font-medium">Enterprise HMS</div>
+            <span className="font-bold text-slate-900 tracking-tight text-base block leading-tight">HostelDesk</span>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{user?.role || 'PORTAL'}</span>
           </div>
         </div>
 
-        {renderNavSection('MAIN MENU', mainItems)}
-        {residentialItems.length > 0 && renderNavSection('HOSTEL & RESIDENTS', residentialItems)}
-        {diningAndOpsItems.length > 0 && renderNavSection('DINING & OPERATIONS', diningAndOpsItems)}
+        {/* Dynamic Navigation Sections */}
+        <div className="p-4 space-y-6 overflow-y-auto max-h-[calc(100vh-140px)]">
+          {getSections().map((section, sIdx) => (
+            <div key={sIdx}>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                {section.title}
+              </div>
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition-all ${
+                          isActive
+                            ? 'bg-[#0D3833] text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }`
+                      }
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{item.name}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="pt-3 border-t border-slate-100">
+      {/* Logout Footer */}
+      <div className="p-4 border-t border-slate-100">
         <button
-          onClick={handleSignOut}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-full text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+          onClick={logout}
+          className="flex items-center gap-3 px-3.5 py-2.5 w-full rounded-full text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
         >
-          <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
-            <LogOut className="w-3.5 h-3.5" />
-          </div>
+          <LogOut className="w-4 h-4 shrink-0" />
           <span>Sign Out</span>
         </button>
       </div>

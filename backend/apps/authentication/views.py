@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password
 from .serializers import CustomTokenObtainPairSerializer, UserSerializer
 
 User = get_user_model()
@@ -37,3 +38,22 @@ class CurrentUserProfileView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request):
+        # Change Password handling
+        user = request.user
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+
+        if not current_password or not new_password:
+            return Response({'message': 'Both current and new password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not check_password(current_password, user.password):
+            return Response({'message': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(new_password) < 6:
+            return Response({'message': 'New password must be at least 6 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+        return Response({'message': 'Password updated successfully.'}, status=status.HTTP_200_OK)

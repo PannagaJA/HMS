@@ -1,98 +1,61 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Plus, 
-  Check, 
-  Trash2, 
-  Edit, 
-  Calendar, 
-  UtensilsCrossed, 
-  Clock, 
-  Search,
-  X
-} from 'lucide-react';
-import type { MealType, MenuItem, Menu, Hostel } from '../../types';
+import { Utensils, Plus, Trash2, Edit2, Download } from 'lucide-react';
+import type { MealType, MenuItem, Menu } from '../../types';
 import { apiClient } from '../../api/apiClient';
 
+const DAYS = [
+  { id: 1, name: 'Monday' },
+  { id: 2, name: 'Tuesday' },
+  { id: 3, name: 'Wednesday' },
+  { id: 4, name: 'Thursday' },
+  { id: 5, name: 'Friday' },
+  { id: 6, name: 'Saturday' },
+  { id: 7, name: 'Sunday' },
+];
+
 export const MenuManagement: React.FC = () => {
-  const [hostels, setHostels] = useState<Hostel[]>([]);
-  const [selectedHostelId, setSelectedHostelId] = useState<number | null>(null);
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
-  const [activeDay, setActiveDay] = useState('0'); // 0=Monday
+  const [activeDay, setActiveDay] = useState<number>(1);
+  const [activeTab, setActiveTab] = useState<'timetable' | 'catalog'>('timetable');
 
-  // Tab View: Weekly Matrix vs Menu Items Catalog vs Meal Types
-  const [activeViewTab, setActiveViewTab] = useState<'weekly' | 'items' | 'meal_types'>('weekly');
-
-  // Add/Edit Food Item Modal
+  // Modal State for Food Item
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemName, setItemName] = useState('');
+  const [itemCategory, setItemCategory] = useState('Main Course');
   const [itemDesc, setItemDesc] = useState('');
   const [isVeg, setIsVeg] = useState(true);
-  const [itemSearch, setItemSearch] = useState('');
 
-  // Configure Slot Menu Modal
+  // Modal State for Meal Slot Configuration
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [targetMealType, setTargetMealType] = useState<MealType | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
 
-  // Add Meal Type Modal
-  const [showMealTypeModal, setShowMealTypeModal] = useState(false);
-  const [newMealTypeCode, setNewMealTypeCode] = useState('');
-  const [newMealTypeDesc, setNewMealTypeDesc] = useState('');
-  const [newTimeFrom, setNewTimeFrom] = useState('08:00');
-  const [newTimeTo, setNewTimeTo] = useState('09:30');
-
-  const days = [
-    { id: '0', label: 'Monday' },
-    { id: '1', label: 'Tuesday' },
-    { id: '2', label: 'Wednesday' },
-    { id: '3', label: 'Thursday' },
-    { id: '4', label: 'Friday' },
-    { id: '5', label: 'Saturday' },
-    { id: '6', label: 'Sunday' },
-  ];
-
   useEffect(() => {
-    fetchInitialData();
+    fetchData();
   }, []);
 
-  useEffect(() => {
-    if (selectedHostelId) {
-      fetchMenus(selectedHostelId);
-    }
-  }, [selectedHostelId]);
-
-  const fetchInitialData = async () => {
+  const fetchData = async () => {
     try {
-      const [hostelsRes, mealTypesRes, itemsRes] = await Promise.all([
-        apiClient.get<Hostel[]>('/hms/hostels/'),
-        apiClient.get<MealType[]>('/mess/meal-types/'),
-        apiClient.get<MenuItem[]>('/mess/menu-items/'),
+      const [mealTypesRes, menuItemsRes, menusRes] = await Promise.all([
+        apiClient.get<MealType[]>('/hms/meal-types/'),
+        apiClient.get<MenuItem[]>('/hms/menu-items/'),
+        apiClient.get<Menu[]>('/hms/menus/'),
       ]);
-      setHostels(hostelsRes.data);
       setMealTypes(mealTypesRes.data);
-      setMenuItems(itemsRes.data);
-      if (hostelsRes.data.length > 0) setSelectedHostelId(hostelsRes.data[0].id);
+      setMenuItems(menuItemsRes.data);
+      setMenus(menusRes.data);
     } catch (err) {
       console.error('Failed to load menu data', err);
     }
   };
 
-  const fetchMenus = async (hostelId: number) => {
-    try {
-      const res = await apiClient.get<Menu[]>(`/mess/menus/?hostel=${hostelId}`);
-      setMenus(res.data);
-    } catch (err) {
-      console.error('Failed to fetch menus', err);
-    }
-  };
-
-  // 1. Food Item Actions
-  const handleOpenCreateItem = () => {
+  const handleOpenAddItem = () => {
     setEditingItem(null);
     setItemName('');
+    setItemCategory('Main Course');
     setItemDesc('');
     setIsVeg(true);
     setShowItemModal(true);
@@ -101,35 +64,30 @@ export const MenuManagement: React.FC = () => {
   const handleOpenEditItem = (item: MenuItem) => {
     setEditingItem(item);
     setItemName(item.name);
+    setItemCategory(item.category || 'Main Course');
     setItemDesc(item.description || '');
-    setIsVeg(item.vegetarian);
+    setIsVeg(Boolean(item.is_veg ?? item.vegetarian ?? true));
     setShowItemModal(true);
   };
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemName.trim()) return;
+    const payload = {
+      name: itemName,
+      category: itemCategory,
+      description: itemDesc,
+      is_veg: isVeg,
+      vegetarian: isVeg,
+    };
 
     try {
       if (editingItem) {
-        await apiClient.put(`/mess/menu-items/${editingItem.id}/`, {
-          name: itemName.trim(),
-          description: itemDesc.trim(),
-          vegetarian: isVeg,
-          is_active: true,
-        });
+        await apiClient.put(`/hms/menu-items/${editingItem.id}/`, payload);
       } else {
-        await apiClient.post('/mess/menu-items/', {
-          name: itemName.trim(),
-          description: itemDesc.trim(),
-          vegetarian: isVeg,
-          is_active: true,
-        });
+        await apiClient.post('/hms/menu-items/', payload);
       }
       setShowItemModal(false);
-      const itemsRes = await apiClient.get<MenuItem[]>('/mess/menu-items/');
-      setMenuItems(itemsRes.data);
-      if (selectedHostelId) fetchMenus(selectedHostelId);
+      fetchData();
     } catch (err) {
       alert('Failed to save food item');
     }
@@ -138,244 +96,175 @@ export const MenuManagement: React.FC = () => {
   const handleDeleteItem = async (id: number) => {
     if (!confirm('Are you sure you want to delete this food item?')) return;
     try {
-      await apiClient.delete(`/mess/menu-items/${id}/`);
-      const itemsRes = await apiClient.get<MenuItem[]>('/mess/menu-items/');
-      setMenuItems(itemsRes.data);
-      if (selectedHostelId) fetchMenus(selectedHostelId);
+      await apiClient.delete(`/hms/menu-items/${id}/`);
+      fetchData();
     } catch (err) {
       alert('Failed to delete food item');
     }
   };
 
-  // 2. Meal Slot Menu Configuration
   const handleOpenConfigureSlot = (mealType: MealType) => {
-    if (!selectedHostelId) return;
     setTargetMealType(mealType);
-
     const existing = menus.find(
-      (m) => m.day_of_week === activeDay && m.meal_type === mealType.id
+      (m) => Number(m.day_of_week) === Number(activeDay) && Number(m.meal_type) === Number(mealType.id)
     );
-    setSelectedItemIds(existing?.items || []);
+    const existingIds = (existing?.items || []).map((i: any) => (typeof i === 'number' ? i : i.id));
+    setSelectedItemIds(existingIds);
     setShowConfigureModal(true);
-  };
-
-  const handleToggleItemInSlot = (itemId: number) => {
-    setSelectedItemIds((prev) =>
-      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
-    );
   };
 
   const handleSaveSlotMenu = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedHostelId || !targetMealType) return;
+    if (!targetMealType) return;
 
     try {
       const existing = menus.find(
-        (m) => m.day_of_week === activeDay && m.meal_type === targetMealType.id
+        (m) => Number(m.day_of_week) === Number(activeDay) && Number(m.meal_type) === Number(targetMealType.id)
       );
 
-      if (existing) {
-        await apiClient.put(`/mess/menus/${existing.id}/`, {
-          hostel: selectedHostelId,
-          day_of_week: activeDay,
-          meal_type: targetMealType.id,
-          items: selectedItemIds,
-          is_recurring: true,
-        });
-      } else {
-        await apiClient.post('/mess/menus/', {
-          hostel: selectedHostelId,
-          day_of_week: activeDay,
-          meal_type: targetMealType.id,
-          items: selectedItemIds,
-          is_recurring: true,
-        });
-      }
+      const payload = {
+        day_of_week: activeDay,
+        meal_type: targetMealType.id,
+        items: selectedItemIds,
+      };
 
+      if (existing) {
+        await apiClient.put(`/hms/menus/${existing.id}/`, payload);
+      } else {
+        await apiClient.post('/hms/menus/', payload);
+      }
       setShowConfigureModal(false);
-      fetchMenus(selectedHostelId);
+      fetchData();
     } catch (err) {
-      alert('Failed to update meal slot menu');
+      alert('Failed to update dining menu slot');
     }
   };
 
-  // 3. Meal Type Creation
-  const handleCreateMealType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiClient.post('/mess/meal-types/', {
-        name: newMealTypeCode.toUpperCase(),
-        description: newMealTypeDesc,
-        time_from: newTimeFrom,
-        time_to: newTimeTo,
-      });
-      setShowMealTypeModal(false);
-      setNewMealTypeCode('');
-      setNewMealTypeDesc('');
-      const res = await apiClient.get<MealType[]>('/mess/meal-types/');
-      setMealTypes(res.data);
-    } catch (err) {
-      alert('Failed to create meal type');
-    }
+  const handleToggleItemSelection = (id: number) => {
+    setSelectedItemIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  };
+
+  const handleExportPDF = () => {
+    window.print();
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mess & Dining Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Configure weekly recurring meal timetables, dishes catalog, and dining hours</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Dining & Menu Planner</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Configure 7-day recurring meal timetables, food catalog, and nutritional slots</p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleOpenCreateItem}
-            className="px-4 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-1.5"
+            onClick={handleExportPDF}
+            className="px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Print Menu</span>
+          </button>
+          <button
+            onClick={handleOpenAddItem}
+            className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Food Item</span>
           </button>
-          <button
-            onClick={() => setShowMealTypeModal(true)}
-            className="px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-1.5"
-          >
-            <Clock className="w-4 h-4" />
-            <span>Add Meal Slot</span>
-          </button>
         </div>
       </div>
 
-      {/* Main View Switcher Pills */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
         <button
-          onClick={() => setActiveViewTab('weekly')}
-          className={`px-5 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
-            activeViewTab === 'weekly'
+          onClick={() => setActiveTab('timetable')}
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === 'timetable'
               ? 'bg-[#0D3833] text-white shadow-sm'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Weekly Dining Timetable</span>
+          Weekly Timetable
         </button>
         <button
-          onClick={() => setActiveViewTab('items')}
-          className={`px-5 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
-            activeViewTab === 'items'
+          onClick={() => setActiveTab('catalog')}
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === 'catalog'
               ? 'bg-[#0D3833] text-white shadow-sm'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
-          <UtensilsCrossed className="w-3.5 h-3.5" />
-          <span>Food Items Catalog ({menuItems.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveViewTab('meal_types')}
-          className={`px-5 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
-            activeViewTab === 'meal_types'
-              ? 'bg-[#0D3833] text-white shadow-sm'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>Meal Timings & Slots ({mealTypes.length})</span>
+          Food Items Catalog ({menuItems.length})
         </button>
       </div>
 
-      {/* VIEW 1: WEEKLY TIMETABLE */}
-      {activeViewTab === 'weekly' && (
-        <div className="space-y-6 animate-in fade-in duration-150">
-          {/* Hostel Selector Tabs */}
-          <div className="flex items-center gap-2.5 overflow-x-auto">
-            {hostels.map((h) => (
-              <button
-                key={h.id}
-                onClick={() => setSelectedHostelId(h.id)}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                  selectedHostelId === h.id
-                    ? 'bg-[#0D3833] text-white shadow-sm'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {h.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Days of Week Strip */}
-          <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2 overflow-x-auto">
-            {days.map((day) => (
+      {activeTab === 'timetable' && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            {DAYS.map((day) => (
               <button
                 key={day.id}
                 onClick={() => setActiveDay(day.id)}
-                className={`flex-1 py-2 px-3.5 rounded-xl text-xs font-bold transition-all text-center ${
+                className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   activeDay === day.id
-                    ? 'bg-[#D1F2EA] text-teal-950 border border-teal-300 shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50'
+                    ? 'bg-[#D1F2EA] text-teal-950 border border-teal-300 shadow-sm'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {day.label}
+                {day.name}
               </button>
             ))}
           </div>
 
-          {/* Meals Grid for Active Day */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {mealTypes.map((mealType) => {
               const menuForSlot = menus.find(
-                (m) => m.day_of_week === activeDay && m.meal_type === mealType.id
+                (m) => Number(m.day_of_week) === Number(activeDay) && Number(m.meal_type) === Number(mealType.id)
               );
-
-              const cardThemes: Record<string, { bg: string; border: string; text: string }> = {
-                BR: { bg: 'bg-[#E8F8CE]', border: 'border-emerald-300', text: 'text-emerald-950' },
-                LN: { bg: 'bg-[#D1F2EA]', border: 'border-teal-300', text: 'text-teal-950' },
-                SN: { bg: 'bg-[#FCE2E1]', border: 'border-rose-300', text: 'text-rose-950' },
-                DN: { bg: 'bg-[#E0E7FF]', border: 'border-indigo-300', text: 'text-indigo-950' },
-              };
-
-              const theme = cardThemes[mealType.name] || { bg: 'bg-white', border: 'border-slate-200', text: 'text-slate-900' };
+              const itemsList = menuForSlot?.items || [];
 
               return (
                 <div
                   key={mealType.id}
-                  className={`p-6 rounded-3xl border shadow-sm flex flex-col justify-between ${theme.bg} ${theme.border} ${theme.text}`}
+                  className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="font-bold text-base">{mealType.description || mealType.name}</h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/10">
-                        {mealType.time_from || '07:30'} - {mealType.time_to || '09:30'}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-slate-800 tracking-tight">{mealType.name}</span>
+                      <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                        {mealType.start_time || mealType.time_from || '08:00'} - {mealType.end_time || mealType.time_to || '10:00'}
                       </span>
                     </div>
-                    <div className="text-[11px] opacity-75 mb-4">Served in Hostel Dining Hall</div>
 
-                    {/* Food Items in this slot */}
-                    <div className="space-y-1.5 min-h-[120px]">
-                      {menuForSlot?.items_detail && menuForSlot.items_detail.length > 0 ? (
-                        menuForSlot.items_detail.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-2 bg-white/90 px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 border border-black/5 shadow-2xs"
-                          >
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.vegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                            <span className="truncate">{item.name}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="h-full flex items-center justify-center bg-white/40 p-4 rounded-2xl text-xs italic text-center opacity-70 border border-dashed border-black/10">
-                          No items mapped. Click configure to add dishes.
+                    <div className="min-h-[140px] space-y-1.5 py-2">
+                      {itemsList.length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
+                          No items configured
                         </div>
+                      ) : (
+                        itemsList.map((item: any, idx: number) => {
+                          const itemObj = typeof item === 'object' ? item : menuItems.find((mi) => mi.id === item);
+                          const isVegetarian = itemObj?.is_veg ?? itemObj?.vegetarian ?? true;
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs text-slate-700 font-medium"
+                            >
+                              <span className={`w-2 h-2 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              <span className="truncate">{itemObj?.name || `Item #${item}`}</span>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-black/10 flex items-center justify-between">
+                  <div className="pt-3 border-t border-slate-100 flex justify-end">
                     <button
                       onClick={() => handleOpenConfigureSlot(mealType)}
-                      className="w-full py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                      className="px-4 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
                     >
-                      <Edit className="w-3.5 h-3.5" />
-                      <span>Configure Menu</span>
+                      Configure Slot
                     </button>
                   </div>
                 </div>
@@ -385,203 +274,91 @@ export const MenuManagement: React.FC = () => {
         </div>
       )}
 
-      {/* VIEW 2: FOOD ITEMS CATALOG */}
-      {activeViewTab === 'items' && (
-        <div className="space-y-5 animate-in fade-in duration-150">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-4">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                placeholder="Search food item name..."
-                className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-              />
-            </div>
-            <span className="text-xs font-semibold text-slate-400">
-              Total {menuItems.length} Culinary Items
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {menuItems
-              .filter((i) => i.name.toLowerCase().includes(itemSearch.toLowerCase()))
-              .map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
-                >
+      {activeTab === 'catalog' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {menuItems.map((item) => {
+            const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+            return (
+              <div
+                key={item.id}
+                className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold ${
+                    isVegetarian ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                  }`}>
+                    <Utensils className="w-5 h-5" />
+                  </div>
                   <div>
-                    <div className="flex items-start justify-between mb-2">
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                        item.vegetarian
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border-rose-200'
-                      }`}>
-                        {item.vegetarian ? '100% VEG' : 'NON-VEG'}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-slate-900 text-sm">{item.name}</h4>
-                    {item.description && (
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{item.description}</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-end gap-1.5 pt-3 mt-3 border-t border-slate-100">
-                    <button
-                      onClick={() => handleOpenEditItem(item)}
-                      className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 transition-colors"
-                      title="Edit Item"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => item.id && handleDeleteItem(item.id)}
-                      className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors"
-                      title="Delete Item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <h4 className="text-sm font-bold text-slate-900">{item.name}</h4>
+                    <span className="text-[11px] text-slate-400">{item.category || 'General'}</span>
                   </div>
                 </div>
-              ))}
-          </div>
-        </div>
-      )}
 
-      {/* VIEW 3: MEAL SLOTS / TIMINGS */}
-      {activeViewTab === 'meal_types' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5 animate-in fade-in duration-150">
-          {mealTypes.map((mt) => (
-            <div
-              key={mt.id}
-              className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-10 h-10 rounded-2xl bg-[#E0E7FF] text-indigo-950 flex items-center justify-center font-bold text-sm mb-4">
-                  {mt.name}
-                </div>
-                <h3 className="text-base font-bold text-slate-900">{mt.description || mt.name}</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Active Service Slot
-                </p>
-                <div className="mt-4 p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs font-mono font-semibold text-slate-700 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  <span>{mt.time_from || '08:00'} - {mt.time_to || '10:00'}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* MODAL 1: CONFIGURE SLOT MENU (Select items for Day & Slot) */}
-      {showConfigureModal && targetMealType && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">
-                  Configure {targetMealType.description || targetMealType.name}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Day: <strong>{days.find((d) => d.id === activeDay)?.label}</strong>
-                </p>
-              </div>
-              <button
-                onClick={() => setShowConfigureModal(false)}
-                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto py-4 space-y-2">
-              <div className="text-xs font-semibold text-slate-700 mb-2">Select dishes to serve:</div>
-              {menuItems.map((item) => {
-                const isSelected = item.id ? selectedItemIds.includes(item.id) : false;
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => item.id && handleToggleItemInSlot(item.id)}
-                    className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-                      isSelected
-                        ? 'bg-[#D1F2EA] border-teal-300 text-teal-950 font-bold'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleOpenEditItem(item)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-2.5 h-2.5 rounded-full ${item.vegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                      <span className="text-xs">{item.name}</span>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-teal-800" />}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowConfigureModal(false)}
-                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveSlotMenu}
-                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm"
-              >
-                Save Meal Plan
-              </button>
-            </div>
-          </div>
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* MODAL 2: ADD / EDIT FOOD ITEM */}
+      {/* Item Modal */}
       {showItemModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">
-              {editingItem ? 'Edit Culinary Dish' : 'Add Food Item'}
+              {editingItem ? 'Edit Food Item' : 'Add Food Item'}
             </h3>
-            <p className="text-xs text-slate-500 mb-5">Create or edit a catalog item for hostel menus.</p>
+            <p className="text-xs text-slate-500 mb-5">Manage item name, nutritional category, and dietary flags.</p>
 
             <form onSubmit={handleSaveItem} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Dish Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Item Name</label>
                 <input
                   type="text"
                   required
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
-                  placeholder="e.g. Aloo Paratha with Curd"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm"
+                  placeholder="e.g. Masala Dosa with Sambar"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Description (Optional)</label>
-                <textarea
-                  rows={2}
-                  value={itemDesc}
-                  onChange={(e) => setItemDesc(e.target.value)}
-                  placeholder="e.g. Served hot with butter and pickle"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm"
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                <input
+                  type="text"
+                  required
+                  value={itemCategory}
+                  onChange={(e) => setItemCategory(e.target.value)}
+                  placeholder="e.g. Breakfast / Beverages"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
                 />
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isVeg}
-                    onChange={(e) => setIsVeg(e.target.checked)}
-                    className="w-4 h-4 text-emerald-600 rounded"
-                  />
-                  <span>Vegetarian Dish (100% Veg)</span>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="vegCheck"
+                  checked={isVeg}
+                  onChange={(e) => setIsVeg(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                />
+                <label htmlFor="vegCheck" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                  Vegetarian Dish
                 </label>
               </div>
 
@@ -589,15 +366,15 @@ export const MenuManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowItemModal(false)}
-                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm"
+                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
                 >
-                  Save Dish
+                  Save Item
                 </button>
               </div>
             </form>
@@ -605,75 +382,55 @@ export const MenuManagement: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 3: ADD MEAL TYPE / TIMING SLOT */}
-      {showMealTypeModal && (
+      {/* Configure Slot Modal */}
+      {showConfigureModal && targetMealType && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Add Dining Meal Slot</h3>
-            <p className="text-xs text-slate-500 mb-5">Define a new dining service window (e.g. Midnight Snack).</p>
+          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              Configure {targetMealType.name} Menu
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Select dishes served on <strong className="text-slate-800">{DAYS.find((d) => d.id === activeDay)?.name}</strong>.
+            </p>
 
-            <form onSubmit={handleCreateMealType} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={newMealTypeCode}
-                    onChange={(e) => setNewMealTypeCode(e.target.value)}
-                    placeholder="e.g. MS"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={newMealTypeDesc}
-                    onChange={(e) => setNewMealTypeDesc(e.target.value)}
-                    placeholder="e.g. Midnight Snacks"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Service Start</label>
-                  <input
-                    type="time"
-                    required
-                    value={newTimeFrom}
-                    onChange={(e) => setNewTimeFrom(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Service End</label>
-                  <input
-                    type="time"
-                    required
-                    value={newTimeTo}
-                    onChange={(e) => setNewTimeTo(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
+            <form onSubmit={handleSaveSlotMenu} className="space-y-4">
+              <div className="max-h-64 overflow-y-auto space-y-2 p-2 border border-slate-100 rounded-2xl bg-slate-50">
+                {menuItems.map((item) => {
+                  const isSelected = selectedItemIds.includes(item.id);
+                  const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => handleToggleItemSelection(item.id)}
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-[#D1F2EA] border-teal-300 text-teal-950 font-semibold'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span>{item.name}</span>
+                      </div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400">{item.category}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowMealTypeModal(false)}
-                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  onClick={() => setShowConfigureModal(false)}
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm"
+                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
                 >
-                  Create Slot
+                  Save Timetable Slot
                 </button>
               </div>
             </form>

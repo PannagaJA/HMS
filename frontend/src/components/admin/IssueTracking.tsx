@@ -22,7 +22,7 @@ export const IssueTracking: React.FC = () => {
 
   const fetchIssues = async () => {
     try {
-      const res = await apiClient.get<HostelIssue[]>('/warden/issues/');
+      const res = await apiClient.get<HostelIssue[]>('/hms/issues/');
       setIssues(res.data);
     } catch (err) {
       console.error('Failed to load issues', err);
@@ -34,7 +34,7 @@ export const IssueTracking: React.FC = () => {
     if (!selectedIssue) return;
 
     try {
-      await apiClient.post(`/warden/issues/${selectedIssue.id}/update_status/`, {
+      await apiClient.post(`/hms/issues/${selectedIssue.id}/update_status/`, {
         status: updateStatus,
         note: updateNote,
       });

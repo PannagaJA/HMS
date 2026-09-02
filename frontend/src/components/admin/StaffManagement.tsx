@@ -36,21 +36,31 @@ export const StaffManagement: React.FC = () => {
     e.preventDefault();
     const endpoint = activeTab === 'wardens' ? '/hms/wardens/' : '/hms/caretakers/';
     try {
-      await apiClient.post(endpoint, {
+      const payload: any = {
         name,
-        email,
+        email: email || undefined,
         phone,
-        designation: activeTab === 'wardens' ? designation : undefined,
-        experience,
-      });
+        experience: Number(experience) || 0,
+      };
+      if (activeTab === 'wardens') {
+        payload.designation = designation || 'Hostel Warden';
+      }
+      await apiClient.post(endpoint, payload);
       setShowModal(false);
       setName('');
       setEmail('');
       setPhone('');
       setDesignation('');
+      setExperience(2);
       fetchStaff();
-    } catch (err) {
-      alert('Failed to add staff member');
+    } catch (err: any) {
+      const errorMsg =
+        err.response?.data?.detail ||
+        err.response?.data?.name?.[0] ||
+        err.response?.data?.email?.[0] ||
+        err.response?.data?.phone?.[0] ||
+        'Failed to add staff member';
+      alert(errorMsg);
     }
   };
 
@@ -60,8 +70,8 @@ export const StaffManagement: React.FC = () => {
     try {
       await apiClient.delete(endpoint);
       fetchStaff();
-    } catch (err) {
-      alert('Failed to delete staff member');
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to delete staff member');
     }
   };
 
@@ -74,7 +84,7 @@ export const StaffManagement: React.FC = () => {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2"
+          className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Add {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}</span>
@@ -84,7 +94,7 @@ export const StaffManagement: React.FC = () => {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setActiveTab('wardens')}
-          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
+          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'wardens'
               ? 'bg-[#0D3833] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -94,7 +104,7 @@ export const StaffManagement: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('caretakers')}
-          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
+          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'caretakers'
               ? 'bg-[#0D3833] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -116,7 +126,7 @@ export const StaffManagement: React.FC = () => {
                   {staff.name[0]}
                 </div>
                 <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-                  {staff.experience} YRS EXP
+                  {staff.experience || (staff as any).experience_years || 0} YRS EXP
                 </span>
               </div>
 
@@ -140,7 +150,7 @@ export const StaffManagement: React.FC = () => {
             <div className="flex items-center justify-end pt-3 border-t border-slate-100">
               <button
                 onClick={() => handleDelete(staff.id)}
-                className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors"
+                className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
                 title="Remove staff"
               >
                 <Trash2 className="w-4 h-4" />
@@ -186,13 +196,15 @@ export const StaffManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone (10 Digits)</label>
                   <input
-                    type="text"
+                    type="tel"
                     required
+                    maxLength={10}
+                    pattern="[0-9]{10}"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98..."
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="9876543210"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
                   />
                 </div>
@@ -223,13 +235,13 @@ export const StaffManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm"
+                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
                 >
                   Save Staff Member
                 </button>
