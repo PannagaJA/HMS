@@ -48,6 +48,42 @@ export const issueService = {
     }));
   },
 
+  async createIssue(payload: { title: string; category: string; description: string; priority?: string }) {
+    const { data: user } = await supabase.auth.getUser();
+    const userId = user.user?.id;
+
+    // Find student record and their active room allocation
+    const { data: student } = await supabase
+      .from('students')
+      .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+      .eq('profile_id', userId || '')
+      .single();
+
+    if (!student) {
+      throw new Error('Could not identify resident student record for issue reporting');
+    }
+
+    const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active);
+    const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+    const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+    const roomId = room?.id || 4;
+    const hostelId = room?.hostel_id || 1;
+
+    const insertBody = {
+      student_id: student.id,
+      hostel_id: hostelId,
+      room_id: roomId,
+      title: payload.title,
+      category: (payload.category || 'OTHER').toUpperCase(),
+      description: payload.description,
+      status: 'pending'
+    };
+
+    const { data, error } = await supabase.from('issues').insert(insertBody).select().single();
+    if (error) throw error;
+    return data;
+  },
+
   async updateStatus(issueId: number, status: string, note = '') {
     const { data, error } = await supabase.rpc('update_issue_status', {
       p_issue_id: issueId,

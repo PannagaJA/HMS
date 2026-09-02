@@ -209,8 +209,7 @@ export const apiClient = {
 
     // Create Maintenance Issue
     if (endpoint.includes('/hms/issues/') && !endpoint.includes('update_status')) {
-      const { data, error } = await supabase.from('issues').insert(body).select().single();
-      if (error) throw error;
+      const data = await issueService.createIssue(body);
       return { data: data as T };
     }
 
