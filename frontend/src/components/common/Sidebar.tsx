@@ -15,7 +15,7 @@ import {
   QrCode,
   User,
   LogOut,
-  X,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -54,8 +54,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { path: '/warden/profile', name: 'My Profile', icon: User },
   ];
 
+  // Security Guard Nav Items with dedicated Student Movement & QR Scanner
   const securityNavItems = [
-    { path: '/security/scanner', name: 'Pass Scanner Terminal', icon: QrCode },
+    { path: '/security/scanner', name: 'Student Gate Movement & QR', icon: QrCode },
     { path: '/security/visitors', name: 'Visitor Register', icon: ClipboardList },
     { path: '/security/profile', name: 'My Profile', icon: User },
   ];
@@ -127,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
           </button>
         </div>
 
-        {/* Middle Navigation Section (Clean scrolling without section title headers) */}
+        {/* Middle Navigation Section */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
           {navItems.map((item) => {
             const Icon = item.icon;
