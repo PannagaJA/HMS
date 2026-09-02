@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MealType, MenuItem, Menu, MessBilling, StudentMealSkip
+from .models import MealType, MenuItem, Menu, StudentMealSkip
 from apps.hms_admin.models import Hostel
 
 class MealTypeSerializer(serializers.ModelSerializer):
@@ -17,14 +17,11 @@ class MealTypeSerializer(serializers.ModelSerializer):
         return str(obj.time_to) if hasattr(obj, 'time_to') else '10:00:00'
 
 class MenuItemSerializer(serializers.ModelSerializer):
-    is_veg = serializers.SerializerMethodField()
+    vegetarian = serializers.BooleanField(source='is_veg', required=False)
 
     class Meta:
         model = MenuItem
         fields = '__all__'
-
-    def get_is_veg(self, obj):
-        return getattr(obj, 'vegetarian', True)
 
 class MenuSerializer(serializers.ModelSerializer):
     meal_type_name = serializers.ReadOnlyField(source='meal_type.name')
@@ -45,12 +42,4 @@ class MenuSerializer(serializers.ModelSerializer):
 class StudentMealSkipSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentMealSkip
-        fields = '__all__'
-
-class MessBillingSerializer(serializers.ModelSerializer):
-    student_name = serializers.ReadOnlyField(source='student.student_name')
-    enrollment_no = serializers.ReadOnlyField(source='student.enrollment_no')
-
-    class Meta:
-        model = MessBilling
         fields = '__all__'

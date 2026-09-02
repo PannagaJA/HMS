@@ -11,7 +11,7 @@ from apps.hms_admin.models import Hostel, HostelRoom, HostelCourse, HostelWarden
 from apps.student.models import HostelStudent
 from apps.warden.models import HostelIssue, IssueUpdate
 from apps.security.models import GatePassRequest, VisitorLog
-from apps.mess.models import MealType, MenuItem, Menu, StudentMealSkip, MessBilling
+from apps.mess.models import MealType, MenuItem, Menu, StudentMealSkip
 
 User = get_user_model()
 

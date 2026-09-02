@@ -11,7 +11,6 @@ import { StudentManagement } from './components/admin/StudentManagement';
 import { OutsideStudentManagement } from './components/admin/OutsideStudentManagement';
 import { StaffManagement } from './components/admin/StaffManagement';
 import { MenuManagement } from './components/admin/MenuManagement';
-import { MessBillingManagement } from './components/admin/MessBillingManagement';
 import { IssueTracking } from './components/admin/IssueTracking';
 import { VisitorLogsManagement } from './components/admin/VisitorLogsManagement';
 import { HMSProfile } from './components/admin/HMSProfile';
@@ -52,7 +51,6 @@ function App() {
             <Route path="/admin/outside-students" element={<OutsideStudentManagement />} />
             <Route path="/admin/staff" element={<StaffManagement />} />
             <Route path="/admin/menu" element={<MenuManagement />} />
-            <Route path="/admin/billing" element={<MessBillingManagement />} />
             <Route path="/admin/issues" element={<IssueTracking />} />
             <Route path="/admin/gatepass" element={<WardenGatePassManagement />} />
             <Route path="/admin/visitors" element={<VisitorLogsManagement />} />

@@ -12,7 +12,7 @@ from .views import (
     StaffEnrollmentView
 )
 from apps.student.views import HostelStudentViewSet, HostelOutsideStudentViewSet
-from apps.mess.views import MealTypeViewSet, MenuItemViewSet, MenuViewSet, MessBillingViewSet
+from apps.mess.views import MealTypeViewSet, MenuItemViewSet, MenuViewSet
 from apps.warden.views import HostelIssueViewSet
 from apps.security.views import GatePassRequestViewSet, VisitorLogViewSet
 
@@ -27,7 +27,6 @@ router.register(r'courses', HostelCourseViewSet, basename='course')
 router.register(r'meal-types', MealTypeViewSet, basename='meal-type')
 router.register(r'menu-items', MenuItemViewSet, basename='menu-item')
 router.register(r'menus', MenuViewSet, basename='menu')
-router.register(r'mess-billing', MessBillingViewSet, basename='mess-billing')
 router.register(r'issues', HostelIssueViewSet, basename='issue')
 router.register(r'gate-passes', GatePassRequestViewSet, basename='gate-pass')
 router.register(r'visitor-logs', VisitorLogViewSet, basename='visitor-log')

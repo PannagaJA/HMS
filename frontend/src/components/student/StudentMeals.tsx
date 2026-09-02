@@ -46,7 +46,7 @@ export const StudentMeals: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Mess & Dining</h1>
-          <p className="text-sm text-slate-500 mt-0.5">View today's recurring meal menu, nutrition, and manage meal skip rebates</p>
+          <p className="text-sm text-slate-500 mt-0.5">View today's recurring meal menu, dining timetable, and food schedule</p>
         </div>
         <span className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs border border-teal-200">
           <Calendar className="w-4 h-4 text-teal-700" />
@@ -91,15 +91,15 @@ export const StudentMeals: React.FC = () => {
 
                 <div className="pt-4 border-t border-slate-200/60">
                   {isSkipped ? (
-                    <div className="py-2.5 text-center text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full">
-                      ✓ Skipped (Rebate Active)
+                    <div className="py-2.5 text-center text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-full">
+                      ✓ Meal Skipped
                     </div>
                   ) : (
                     <button
                       onClick={() => handleSkipMeal(mealType.id)}
                       className="w-full py-2.5 rounded-full border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer shadow-2xs"
                     >
-                      Skip Meal (Rebate)
+                      Skip Meal Today
                     </button>
                   )}
                 </div>

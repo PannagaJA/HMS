@@ -158,25 +158,6 @@ export interface Menu {
   items_detail?: MenuItem[];
 }
 
-export interface MessBilling {
-  id: number;
-  student_name: string;
-  enrollment_no: string;
-  month: string;
-  base_mess_fee: number;
-  meals_skipped_count: number;
-  discount_per_skip: number;
-  total_discount: number;
-  final_amount: number;
-  status: 'PENDING' | 'PAID' | 'OVERDUE';
-  total_meals?: number;
-  meals_skipped?: number;
-  meals_consumed?: number;
-  total_cost?: number;
-  discounted_cost?: number;
-  paid?: boolean;
-}
-
 export interface HostelIssue {
   id: number;
   student_name: string;
