@@ -14,7 +14,7 @@ export const RoomManagement: React.FC = () => {
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
-  const [selectedFloor, setSelectedFloor] = useState<number | 'ALL'>('ALL');
+  const [selectedFloor, setSelectedFloor] = useState<string>('');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showSingleRoomModal, setShowSingleRoomModal] = useState(false);
   const [showEditRoomModal, setShowEditRoomModal] = useState(false);
@@ -53,6 +53,10 @@ export const RoomManagement: React.FC = () => {
   useEffect(() => {
     if (selectedHostelId) {
       fetchRooms(selectedHostelId);
+      setSelectedFloor(''); // Reset floor selection on block change
+    } else {
+      setRooms([]);
+      setSelectedFloor('');
     }
   }, [selectedHostelId]);
 
@@ -60,10 +64,6 @@ export const RoomManagement: React.FC = () => {
     try {
       const res = await apiClient.get<Hostel[]>('/hms/hostels/');
       setHostels(res.data);
-      if (res.data.length > 0) {
-        setSelectedHostelId(String(res.data[0].id));
-        setSingleHostelId(String(res.data[0].id));
-      }
     } catch (err) {
       console.error('Failed to load hostels', err);
     }
@@ -207,7 +207,10 @@ export const RoomManagement: React.FC = () => {
   };
 
   const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort((a, b) => a - b);
-  const filteredRooms = rooms.filter((r) => selectedFloor === 'ALL' || r.floor === selectedFloor);
+  const filteredRooms = rooms.filter((r) => {
+    if (!selectedFloor || selectedFloor === 'ALL') return true;
+    return String(r.floor) === String(selectedFloor);
+  });
 
   return (
     <div className="space-y-6">
@@ -234,14 +237,14 @@ export const RoomManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
           {/* Block Selector Dropdown */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-1 max-w-md">
             <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Select Block:</span>
-            <div className="w-56 sm:w-64">
+            <div className="flex-1 min-w-[200px]">
               <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose hostel block" />
                 </SelectTrigger>
                 <SelectContent>
@@ -254,15 +257,16 @@ export const RoomManagement: React.FC = () => {
           </div>
 
           {/* Floor Selector Dropdown */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 sm:w-64">
             <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Floor:</span>
-            <div className="w-44 sm:w-48">
+            <div className="flex-1">
               <Select
-                value={String(selectedFloor)}
-                onValueChange={(val) => setSelectedFloor(val === 'ALL' ? 'ALL' : Number(val))}
+                value={selectedFloor}
+                onValueChange={(val) => setSelectedFloor(val)}
+                disabled={!selectedHostelId}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Floors" />
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select floor" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Floors</SelectItem>
@@ -277,14 +281,40 @@ export const RoomManagement: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 w-full md:w-auto justify-end">
-          <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">
-            {filteredRooms.length} {filteredRooms.length === 1 ? 'Room' : 'Rooms'} Shown
-          </span>
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+          {selectedHostelId && selectedFloor && (
+            <span className="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700">
+              {filteredRooms.length} {filteredRooms.length === 1 ? 'Room' : 'Rooms'} Shown
+            </span>
+          )}
         </div>
       </div>
 
-      {filteredRooms.length === 0 ? (
+      {!selectedHostelId ? (
+        <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Building2 className="w-8 h-8 text-[#0D3833]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Select a Hostel Block</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              Please choose a hostel block and floor from the dropdowns above to view room matrices, bed occupancies, and resident distributions.
+            </p>
+          </div>
+        </div>
+      ) : !selectedFloor ? (
+        <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Layers className="w-8 h-8 text-[#0D3833]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Select a Floor</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              Please choose a floor (or "All Floors") from the floor dropdown to view the room cards and bed slots.
+            </p>
+          </div>
+        </div>
+      ) : filteredRooms.length === 0 ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
           <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
             <BedDouble className="w-8 h-8 text-[#0D3833]" />
