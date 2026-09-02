@@ -37,18 +37,35 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
       {/* Left Sidebar */}
       <Sidebar isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
 
-      {/* Main Content Area (Full Height without top navbar) */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
-        {/* Floating Mobile Hamburger Button (Only on small screens when sidebar is hidden) */}
-        <button
-          onClick={() => setMobileSidebarOpen(true)}
-          className="lg:hidden fixed top-4 left-4 z-30 p-2.5 rounded-2xl bg-white/90 backdrop-blur-sm border border-slate-200/80 shadow-md text-slate-700 hover:bg-slate-100 cursor-pointer"
-          aria-label="Open Navigation Menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Sleek Mobile Top App Bar (Only on mobile/tablet < 1024px, hidden on desktop) */}
+        <div className="lg:hidden h-14 px-4 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between shrink-0 z-30">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="p-2 -ml-1 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 transition-colors cursor-pointer active:scale-95 shadow-2xs"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-16 lg:pt-8">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[#0D3833] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                H
+              </div>
+              <span className="font-bold text-slate-900 tracking-tight text-sm">HostelDesk</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#D1F2EA] text-teal-950 text-[10px] font-bold border border-teal-200 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-600 animate-pulse" />
+            <span>{user?.role || 'PORTAL'}</span>
+          </div>
+        </div>
+
+        {/* Dynamic Page Content */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
