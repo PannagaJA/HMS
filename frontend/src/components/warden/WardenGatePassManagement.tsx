@@ -110,8 +110,30 @@ export const WardenGatePassManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Filter Pill Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+        {/* Mobile View: Status Filter Dropdown (< 768px) */}
+        <div className="block md:hidden w-full">
+          <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+            Filter Status:
+          </label>
+          <Select
+            value={activeFilter}
+            onValueChange={(val: any) => setActiveFilter(val)}
+            disabled={!selectedHostelId}
+          >
+            <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 disabled:opacity-50">
+              <SelectValue placeholder="Select Status Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pending Requests {selectedHostelId ? `(${pendingCount})` : ''}</SelectItem>
+              <SelectItem value="approved">Approved Requests</SelectItem>
+              <SelectItem value="rejected">Rejected Requests</SelectItem>
+              <SelectItem value="all">All Requests</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop View: Status Filter Pill Tabs (>= 768px) */}
+        <div className="hidden md:flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {(['pending', 'approved', 'rejected', 'all'] as const).map((tab) => (
             <button
               key={tab}
