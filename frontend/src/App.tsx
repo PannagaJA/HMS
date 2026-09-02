@@ -60,6 +60,7 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['WARDEN']} />}>
             <Route path="/warden/dashboard" element={<WardenDashboard />} />
             <Route path="/warden/residents" element={<WardenResidentManagement />} />
+            <Route path="/warden/menu" element={<MenuManagement />} />
             <Route path="/warden/passes" element={<WardenGatePassManagement />} />
             <Route path="/warden/issues" element={<WardenIssueManagement />} />
             <Route path="/warden/visitors" element={<WardenVisitorLogs />} />

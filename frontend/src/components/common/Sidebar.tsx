@@ -12,7 +12,6 @@ import {
   Wrench,
   Ticket,
   ClipboardList,
-  ShieldCheck,
   QrCode,
   User,
   LogOut,
@@ -44,9 +43,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { path: '/admin/profile', name: 'Account & Security', icon: User },
   ];
 
+  // Warden Nav Items matching reference Stalight architecture
   const wardenNavItems = [
     { path: '/warden/dashboard', name: 'Warden Dashboard', icon: LayoutDashboard },
     { path: '/warden/residents', name: 'Resident Students', icon: Users },
+    { path: '/warden/menu', name: 'Mess & Dining Menu', icon: UtensilsCrossed },
     { path: '/warden/passes', name: 'Gate Pass Review', icon: Ticket },
     { path: '/warden/issues', name: 'Hostel Issues', icon: Wrench },
     { path: '/warden/visitors', name: 'Visitor Register', icon: ClipboardList },
@@ -74,116 +75,125 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     }
   };
 
-  const handleConfirmLogout = () => {
-    setShowLogoutModal(false);
-    if (onClose) onClose();
-    logout();
+  const navItems = getNavItems();
+
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
   };
 
-  const handleNavClick = () => {
+  const handleConfirmLogout = async () => {
+    setShowLogoutModal(false);
     if (onClose) onClose();
+    await logout();
   };
 
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
+      {/* Mobile Drawer Overlay Backdrop */}
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 bg-black/50 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden transition-opacity"
         />
       )}
 
-      {/* Sidebar Drawer */}
+      {/* Sidebar Container */}
       <aside
-        className={`fixed lg:static top-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col shrink-0 h-screen select-none overflow-hidden transition-transform duration-300 ease-in-out ${
-          isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Sticky Header */}
-        <div className="h-16 px-6 flex items-center justify-between border-b border-slate-100 shrink-0 bg-white z-10">
+        {/* Pinned Header */}
+        <div className="h-16 px-6 border-b border-slate-200/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#0D3833] text-white flex items-center justify-center font-bold text-base shadow-sm">
-              <ShieldCheck className="w-5 h-5 text-emerald-300" />
+              H
             </div>
             <div>
-              <span className="font-bold text-slate-900 tracking-tight text-base block leading-tight">HostelDesk</span>
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{user?.role || 'PORTAL'}</span>
+              <span className="font-bold text-slate-800 tracking-tight text-sm block leading-none">HostelDesk</span>
+              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block mt-1">Enterprise HMS</span>
             </div>
           </div>
-
-          {/* Close button on Mobile */}
+          {/* Mobile Close Button */}
           <button
             onClick={onClose}
-            className="lg:hidden p-1.5 rounded-full hover:bg-slate-100 text-slate-500 cursor-pointer"
-            aria-label="Close Sidebar"
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Scrollable Navigation List */}
-        <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto min-h-0">
-          {getNavItems().map((item) => {
+        {/* Middle Navigation Section (Clean scrolling without section title headers) */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
+          {navItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={handleNavClick}
+                onClick={() => {
+                  if (onClose) onClose();
+                }}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition-all ${
+                  `flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-150 group ${
                     isActive
                       ? 'bg-[#0D3833] text-white shadow-sm'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`
                 }
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{item.name}</span>
+                {({ isActive }) => (
+                  <>
+                    <Icon
+                      className={`w-4 h-4 transition-colors ${
+                        isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-600'
+                      }`}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </>
+                )}
               </NavLink>
             );
           })}
         </nav>
 
-        {/* Sticky Bottom Sign Out */}
-        <div className="p-3.5 border-t border-slate-100 shrink-0 bg-white z-10">
+        {/* Pinned Bottom Sign Out Section */}
+        <div className="p-3 border-t border-slate-200/80 shrink-0">
           <button
-            onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-3 px-4 py-2.5 w-full rounded-2xl text-xs font-semibold text-rose-600 bg-rose-50/70 hover:bg-rose-100/80 border border-rose-100 transition-all cursor-pointer group"
+            onClick={handleLogoutClick}
+            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-semibold text-rose-600 bg-rose-50/60 hover:bg-rose-100/80 border border-rose-100 transition-all duration-150 cursor-pointer group"
           >
-            <LogOut className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-            <span>Sign Out</span>
+            <LogOut className="w-4 h-4 text-rose-500 group-hover:text-rose-700 transition-colors" />
+            <span className="font-medium">Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* Logout Confirmation Dialog */}
+      {/* Sign Out Confirmation Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-100">
               <LogOut className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Confirm Sign Out</h3>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Confirm Sign Out</h3>
             <p className="text-xs text-slate-500 mb-6">
-              Are you sure you want to end your current session? You will need to log in again to access the portal.
+              Are you sure you want to end your current session? You will be redirected to the login page.
             </p>
-
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmLogout}
-                className="flex-1 px-4 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-full bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors shadow-sm cursor-pointer"
               >
-                Yes, Sign Out
+                Sign Out
               </button>
             </div>
           </div>

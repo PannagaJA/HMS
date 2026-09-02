@@ -114,3 +114,5 @@ frontend/.vite/
 # Oxlint / Linter Caches
 .oxlint-cache
 .eslintcache
+# Added by code-review-graph
+.code-review-graph/

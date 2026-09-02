@@ -151,35 +151,28 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'accept-encoding',
 ]
 
-# Standard Console Request Logging
+# Clean Terminal Request Logging
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'verbose': {
-            'format': '[{asctime}] {levelname} {name} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
+        'django.server': {
+            '()': 'django.utils.log.ServerFormatter',
+            'format': '[{server_time}] INFO {message}',
             'style': '{',
         },
     },
     'handlers': {
-        'console': {
+        'django.server': {
+            'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'simple',
+            'formatter': 'django.server',
         },
     },
     'loggers': {
         'django.server': {
-            'handlers': ['console'],
+            'handlers': ['django.server'],
             'level': 'INFO',
-            'propagate': False,
-        },
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
             'propagate': False,
         },
     },
