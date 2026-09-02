@@ -41,7 +41,7 @@ export const WardenDashboard: React.FC = () => {
   const [selectedFloor, setSelectedFloor] = useState<string>('');
   const [selectedRoom, setSelectedRoom] = useState<HostelRoom | null>(null);
 
-  const currentHostel = stats?.managed_hostels.find((h) => h.id === selectedHostelId);
+  const currentHostel = stats?.managed_hostels?.find((h) => h.id === selectedHostelId);
 
   useEffect(() => {
     fetchDashboardData(selectedHostelId);
@@ -60,7 +60,7 @@ export const WardenDashboard: React.FC = () => {
       const url = hostelId ? `/warden/dashboard/?hostel_id=${hostelId}` : '/warden/dashboard/';
       const res = await apiClient.get<WardenStats>(url);
       setStats(res.data);
-      if (!hostelId && res.data.managed_hostels.length > 0) {
+      if (!hostelId && res.data?.managed_hostels?.length > 0) {
         setSelectedHostelId(res.data.managed_hostels[0].id);
       }
     } catch (err) {

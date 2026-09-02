@@ -39,6 +39,9 @@ export const VisitorLogsManagement: React.FC = () => {
       ]);
       setLogs(logsRes.data);
       setHostels(hostelsRes.data);
+      if (hostelsRes.data.length > 0 && !selectedHostelId) {
+        setSelectedHostelId(String(hostelsRes.data[0].id));
+      }
     } catch (err) {
       console.error('Failed to load visitor logs or hostels', err);
     }

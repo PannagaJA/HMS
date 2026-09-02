@@ -64,6 +64,9 @@ export const RoomManagement: React.FC = () => {
     try {
       const res = await apiClient.get<Hostel[]>('/hms/hostels/');
       setHostels(res.data);
+      if (res.data.length > 0 && !selectedHostelId) {
+        setSelectedHostelId(String(res.data[0].id));
+      }
     } catch (err) {
       console.error('Failed to load hostels', err);
     }

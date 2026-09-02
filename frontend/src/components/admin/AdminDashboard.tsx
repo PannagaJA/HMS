@@ -205,9 +205,9 @@ export const AdminDashboard: React.FC = () => {
                   <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-4 pl-6 font-semibold text-slate-800 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-[#E8F8CE] text-emerald-950 font-bold flex items-center justify-center text-xs">
-                        {p.student_name[0]}
+                        {p.student_name?.[0] || 'S'}
                       </div>
-                      <span>{p.student_name}</span>
+                      <span>{p.student_name || 'Student'}</span>
                     </td>
                     <td className="py-4 px-4 font-mono text-xs text-slate-700 font-semibold">
                       {p.enrollment_no}

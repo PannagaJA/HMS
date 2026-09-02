@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 
 describe('Stage 9: Security Verification Test Suite', () => {
   it('SEC-001: Student cannot escalate their role', () => {
-    const callerRole = 'STUDENT';
-    const attemptedRoleUpdate = 'ADMIN';
-    const isAllowed = callerRole === 'ADMIN';
+    const callerRole: string = 'STUDENT';
+    const attemptedRoleUpdate: string = 'ADMIN';
+    const isAllowed = callerRole === attemptedRoleUpdate;
     expect(isAllowed).toBe(false);
   });
 
@@ -34,7 +34,7 @@ describe('Stage 9: Security Verification Test Suite', () => {
   });
 
   it('SEC-013: ENTRY movement before EXIT must be rejected', () => {
-    const pass = { actual_exit_time: null, actual_entry_time: null };
+    const pass: { actual_exit_time: string | null; actual_entry_time: string | null } = { actual_exit_time: null, actual_entry_time: null };
     const canStampEntry = pass.actual_exit_time !== null;
     expect(canStampEntry).toBe(false);
   });
@@ -60,7 +60,15 @@ describe('Stage 9: Security Verification Test Suite', () => {
   });
 
   it('SEC-024: Visitor checkout modifies checkout timestamp only', () => {
-    const originalLog = {
+    const originalLog: {
+      id: number;
+      student_id: number;
+      hostel_id: number;
+      room_id: number;
+      visitor_name: string;
+      check_in_time: string;
+      check_out_time: string | null;
+    } = {
       id: 1,
       student_id: 10,
       hostel_id: 2,

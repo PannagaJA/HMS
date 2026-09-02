@@ -33,6 +33,9 @@ export const WardenGatePassManagement: React.FC = () => {
       ]);
       setPasses(passesRes.data);
       setHostels(hostelsRes.data);
+      if (hostelsRes.data.length > 0 && !selectedHostelId) {
+        setSelectedHostelId(String(hostelsRes.data[0].id));
+      }
     } catch (err) {
       console.error('Failed to load gate passes or hostels', err);
     }
