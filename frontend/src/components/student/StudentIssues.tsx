@@ -48,7 +48,10 @@ export const StudentIssues: React.FC = () => {
       setIssueDesc('');
       fetchIssues();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to report maintenance issue');
+      const errorMsg = err.response?.data?.detail 
+        || (typeof err.response?.data === 'object' ? JSON.stringify(err.response?.data) : err.response?.data)
+        || 'Failed to report maintenance issue';
+      alert(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -125,8 +128,8 @@ export const StudentIssues: React.FC = () => {
                     <SelectItem value="ELECTRICAL">Electrical (Lights, Fan, Switchboard)</SelectItem>
                     <SelectItem value="PLUMBING">Plumbing (Tap, Pipe, Drainage)</SelectItem>
                     <SelectItem value="CARPENTRY">Carpentry (Bed, Desk, Door, Cupboard)</SelectItem>
+                    <SelectItem value="WIFI">Wi-Fi & Internet</SelectItem>
                     <SelectItem value="CLEANLINESS">Cleanliness & Hygiene</SelectItem>
-                    <SelectItem value="INTERNET">Wi-Fi & Internet</SelectItem>
                     <SelectItem value="OTHER">Other Issue</SelectItem>
                   </SelectContent>
                 </Select>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BedDouble, Plus } from 'lucide-react';
+import { BedDouble, Plus, X } from 'lucide-react';
 import type { HostelRoom, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -192,53 +192,53 @@ export const RoomManagement: React.FC = () => {
         })}
       </div>
 
-      {/* Room Occupants Side Drawer */}
+      {/* Room Occupants Centered Modal Popup */}
       {showOccupantsDrawer && selectedRoom && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-end">
-          <div className="bg-white w-full max-w-md h-full p-6 shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-200 flex flex-col justify-between">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-7 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Room {selectedRoom.no} Details</h3>
+                  <h3 className="text-xl font-bold text-slate-900">Room {selectedRoom.no} Details</h3>
                   <p className="text-xs text-slate-500">Floor {selectedRoom.floor} · {selectedRoom.room_type_display || 'Standard'}</p>
                 </div>
                 <button
                   onClick={() => setShowOccupantsDrawer(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-xs">
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400 block mb-0.5">Total Capacity</span>
-                    <span className="font-bold text-slate-800">{selectedRoom.capacity} Beds</span>
+                    <span className="font-bold text-slate-800 text-sm">{selectedRoom.capacity} Beds</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block mb-0.5">Occupied Slots</span>
-                    <span className="font-bold text-slate-800">{selectedRoom.occupied_count} Students</span>
+                    <span className="font-bold text-slate-800 text-sm">{selectedRoom.occupied_count} Students</span>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Allocated Bed Slots</h4>
-                  <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">Allocated Bed Slots</h4>
+                  <div className="space-y-2.5">
                     {Array.from({ length: selectedRoom.capacity }).map((_, idx) => {
                       const isOccupied = idx < selectedRoom.occupied_count;
                       return (
                         <div
                           key={idx}
-                          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs ${
+                          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs transition-colors ${
                             isOccupied
-                              ? 'bg-white border-slate-200 shadow-sm'
+                              ? 'bg-white border-slate-200/80 shadow-xs'
                               : 'bg-slate-50/60 border-dashed border-slate-200 text-slate-400'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-                              isOccupied ? 'bg-[#0D3833] text-white' : 'bg-slate-200 text-slate-500'
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                              isOccupied ? 'bg-[#0D3833] text-white shadow-xs' : 'bg-slate-200 text-slate-500'
                             }`}>
                               {idx + 1}
                             </div>
@@ -251,8 +251,8 @@ export const RoomManagement: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            isOccupied ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            isOccupied ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
                           }`}>
                             {isOccupied ? 'OCCUPIED' : 'VACANT'}
                           </span>
@@ -264,12 +264,12 @@ export const RoomManagement: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex justify-end">
+            <div className="pt-5 mt-4 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => setShowOccupantsDrawer(false)}
-                className="px-5 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 cursor-pointer"
+                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
               >
-                Close Drawer
+                Close Details
               </button>
             </div>
           </div>
