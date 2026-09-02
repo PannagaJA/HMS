@@ -8,7 +8,6 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { HostelManagement } from './components/admin/HostelManagement';
 import { RoomManagement } from './components/admin/RoomManagement';
 import { StudentManagement } from './components/admin/StudentManagement';
-import { OutsideStudentManagement } from './components/admin/OutsideStudentManagement';
 import { StaffManagement } from './components/admin/StaffManagement';
 import { MenuManagement } from './components/admin/MenuManagement';
 import { IssueTracking } from './components/admin/IssueTracking';
@@ -48,7 +47,6 @@ function App() {
             <Route path="/admin/hostels" element={<HostelManagement />} />
             <Route path="/admin/rooms" element={<RoomManagement />} />
             <Route path="/admin/students" element={<StudentManagement />} />
-            <Route path="/admin/outside-students" element={<OutsideStudentManagement />} />
             <Route path="/admin/staff" element={<StaffManagement />} />
             <Route path="/admin/menu" element={<MenuManagement />} />
             <Route path="/admin/issues" element={<IssueTracking />} />

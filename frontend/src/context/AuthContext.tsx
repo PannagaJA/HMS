@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await loginUser(username, password);
+      if (!res.user) throw new Error('User profile not found');
       setUser(res.user);
       setToken(res.access);
       return res.user;

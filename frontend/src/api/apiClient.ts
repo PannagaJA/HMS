@@ -1,1 +1,1 @@
-export * from '../utils/authService';
+export { apiClient } from '../utils/authService';
