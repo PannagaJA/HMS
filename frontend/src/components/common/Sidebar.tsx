@@ -60,8 +60,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { path: '/security/profile', name: 'My Profile', icon: User },
   ];
 
+  // Student Nav Items with dedicated pages matching Stalight
   const studentNavItems = [
-    { path: '/student/dashboard', name: 'My Residence & Pass', icon: LayoutDashboard },
+    { path: '/student/dashboard', name: 'Overview & Room', icon: LayoutDashboard },
+    { path: '/student/passes', name: 'My Gate Passes', icon: Ticket },
+    { path: '/student/issues', name: 'Maintenance Issues', icon: Wrench },
+    { path: '/student/meals', name: 'Mess & Dining', icon: UtensilsCrossed },
     { path: '/student/profile', name: 'My Profile', icon: User },
   ];
 

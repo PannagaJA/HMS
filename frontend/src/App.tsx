@@ -26,8 +26,11 @@ import { WardenVisitorLogs } from './components/warden/WardenVisitorLogs';
 // Security Pages
 import { GatePassScanner } from './components/security/GatePassScanner';
 
-// Student Pages
+// Student Dedicated Pages
 import { StudentDashboard } from './components/student/StudentDashboard';
+import { StudentGatePasses } from './components/student/StudentGatePasses';
+import { StudentIssues } from './components/student/StudentIssues';
+import { StudentMeals } from './components/student/StudentMeals';
 
 function App() {
   return (
@@ -77,6 +80,9 @@ function App() {
           {/* Student Resident Protected Routes */}
           <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
             <Route path="/student/dashboard" element={<StudentDashboard />} />
+            <Route path="/student/passes" element={<StudentGatePasses />} />
+            <Route path="/student/issues" element={<StudentIssues />} />
+            <Route path="/student/meals" element={<StudentMeals />} />
             <Route path="/student/profile" element={<HMSProfile />} />
           </Route>
 

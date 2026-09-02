@@ -58,24 +58,30 @@ export interface HostelRoom {
   id: number;
   hostel: number;
   hostel_name: string;
-  no: string;
-  name: string;
+  room_no?: string;
+  no?: string;
+  name?: string;
   floor: number;
   capacity: number;
+  occupied_beds: number;
   occupied_count: number;
-  current_occupancy?: number;
-  occupants?: RoomOccupant[];
-  vacant: boolean;
+  current_occupancy: number;
+  vacant_beds: number;
+  vacant: number;
   room_type: string;
   room_type_display?: string;
+  is_active: boolean;
+  occupants?: RoomOccupant[];
 }
 
 export interface HostelStudent {
   id: number;
   student_name: string;
   enrollment_no: string;
-  gender: 'M' | 'F';
+  email?: string;
   father_name?: string;
+  gender: 'M' | 'F';
+  phone?: string;
   guardian_phone?: string;
   emergency_contact?: string;
   room_allotted: boolean;
@@ -145,7 +151,7 @@ export interface MenuItem {
 
 export interface Menu {
   id: number;
-  day_of_week: number;
+  day_of_week: number | string;
   meal_type: number;
   meal_type_name?: string;
   items: MenuItem[];
@@ -180,7 +186,8 @@ export interface HostelIssue {
   category: string;
   title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'waiting_for_workers' | 'completed';
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | string;
+  status: 'pending' | 'in_progress' | 'waiting_for_workers' | 'completed' | 'resolved';
   created_at: string;
 }
 
@@ -192,7 +199,7 @@ export interface GatePassRequest {
   enrollment_no: string;
   hostel_name: string;
   room_no: string;
-  pass_type: 'day_out' | 'night_out' | 'home';
+  pass_type: 'day_out' | 'night_out' | 'home' | 'DAY_OUT' | 'NIGHT_OUT' | 'HOME_VISIT' | 'EMERGENCY' | string;
   purpose: string;
   reason?: string;
   out_date: string;
@@ -200,7 +207,7 @@ export interface GatePassRequest {
   return_date: string;
   expected_return_date?: string;
   expected_return_time?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | string;
   created_at: string;
   destination?: string;
   actual_exit_time?: string;
