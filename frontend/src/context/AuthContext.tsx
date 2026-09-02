@@ -8,6 +8,7 @@ import {
   saveAuthSession,
   apiClient 
 } from '../utils/authService';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -24,26 +25,62 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => getStoredUser());
   const [token, setToken] = useState<string | null>(() => getAccessToken());
-  const [isLoading, setIsLoading] = useState(false);
+  // Optimistic UI: If stored user exists, don't block the screen with full loader
+  const [isLoading, setIsLoading] = useState<boolean>(() => !getStoredUser());
 
   const refreshUserProfile = async (): Promise<User | null> => {
-    const currentToken = getAccessToken();
-    if (currentToken) {
-      try {
-        const res = await apiClient.get<User>('/auth/me/');
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) {
+        // Only clear if confirmed no Supabase session
+        const sessionRes = await supabase.auth.getSession();
+        if (!sessionRes.data?.session) {
+          setUser(null);
+          setToken(null);
+          localStorage.removeItem('hms_user');
+          localStorage.removeItem('hms_token');
+          return null;
+        }
+      }
+
+      const res = await apiClient.get<User>('/auth/me/');
+      if (res.data) {
         setUser(res.data);
+        const sessionRes = await supabase.auth.getSession();
+        const currentToken = sessionRes.data?.session?.access_token || getAccessToken() || '';
+        setToken(currentToken);
         saveAuthSession(currentToken, undefined, res.data);
         return res.data;
-      } catch (err) {
-        // Token expired or invalid
       }
+    } catch (err) {
+      console.error('Session restoration background check:', err);
+    } finally {
+      setIsLoading(false);
     }
     return null;
   };
 
   useEffect(() => {
-    // Verify session on mount
+    // 1. Initial restoration on page refresh
     refreshUserProfile();
+
+    // 2. Listen to Supabase auth events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('hms_user');
+        localStorage.removeItem('hms_token');
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session) {
+          setToken(session.access_token);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const updateCurrentUser = (updatedUser: User) => {

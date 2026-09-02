@@ -538,9 +538,36 @@ export const authService = {
 
 export const loginUser = async (u: string, p: string) => {
   const res = await authService.login(u, p);
-  return { user: res.profile as any, access: res.session?.access_token || '' };
+  const token = res.session?.access_token || '';
+  if (res.profile) {
+    localStorage.setItem('hms_user', JSON.stringify(res.profile));
+  }
+  if (token) {
+    localStorage.setItem('hms_token', token);
+  }
+  return { user: res.profile as any, access: token };
 };
-export const logoutUser = async () => authService.logout();
-export const getStoredUser = (): any => null;
-export const getAccessToken = (): string | null => null;
-export const saveAuthSession = (_a?: any, _b?: any, _c?: any): void => {};
+
+export const logoutUser = async () => {
+  localStorage.removeItem('hms_user');
+  localStorage.removeItem('hms_token');
+  await authService.logout();
+};
+
+export const getStoredUser = (): any => {
+  try {
+    const raw = localStorage.getItem('hms_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getAccessToken = (): string | null => {
+  return localStorage.getItem('hms_token');
+};
+
+export const saveAuthSession = (token?: string, _b?: any, user?: any): void => {
+  if (token) localStorage.setItem('hms_token', token);
+  if (user) localStorage.setItem('hms_user', JSON.stringify(user));
+};
