@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Download, Check, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed } from 'lucide-react';
 import type { MealType, MenuItem, Menu } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -231,7 +231,7 @@ export const MenuManagement: React.FC = () => {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {mealTypes.map((mealType) => {
               const menuForSlot = menus.find(
                 (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(mealType.id)
@@ -239,23 +239,59 @@ export const MenuManagement: React.FC = () => {
               // Check both items_detail (full objects) or items (IDs/objects)
               const itemsList = menuForSlot?.items_detail || menuForSlot?.items || [];
 
+              // Map code to friendly titles and themed colors
+              const slotCode = mealType.name.toUpperCase();
+              const isBreakfast = slotCode === 'BR' || slotCode.includes('BREAKFAST');
+              const isLunch = slotCode === 'LN' || slotCode.includes('LUNCH');
+              const isSnacks = slotCode === 'SN' || slotCode.includes('SNACK');
+              const isDinner = slotCode === 'DN' || slotCode.includes('DINNER');
+
+              const slotTitle = isBreakfast ? 'Breakfast' : isLunch ? 'Lunch' : isSnacks ? 'Evening Snacks' : isDinner ? 'Dinner' : mealType.name;
+              const slotIcon = isBreakfast ? <Coffee className="w-5 h-5" /> : isLunch ? <Sun className="w-5 h-5" /> : isSnacks ? <Sunset className="w-5 h-5" /> : <Moon className="w-5 h-5" />;
+              
+              const headerBg = isBreakfast ? 'bg-amber-50 text-amber-900 border-amber-200' :
+                               isLunch ? 'bg-orange-50 text-orange-900 border-orange-200' :
+                               isSnacks ? 'bg-teal-50 text-teal-900 border-teal-200' :
+                               'bg-indigo-50 text-indigo-900 border-indigo-200';
+
+              const badgeBg = isBreakfast ? 'bg-amber-100 text-amber-800' :
+                              isLunch ? 'bg-orange-100 text-orange-800' :
+                              isSnacks ? 'bg-teal-100 text-teal-800' :
+                              'bg-indigo-100 text-indigo-800';
+
               return (
                 <div
                   key={mealType.id}
-                  className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
+                  className="bg-white rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between overflow-hidden hover:border-slate-300 hover:shadow-md transition-all"
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold text-slate-800 tracking-tight">{mealType.name}</span>
-                      <span className="text-[10px] font-mono text-slate-400 font-semibold">
-                        {mealType.start_time || mealType.time_from || '08:00'} - {mealType.end_time || mealType.time_to || '10:00'}
-                      </span>
+                  <div className="p-5">
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${headerBg} shadow-2xs`}>
+                          {slotIcon}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-bold text-slate-900 text-base">{slotTitle}</h3>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${badgeBg}`}>
+                              {mealType.name}
+                            </span>
+                          </div>
+                          <span className="flex items-center gap-1 text-[11px] text-slate-500 font-mono mt-0.5">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>{mealType.start_time || mealType.time_from || '08:00'} - {mealType.end_time || mealType.time_to || '10:00'}</span>
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="min-h-[140px] space-y-1.5 py-2">
+                    {/* Meal Items List */}
+                    <div className="min-h-[120px] space-y-2 py-1">
                       {itemsList.length === 0 ? (
-                        <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
-                          No items configured
+                        <div className="h-28 flex flex-col items-center justify-center rounded-2xl bg-slate-50/70 border border-dashed border-slate-200 text-xs text-slate-400">
+                          <UtensilsCrossed className="w-5 h-5 text-slate-300 mb-1" />
+                          <span>No items configured</span>
                         </div>
                       ) : (
                         itemsList.map((item: any, idx: number) => {
@@ -264,9 +300,14 @@ export const MenuManagement: React.FC = () => {
                           return (
                             <div
                               key={idx}
-                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs text-slate-700 font-medium"
+                              className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-800 font-medium hover:bg-slate-100/80 transition-colors shadow-2xs"
                             >
-                              <span className={`w-2 h-2 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${
+                                  isVegetarian ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-rose-500 ring-2 ring-rose-100'
+                                }`}
+                                title={isVegetarian ? 'Vegetarian' : 'Non-Veg'}
+                              />
                               <span className="truncate">{itemObj?.name || `Item #${item}`}</span>
                             </div>
                           );
@@ -275,12 +316,17 @@ export const MenuManagement: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex justify-end">
+                  {/* Card Footer Action */}
+                  <div className="p-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      {itemsList.length} {itemsList.length === 1 ? 'Dish' : 'Dishes'}
+                    </span>
                     <button
                       onClick={() => handleOpenConfigureSlot(mealType)}
-                      className="px-4 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                      className="px-4 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
                     >
-                      Configure Slot
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Configure Slot</span>
                     </button>
                   </div>
                 </div>
