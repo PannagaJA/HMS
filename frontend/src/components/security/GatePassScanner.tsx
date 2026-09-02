@@ -29,6 +29,9 @@ export const GatePassScanner: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'outside' | 'completed'>('outside');
   const [filterQuery, setFilterQuery] = useState('');
 
+  // Confirmation Dialog State for Check Out & Check In
+  const [pendingConfirmAction, setPendingConfirmAction] = useState<'EXIT' | 'ENTRY' | null>(null);
+
   // Camera Scanner State
   const [isCameraActive, setIsCameraActive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -45,11 +48,9 @@ export const GatePassScanner: React.FC = () => {
       const res = await apiClient.get<GatePassRequest[]>('/security/gate-passes/');
       const passes = res.data;
 
-      // Filter students who exited campus but have not checked back in yet
       const outside = passes.filter(
         (p) => p.actual_exit_time && !p.actual_entry_time
       );
-      // Filter passes that have completed full round-trip entry
       const completed = passes.filter(
         (p) => p.actual_exit_time && p.actual_entry_time
       );
@@ -125,8 +126,11 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(false);
   };
 
-  const handleLogMovement = async (movementType: 'EXIT' | 'ENTRY') => {
-    if (!scannedPass) return;
+  const handleConfirmMovementExecution = async () => {
+    if (!scannedPass || !pendingConfirmAction) return;
+    const movementType = pendingConfirmAction;
+    setPendingConfirmAction(null);
+
     setActionLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -137,7 +141,7 @@ export const GatePassScanner: React.FC = () => {
       });
       setSuccessMsg(res.data.message);
       setScannedPass(res.data.pass);
-      fetchGatePassRecords(); // Refresh live table
+      fetchGatePassRecords();
     } catch (err: any) {
       setErrorMsg(err.response?.data?.error || 'Failed to log gate movement');
     } finally {
@@ -320,7 +324,7 @@ export const GatePassScanner: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <button
-                onClick={() => handleLogMovement('EXIT')}
+                onClick={() => setPendingConfirmAction('EXIT')}
                 disabled={isExitDone || actionLoading}
                 className={`w-full sm:flex-1 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   isExitDone
@@ -337,7 +341,7 @@ export const GatePassScanner: React.FC = () => {
               </button>
 
               <button
-                onClick={() => handleLogMovement('ENTRY')}
+                onClick={() => setPendingConfirmAction('ENTRY')}
                 disabled={!isExitDone || isEntryDone || actionLoading}
                 className={`w-full sm:flex-1 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   !isExitDone || isEntryDone
@@ -357,7 +361,7 @@ export const GatePassScanner: React.FC = () => {
         </div>
       )}
 
-      {/* SECTION 3: HOSTEL STUDENTS GATE LEDGER TABLE (OUTSIDE STUDENTS & RECENT ENTRIES) */}
+      {/* SECTION 3: HOSTEL STUDENTS GATE LEDGER TABLE */}
       <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -464,6 +468,71 @@ export const GatePassScanner: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* CONFIRMATION POPUP MODAL FOR CHECK OUT & CHECK IN */}
+      {pendingConfirmAction && scannedPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-7 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-150">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 border ${
+              pendingConfirmAction === 'EXIT' 
+                ? 'bg-amber-50 text-amber-600 border-amber-200' 
+                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+            }`}>
+              {pendingConfirmAction === 'EXIT' ? <ArrowRight className="w-7 h-7" /> : <ArrowLeft className="w-7 h-7" />}
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              {pendingConfirmAction === 'EXIT' ? 'Confirm Gate Exit (Check Out)' : 'Confirm Gate Entry (Check In)'}
+            </h3>
+            
+            <p className="text-xs text-slate-500 mb-5">
+              {pendingConfirmAction === 'EXIT'
+                ? `Are you sure you want to log campus departure for ${scannedPass.student_name}?`
+                : `Are you sure you want to log campus return for ${scannedPass.student_name}? This will complete their gate pass.`}
+            </p>
+
+            <div className="bg-slate-50 p-3.5 rounded-2xl text-left border border-slate-200 text-xs space-y-1.5 mb-6">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Student:</span>
+                <strong className="text-slate-800">{scannedPass.student_name}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">USN / Enrollment:</span>
+                <span className="font-mono font-bold text-teal-950">{scannedPass.enrollment_no}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Hostel & Room:</span>
+                <span className="text-slate-700">{scannedPass.hostel_name} (Rm {scannedPass.room_no || '101'})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Pass Type:</span>
+                <span className="text-slate-700 font-semibold">{String(scannedPass.pass_type).replace(/_/g, ' ')}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingConfirmAction(null)}
+                className="flex-1 py-3 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMovementExecution}
+                className={`flex-1 py-3 rounded-full text-white text-xs font-bold shadow-sm cursor-pointer transition-colors ${
+                  pendingConfirmAction === 'EXIT'
+                    ? 'bg-[#0D3833] hover:bg-[#064E3B]'
+                    : 'bg-emerald-700 hover:bg-emerald-800'
+                }`}
+              >
+                {pendingConfirmAction === 'EXIT' ? 'Confirm Check Out' : 'Confirm Check In'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
