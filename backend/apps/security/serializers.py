@@ -24,6 +24,7 @@ class GatePassRequestSerializer(serializers.ModelSerializer):
 class VisitorLogSerializer(serializers.ModelSerializer):
     student_name = serializers.ReadOnlyField(source='student.student_name')
     student_room = serializers.ReadOnlyField(source='student.room.no')
+    hostel_name = serializers.ReadOnlyField(source='student.room.hostel.name')
     status = serializers.SerializerMethodField()
 
     class Meta:

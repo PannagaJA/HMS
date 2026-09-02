@@ -182,6 +182,8 @@ export interface GatePassRequest {
   token?: string;
   student_name: string;
   enrollment_no: string;
+  hostel?: number;
+  hostel_id?: number;
   hostel_name: string;
   room_no: string;
   pass_type: 'day_out' | 'night_out' | 'home' | 'DAY_OUT' | 'NIGHT_OUT' | 'HOME_VISIT' | 'EMERGENCY' | string;
@@ -213,6 +215,9 @@ export interface VisitorLog {
   student_name: string;
   student_room?: string;
   enrollment_no?: string;
+  hostel?: number;
+  hostel_id?: number;
+  hostel_name?: string;
   relation?: string;
   purpose: string;
   entry_time?: string;

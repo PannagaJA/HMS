@@ -1,10 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Search, LogOut, Download } from 'lucide-react';
-import type { VisitorLog } from '../../types';
+import { Search, LogOut, Download, Building2 } from 'lucide-react';
+import type { VisitorLog, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const VisitorLogsManagement: React.FC = () => {
   const [logs, setLogs] = useState<VisitorLog[]>([]);
+  const [hostels, setHostels] = useState<Hostel[]>([]);
+  const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'CHECKED_IN' | 'CHECKED_OUT'>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -19,15 +28,19 @@ export const VisitorLogsManagement: React.FC = () => {
   const [purpose, setPurpose] = useState('');
 
   useEffect(() => {
-    fetchLogs();
+    fetchLogsAndHostels();
   }, []);
 
-  const fetchLogs = async () => {
+  const fetchLogsAndHostels = async () => {
     try {
-      const res = await apiClient.get<VisitorLog[]>('/hms/visitor-logs/');
-      setLogs(res.data);
+      const [logsRes, hostelsRes] = await Promise.all([
+        apiClient.get<VisitorLog[]>('/hms/visitor-logs/'),
+        apiClient.get<Hostel[]>('/hms/hostels/'),
+      ]);
+      setLogs(logsRes.data);
+      setHostels(hostelsRes.data);
     } catch (err) {
-      console.error('Failed to load visitor logs', err);
+      console.error('Failed to load visitor logs or hostels', err);
     }
   };
 
@@ -52,7 +65,7 @@ export const VisitorLogsManagement: React.FC = () => {
       setStudentRoom('');
       setEnrollmentNo('');
       setPurpose('');
-      fetchLogs();
+      fetchLogsAndHostels();
     } catch (err) {
       alert('Failed to register visitor check-in');
     }
@@ -62,7 +75,7 @@ export const VisitorLogsManagement: React.FC = () => {
     if (!confirm('Mark visitor as checked out?')) return;
     try {
       await apiClient.post(`/hms/visitor-logs/${id}/checkout/`);
-      fetchLogs();
+      fetchLogsAndHostels();
     } catch (err) {
       alert('Failed to check out visitor');
     }
@@ -72,11 +85,26 @@ export const VisitorLogsManagement: React.FC = () => {
     window.print();
   };
 
-  const filteredLogs = logs.filter((l) => {
+  // 1. Filter by Hostel first
+  const hostelFilteredLogs = logs.filter((l) => {
+    if (!selectedHostelId) return false;
+    if (selectedHostelId === 'ALL') return true;
+
+    const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
+    return (
+      String(l.hostel) === selectedHostelId ||
+      String(l.hostel_id) === selectedHostelId ||
+      (Boolean(selectedHostelObj) && Boolean(l.hostel_name) && l.hostel_name!.toLowerCase().includes(selectedHostelObj!.name.toLowerCase()))
+    );
+  });
+
+  // 2. Filter by Search & Status
+  const filteredLogs = hostelFilteredLogs.filter((l) => {
     const matchesSearch =
       l.visitor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (l.enrollment_no ? l.enrollment_no.toLowerCase().includes(searchTerm.toLowerCase()) : false);
+      (l.enrollment_no ? l.enrollment_no.toLowerCase().includes(searchTerm.toLowerCase()) : false) ||
+      (l.purpose ? l.purpose.toLowerCase().includes(searchTerm.toLowerCase()) : false);
 
     if (filterStatus === 'ALL') return matchesSearch;
     return matchesSearch && l.status === filterStatus;
@@ -106,25 +134,53 @@ export const VisitorLogsManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div className="relative w-full sm:w-80">
+      {/* Filter Toolbar with Hostel Block Selector & Status Tabs */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* Hostel Selector Dropdown */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-1 max-w-md">
+          <span className="text-xs font-semibold text-slate-500 whitespace-nowrap flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+            <span>Select Hostel:</span>
+          </span>
+          <div className="flex-1 min-w-[200px]">
+            <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800">
+                <SelectValue placeholder="Choose hostel block" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Hostel Blocks</SelectItem>
+                {hostels.map((h) => (
+                  <SelectItem key={h.id} value={String(h.id)}>
+                    {h.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-xs">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search visitor or student name..."
-            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+            disabled={!selectedHostelId}
+            placeholder="Search visitor, student, or purpose..."
+            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 disabled:opacity-50"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        {/* Status Filter Pill Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {(['ALL', 'CHECKED_IN', 'CHECKED_OUT'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilterStatus(tab)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                filterStatus === tab
+              disabled={!selectedHostelId}
+              className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
+                filterStatus === tab && selectedHostelId
                   ? 'bg-[#0D3833] text-white shadow-sm'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
@@ -135,78 +191,157 @@ export const VisitorLogsManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3.5 pl-6">Visitor</th>
-                <th className="py-3.5 px-4">Relation</th>
-                <th className="py-3.5 px-4">Visiting Student</th>
-                <th className="py-3.5 px-4">Purpose</th>
-                <th className="py-3.5 px-4">Check-In Time</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 pr-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
-                    No visitor records found.
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-4 pl-6 font-semibold text-slate-800">
-                      <div>{log.visitor_name}</div>
-                      <div className="text-[11px] font-mono text-slate-400">{log.visitor_phone || log.mobile_number || 'N/A'}</div>
-                    </td>
-                    <td className="py-4 px-4 text-xs font-semibold text-slate-600">
-                      {log.relation}
-                    </td>
-                    <td className="py-4 px-4 text-xs">
-                      <span className="font-bold text-slate-800">{log.student_name}</span>
-                      <div className="text-slate-400">{log.student_room ? `Room ${log.student_room}` : log.enrollment_no || ''}</div>
-                    </td>
-                    <td className="py-4 px-4 text-xs text-slate-600">
-                      {log.purpose}
-                    </td>
-                    <td className="py-4 px-4 text-xs font-mono text-slate-500">
-                      {log.entry_time || log.check_in_time ? new Date(log.entry_time || log.check_in_time || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                        log.status === 'CHECKED_IN'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
-                        {log.status === 'CHECKED_IN' ? 'CURRENTLY INSIDE' : 'CHECKED OUT'}
-                      </span>
-                    </td>
-                    <td className="py-4 pr-6 text-right">
-                      {log.status === 'CHECKED_IN' ? (
-                        <button
-                          onClick={() => handleCheckOut(log.id)}
-                          className="px-3.5 py-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                          <span>Mark Exit</span>
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-400">
-                          Out at {log.exit_time || log.check_out_time ? new Date(log.exit_time || log.check_out_time || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Logged'}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {!selectedHostelId ? (
+        <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-900 flex items-center justify-center mx-auto border border-teal-200">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Select a Hostel Block</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Choose a hostel block from the dropdown above to view and track external campus visitor logs.
+          </p>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Mobile Card View (< 768px) */}
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {filteredLogs.length === 0 ? (
+              <div className="bg-white p-10 rounded-3xl border border-slate-200 text-center text-slate-400 text-sm">
+                No visitor records found for this hostel block.
+              </div>
+            ) : (
+              filteredLogs.map((log) => (
+                <div key={log.id} className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-base">{log.visitor_name}</h4>
+                      <p className="text-xs text-slate-400">{log.visitor_phone || log.mobile_number || 'N/A'}</p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                      log.status === 'CHECKED_IN'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {log.status === 'CHECKED_IN' ? 'INSIDE' : 'DEPARTED'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                      <span className="block text-[10px] font-semibold text-slate-400 uppercase">Visiting Student</span>
+                      <strong className="text-slate-800 block truncate mt-0.5">{log.student_name}</strong>
+                      <span className="text-[10px] text-slate-500 block truncate">
+                        {log.student_room ? `Room ${log.student_room}` : log.enrollment_no || ''}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                      <span className="block text-[10px] font-semibold text-slate-400 uppercase">Relation & Time</span>
+                      <strong className="text-slate-800 block truncate mt-0.5">{log.relation || 'Guest'}</strong>
+                      <span className="text-[10px] font-mono text-slate-500 block truncate">
+                        {log.entry_time || log.check_in_time ? new Date(log.entry_time || log.check_in_time || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-600 italic bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    "{log.purpose}"
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
+                    {log.status === 'CHECKED_IN' ? (
+                      <button
+                        onClick={() => handleCheckOut(log.id)}
+                        className="w-full py-2 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Mark Exit</span>
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        Out at {log.exit_time || log.check_out_time ? new Date(log.exit_time || log.check_out_time || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Logged'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View (>= 768px) */}
+          <div className="hidden md:block bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="py-3.5 pl-6">Visitor</th>
+                    <th className="py-3.5 px-4">Relation</th>
+                    <th className="py-3.5 px-4">Visiting Student</th>
+                    <th className="py-3.5 px-4">Purpose</th>
+                    <th className="py-3.5 px-4">Check-In Time</th>
+                    <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 pr-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {filteredLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-slate-400">
+                        No visitor records found for this hostel block.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-4 pl-6 font-semibold text-slate-800">
+                          <div>{log.visitor_name}</div>
+                          <div className="text-[11px] font-mono text-slate-400">{log.visitor_phone || log.mobile_number || 'N/A'}</div>
+                        </td>
+                        <td className="py-4 px-4 text-xs font-semibold text-slate-600">
+                          {log.relation}
+                        </td>
+                        <td className="py-4 px-4 text-xs">
+                          <span className="font-bold text-slate-800">{log.student_name}</span>
+                          <div className="text-slate-400">{log.student_room ? `Room ${log.student_room}` : log.enrollment_no || ''}</div>
+                        </td>
+                        <td className="py-4 px-4 text-xs text-slate-600">
+                          {log.purpose}
+                        </td>
+                        <td className="py-4 px-4 text-xs font-mono text-slate-500">
+                          {log.entry_time || log.check_in_time ? new Date(log.entry_time || log.check_in_time || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            log.status === 'CHECKED_IN'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {log.status === 'CHECKED_IN' ? 'CURRENTLY INSIDE' : 'CHECKED OUT'}
+                          </span>
+                        </td>
+                        <td className="py-4 pr-6 text-right">
+                          {log.status === 'CHECKED_IN' ? (
+                            <button
+                              onClick={() => handleCheckOut(log.id)}
+                              className="px-3.5 py-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                            >
+                              <LogOut className="w-3.5 h-3.5" />
+                              <span>Mark Exit</span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              Out at {log.exit_time || log.check_out_time ? new Date(log.exit_time || log.check_out_time || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Logged'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
