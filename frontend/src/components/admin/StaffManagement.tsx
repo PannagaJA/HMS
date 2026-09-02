@@ -77,24 +77,26 @@ export const StaffManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Responsive Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Staff & Wardens</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage residential wardens, block caretakers, and supervision staff</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}</span>
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Responsive Tab Bar */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
         <button
           onClick={() => setActiveTab('wardens')}
-          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 sm:flex-initial text-center px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'wardens'
               ? 'bg-[#0D3833] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -104,7 +106,7 @@ export const StaffManagement: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('caretakers')}
-          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 sm:flex-initial text-center px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'caretakers'
               ? 'bg-[#0D3833] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
