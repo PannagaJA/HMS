@@ -52,6 +52,7 @@ export interface RoomOccupant {
   student_name: string;
   enrollment_no: string;
   bed_number?: string;
+  course_name?: string;
 }
 
 export interface HostelRoom {

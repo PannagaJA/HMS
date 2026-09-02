@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BedDouble, Plus, X } from 'lucide-react';
+import { BedDouble, Plus, X, Layers, Building2 } from 'lucide-react';
 import type { HostelRoom, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -16,8 +16,18 @@ export const RoomManagement: React.FC = () => {
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
   const [selectedFloor, setSelectedFloor] = useState<number | 'ALL'>('ALL');
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showSingleRoomModal, setShowSingleRoomModal] = useState(false);
   const [showOccupantsDrawer, setShowOccupantsDrawer] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<HostelRoom | null>(null);
+
+  // Single Room Form State
+  const [singleHostelId, setSingleHostelId] = useState<string>('');
+  const [singleFloor, setSingleFloor] = useState<string>('0');
+  const [singleRoomNo, setSingleRoomNo] = useState<string>('');
+  const [singleRoomName, setSingleRoomName] = useState<string>('');
+  const [singleRoomType, setSingleRoomType] = useState<string>('S');
+  const [singleCapacity, setSingleCapacity] = useState<number>(1);
+  const [isSubmittingSingle, setIsSubmittingSingle] = useState<boolean>(false);
 
   // Bulk room generator state
   const [bulkFloor, setBulkFloor] = useState(1);
@@ -41,6 +51,7 @@ export const RoomManagement: React.FC = () => {
       setHostels(res.data);
       if (res.data.length > 0) {
         setSelectedHostelId(String(res.data[0].id));
+        setSingleHostelId(String(res.data[0].id));
       }
     } catch (err) {
       console.error('Failed to load hostels', err);
@@ -53,6 +64,53 @@ export const RoomManagement: React.FC = () => {
       setRooms(res.data);
     } catch (err) {
       console.error('Failed to load rooms', err);
+    }
+  };
+
+  const handleOpenAddSingleRoom = () => {
+    setSingleHostelId(selectedHostelId || (hostels[0] ? String(hostels[0].id) : ''));
+    setSingleFloor('0');
+    setSingleRoomNo('');
+    setSingleRoomName('');
+    setSingleRoomType('S');
+    setSingleCapacity(1);
+    setShowSingleRoomModal(true);
+  };
+
+  const handleSingleRoomTypeChange = (type: string) => {
+    setSingleRoomType(type);
+    if (type === 'S') setSingleCapacity(1);
+    else if (type === 'D') setSingleCapacity(2);
+    else if (type === 'T') setSingleCapacity(3);
+    else if (type === 'P') setSingleCapacity(4);
+  };
+
+  const handleCreateSingleRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!singleRoomNo.trim() || !singleHostelId) {
+      alert('Please fill in room number and select a hostel');
+      return;
+    }
+
+    setIsSubmittingSingle(true);
+    try {
+      await apiClient.post('/hms/rooms/', {
+        hostel: Number(singleHostelId),
+        no: singleRoomNo.trim(),
+        name: singleRoomName.trim() || `Room ${singleRoomNo.trim()}`,
+        floor: Number(singleFloor),
+        capacity: Number(singleCapacity),
+        room_type: singleRoomType,
+        vacant: true,
+      });
+
+      setShowSingleRoomModal(false);
+      fetchRooms(singleHostelId);
+    } catch (err: any) {
+      console.error('Failed to create room:', err);
+      alert('Failed to create room: ' + (err.response?.data?.detail || err.response?.data?.no?.[0] || err.message));
+    } finally {
+      setIsSubmittingSingle(false);
     }
   };
 
@@ -88,13 +146,22 @@ export const RoomManagement: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Room Matrix & Bed Allocation</h1>
           <p className="text-sm text-slate-500 mt-0.5">Visualize room occupancy, bed slots, and residential allocations per floor</p>
         </div>
-        <button
-          onClick={() => setShowBulkModal(true)}
-          className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Bulk Generate Rooms</span>
-        </button>
+        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <button
+            onClick={handleOpenAddSingleRoom}
+            className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Room</span>
+          </button>
+          <button
+            onClick={() => setShowBulkModal(true)}
+            className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <Layers className="w-4 h-4 text-slate-500" />
+            <span>Bulk Generate</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
@@ -135,7 +202,7 @@ export const RoomManagement: React.FC = () => {
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Floor {f}
+              {f === 0 ? 'Ground Floor' : `Floor ${f}`}
             </button>
           ))}
         </div>
@@ -149,16 +216,25 @@ export const RoomManagement: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold text-slate-900">No Rooms Configured for this Block</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-              There are currently no room allocations setup for the selected floor or hostel block. Generate room slots in bulk to start assigning residents.
+              There are currently no room allocations setup for the selected floor or hostel block. Create a room manually or generate slots in bulk.
             </p>
           </div>
-          <button
-            onClick={() => setShowBulkModal(true)}
-            className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Generate Rooms for this Block</span>
-          </button>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={handleOpenAddSingleRoom}
+              className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Single Room</span>
+            </button>
+            <button
+              onClick={() => setShowBulkModal(true)}
+              className="px-6 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+            >
+              <Layers className="w-4 h-4 text-slate-500" />
+              <span>Bulk Generate</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -179,7 +255,9 @@ export const RoomManagement: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-700">Fl {room.floor}</span>
+                  <span className="text-xs font-bold text-slate-700">
+                    {room.floor === 0 ? 'GF' : `Fl ${room.floor}`}
+                  </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     isFull ? 'bg-rose-100 text-rose-800' : isPartiallyOccupied ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
                   }`}>
@@ -216,83 +294,225 @@ export const RoomManagement: React.FC = () => {
       {/* Room Occupants Centered Modal Popup */}
       {showOccupantsDrawer && selectedRoom && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-7 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">Room {selectedRoom.no} Details</h3>
-                  <p className="text-xs text-slate-500">Floor {selectedRoom.floor} · {selectedRoom.room_type_display || 'Standard'}</p>
+          <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-200/80 shadow-2xl p-6 sm:p-7 relative max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center font-bold shadow-xs">
+                  <BedDouble className="w-6 h-6 text-[#0D3833]" />
                 </div>
-                <button
-                  onClick={() => setShowOccupantsDrawer(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
-                  <div>
-                    <span className="text-slate-400 block mb-0.5">Total Capacity</span>
-                    <span className="font-bold text-slate-800 text-sm">{selectedRoom.capacity} Beds</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block mb-0.5">Occupied Slots</span>
-                    <span className="font-bold text-slate-800 text-sm">{selectedRoom.occupied_count} Students</span>
-                  </div>
-                </div>
-
                 <div>
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">Allocated Bed Slots</h4>
-                  <div className="space-y-2.5">
-                    {Array.from({ length: selectedRoom.capacity }).map((_, idx) => {
-                      const isOccupied = idx < selectedRoom.occupied_count;
-                      return (
-                        <div
-                          key={idx}
-                          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs transition-colors ${
-                            isOccupied
-                              ? 'bg-white border-slate-200/80 shadow-xs'
-                              : 'bg-slate-50/60 border-dashed border-slate-200 text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                              isOccupied ? 'bg-[#0D3833] text-white shadow-xs' : 'bg-slate-200 text-slate-500'
-                            }`}>
-                              {idx + 1}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-slate-800">
-                                {isOccupied ? `Occupant on Bed ${idx + 1}` : `Bed Slot ${idx + 1}`}
-                              </div>
-                              <div className="text-[11px] text-slate-400">
-                                {isOccupied ? 'Active Resident' : 'Available for Allocation'}
-                              </div>
-                            </div>
-                          </div>
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            isOccupied ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
-                          }`}>
-                            {isOccupied ? 'OCCUPIED' : 'VACANT'}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <h3 className="text-xl font-bold text-slate-900">Room {selectedRoom.no}</h3>
+                  <p className="text-xs text-slate-500">
+                    {selectedRoom.hostel_name || 'Hostel Block'} · {selectedRoom.floor === 0 ? 'Ground Floor' : `Floor ${selectedRoom.floor}`}
+                  </p>
                 </div>
               </div>
-            </div>
-
-            <div className="pt-5 mt-4 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => setShowOccupantsDrawer(false)}
-                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
-                Close Details
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Room Info Cards */}
+            <div className="grid grid-cols-2 gap-3 my-5">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="block text-[11px] font-medium text-slate-400">Room Category</span>
+                <span className="text-sm font-bold text-slate-800">{selectedRoom.room_type_display || 'Standard'}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="block text-[11px] font-medium text-slate-400">Total Capacity</span>
+                <span className="text-sm font-bold text-slate-800">{selectedRoom.capacity} Beds</span>
+              </div>
+            </div>
+
+            {/* Current Occupants List */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Current Occupants ({selectedRoom.occupants?.length || 0} / {selectedRoom.capacity})
+                </h4>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  (selectedRoom.occupants?.length || 0) >= selectedRoom.capacity ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {(selectedRoom.occupants?.length || 0) >= selectedRoom.capacity ? 'No Vacancy' : `${selectedRoom.capacity - (selectedRoom.occupants?.length || 0)} Beds Open`}
+                </span>
+              </div>
+
+              {selectedRoom.occupants && selectedRoom.occupants.length > 0 ? (
+                <div className="space-y-2.5">
+                  {selectedRoom.occupants.map((occ) => (
+                    <div
+                      key={occ.id}
+                      className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700">
+                          {occ.student_name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{occ.student_name}</div>
+                          <div className="text-xs text-slate-400 font-mono">{occ.enrollment_no}</div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        {occ.course_name || 'Enrolled'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-xs text-slate-400">No students currently assigned to this room.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-6 mt-6 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowOccupantsDrawer(false)}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Single Room Modal Popup */}
+      {showSingleRoomModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#D1F2EA] text-[#0D3833] flex items-center justify-center">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight">Add Room</h3>
+                  <p className="text-xs text-slate-400">Configure a single room slot in the hostel</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSingleRoomModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSingleRoom} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel</label>
+                <Select value={singleHostelId} onValueChange={setSingleHostelId}>
+                  <SelectTrigger className="w-full bg-slate-50">
+                    <SelectValue placeholder="Select hostel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hostels.map((h) => (
+                      <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
+                  <Select value={singleFloor} onValueChange={setSingleFloor}>
+                    <SelectTrigger className="w-full bg-slate-50">
+                      <SelectValue placeholder="Select floor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Ground Floor</SelectItem>
+                      <SelectItem value="1">1st Floor</SelectItem>
+                      <SelectItem value="2">2nd Floor</SelectItem>
+                      <SelectItem value="3">3rd Floor</SelectItem>
+                      <SelectItem value="4">4th Floor</SelectItem>
+                      <SelectItem value="5">5th Floor</SelectItem>
+                      <SelectItem value="6">6th Floor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Number</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 101, G02"
+                    value={singleRoomNo}
+                    onChange={(e) => setSingleRoomNo(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Room Name <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Deluxe Room 101"
+                  value={singleRoomName}
+                  onChange={(e) => setSingleRoomName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type</label>
+                  <Select value={singleRoomType} onValueChange={handleSingleRoomTypeChange}>
+                    <SelectTrigger className="w-full bg-slate-50">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="S">Single</SelectItem>
+                      <SelectItem value="D">Double</SelectItem>
+                      <SelectItem value="T">Triple</SelectItem>
+                      <SelectItem value="P">Scholar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    required
+                    value={singleCapacity}
+                    onChange={(e) => setSingleCapacity(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSingleRoomModal(false)}
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSingle}
+                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingSingle ? 'Adding...' : 'Add Room'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
