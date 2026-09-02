@@ -6,6 +6,13 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { HostelStudent } from '../../types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const WardenResidentManagement: React.FC = () => {
   const [residents, setResidents] = useState<HostelStudent[]>([]);
@@ -25,19 +32,19 @@ export const WardenResidentManagement: React.FC = () => {
       const res = await apiClient.get<HostelStudent[]>(url);
       setResidents(res.data);
     } catch (err) {
-      console.error('Failed to load resident students', err);
+      console.error('Failed to load residents', err);
     }
   };
 
-  const filteredResidents = residents.filter((r) => {
+  const filteredResidents = residents.filter((st) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    const roomStr = r.room_detail?.no || r.room_no || r.room_number || '';
+    const roomNo = (st.room_detail?.no || st.room_no || st.room_number || '').toLowerCase();
     return (
-      r.student_name.toLowerCase().includes(q) ||
-      r.enrollment_no.toLowerCase().includes(q) ||
-      roomStr.toLowerCase().includes(q) ||
-      (r.guardian_phone && r.guardian_phone.includes(q))
+      st.student_name.toLowerCase().includes(q) ||
+      st.enrollment_no.toLowerCase().includes(q) ||
+      roomNo.includes(q) ||
+      (st.guardian_phone && st.guardian_phone.includes(q))
     );
   });
 
@@ -46,8 +53,8 @@ export const WardenResidentManagement: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Resident Students Directory</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Assigned block roster with room allocation and emergency contacts</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Residents Directory</h1>
+          <p className="text-xs text-slate-500 mt-0.5">View and manage resident students allotted in your block</p>
         </div>
         <div className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 self-start sm:self-auto">
           {filteredResidents.length} Active Residents
@@ -67,20 +74,19 @@ export const WardenResidentManagement: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-          {['all', '1', '2', '3', '4'].map((fl) => (
-            <button
-              key={fl}
-              onClick={() => setFloorFilter(fl)}
-              className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                floorFilter === fl
-                  ? 'bg-[#0D3833] text-white shadow-xs'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {fl === 'all' ? 'All Floors' : `Floor ${fl}`}
-            </button>
-          ))}
+        <div className="w-full sm:w-[170px]">
+          <Select value={floorFilter} onValueChange={setFloorFilter}>
+            <SelectTrigger className="w-full bg-white border-slate-200 text-xs font-semibold text-slate-800">
+              <SelectValue placeholder="Select Floor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Floors</SelectItem>
+              <SelectItem value="1">Floor 1</SelectItem>
+              <SelectItem value="2">Floor 2</SelectItem>
+              <SelectItem value="3">Floor 3</SelectItem>
+              <SelectItem value="4">Floor 4</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

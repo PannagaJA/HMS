@@ -4,6 +4,8 @@ import {
   Ticket,
   Wrench,
   TrendingUp,
+  Layers,
+  DoorClosed,
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { HostelRoom } from '../../types';
@@ -36,7 +38,7 @@ export const WardenDashboard: React.FC = () => {
   const [stats, setStats] = useState<WardenStats | null>(null);
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<number | null>(null);
-  const [selectedFloor, setSelectedFloor] = useState<string>('all');
+  const [selectedFloor, setSelectedFloor] = useState<string>('');
   const [selectedRoom, setSelectedRoom] = useState<HostelRoom | null>(null);
 
   useEffect(() => {
@@ -44,8 +46,10 @@ export const WardenDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedHostelId) {
+    if (selectedHostelId && selectedFloor) {
       fetchRooms(selectedHostelId, selectedFloor);
+    } else {
+      setRooms([]);
     }
   }, [selectedHostelId, selectedFloor]);
 
@@ -107,49 +111,49 @@ export const WardenDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      {/* Metric Cards Grid: 2 columns on mobile, 4 columns on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Residents</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">{stats?.total_residents || 0}</h3>
-            <span className="text-[11px] text-emerald-600 font-medium">In assigned blocks</span>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Residents</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{stats?.total_residents || 0}</h3>
+            <span className="text-[10px] sm:text-[11px] text-emerald-600 font-medium truncate block">In assigned blocks</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-            <Users className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 self-end sm:self-auto">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Occupancy Rate</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">{stats?.occupancy_rate || 0}%</h3>
-            <span className="text-[11px] text-teal-600 font-medium">{stats?.total_rooms || 0} Total Rooms</span>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Occupancy Rate</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{stats?.occupancy_rate || 0}%</h3>
+            <span className="text-[10px] sm:text-[11px] text-teal-600 font-medium truncate block">{stats?.total_rooms || 0} Total Rooms</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center">
-            <TrendingUp className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 self-end sm:self-auto">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pending Passes</p>
-            <h3 className="text-2xl font-bold text-amber-600 mt-1">{stats?.pending_gate_passes || 0}</h3>
-            <span className="text-[11px] text-slate-400 font-medium">Requires review</span>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pending Passes</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-amber-600 mt-1">{stats?.pending_gate_passes || 0}</h3>
+            <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate block">Requires review</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center">
-            <Ticket className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 self-end sm:self-auto">
+            <Ticket className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Open Issues</p>
-            <h3 className="text-2xl font-bold text-rose-600 mt-1">{stats?.open_issues || 0}</h3>
-            <span className="text-[11px] text-slate-400 font-medium">Maintenance tickets</span>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Open Issues</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-rose-600 mt-1">{stats?.open_issues || 0}</h3>
+            <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate block">Maintenance tickets</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center">
-            <Wrench className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center shrink-0 self-end sm:self-auto">
+            <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
@@ -162,27 +166,44 @@ export const WardenDashboard: React.FC = () => {
             <p className="text-xs text-slate-400">Click any room card to view residents and bed allocations</p>
           </div>
 
-          {/* Floor Filter Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            {['all', '1', '2', '3', '4'].map((fl) => (
-              <button
-                key={fl}
-                onClick={() => setSelectedFloor(fl)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                  selectedFloor === fl
-                    ? 'bg-[#0D3833] text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {fl === 'all' ? 'All Floors' : `Floor ${fl}`}
-              </button>
-            ))}
+          {/* Floor Filter Selector: Mobile & Desktop Dropdown / Pills */}
+          <div className="flex items-center gap-2">
+            <div className="w-[160px]">
+              <Select value={selectedFloor} onValueChange={setSelectedFloor}>
+                <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold text-slate-800">
+                  <SelectValue placeholder="Select Floor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Floors</SelectItem>
+                  <SelectItem value="1">Floor 1</SelectItem>
+                  <SelectItem value="2">Floor 2</SelectItem>
+                  <SelectItem value="3">Floor 3</SelectItem>
+                  <SelectItem value="4">Floor 4</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        {rooms.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-xs">
-            No rooms found for the selected filter.
+        {!selectedFloor ? (
+          <div className="bg-slate-50/70 p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-900 flex items-center justify-center mx-auto border border-teal-200">
+              <Layers className="w-5 h-5" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-800">Select a Floor</h4>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto">
+              Choose a floor level or "All Floors" from the dropdown above to view the live room & bed matrix.
+            </p>
+          </div>
+        ) : rooms.length === 0 ? (
+          <div className="bg-slate-50/70 p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto border border-slate-200">
+              <DoorClosed className="w-5 h-5" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-800">No Rooms Found</h4>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto">
+              No rooms are registered for this floor in the selected hostel block.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
