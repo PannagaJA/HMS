@@ -25,7 +25,14 @@ class WardenDashboardViewSet(viewsets.ViewSet):
     def overview(self, request):
         user = request.user
         hostels = get_warden_hostels(user)
-        hostel_ids = hostels.values_list('id', flat=True)
+        hostel_filter = request.query_params.get('hostel_id')
+        
+        if hostel_filter and hostel_filter != 'ALL':
+            scoped_hostels = hostels.filter(id=hostel_filter)
+        else:
+            scoped_hostels = hostels
+
+        hostel_ids = scoped_hostels.values_list('id', flat=True)
 
         total_residents = HostelStudent.objects.filter(room__hostel_id__in=hostel_ids, room_allotted=True).count()
         pending_gate_passes = GatePassRequest.objects.filter(hostel_id__in=hostel_ids, status='pending').count()
@@ -36,7 +43,7 @@ class WardenDashboardViewSet(viewsets.ViewSet):
         occupied = sum(r.occupants.count() for r in rooms)
 
         return Response({
-            'managed_hostels': [{'id': h.id, 'name': h.name, 'gender': h.gender, 'floors': getattr(h, 'floors', 4)} for h in hostels],
+            'managed_hostels': [{'id': h.id, 'name': h.name, 'gender': h.gender, 'floors': getattr(h, 'floor_count', 4) or 4} for h in hostels],
             'total_residents': total_residents,
             'total_rooms': rooms.count(),
             'total_capacity': total_capacity,

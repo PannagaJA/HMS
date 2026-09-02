@@ -41,9 +41,11 @@ export const WardenDashboard: React.FC = () => {
   const [selectedFloor, setSelectedFloor] = useState<string>('');
   const [selectedRoom, setSelectedRoom] = useState<HostelRoom | null>(null);
 
+  const currentHostel = stats?.managed_hostels.find((h) => h.id === selectedHostelId);
+
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    fetchDashboardData(selectedHostelId);
+  }, [selectedHostelId]);
 
   useEffect(() => {
     if (selectedHostelId && selectedFloor) {
@@ -53,11 +55,12 @@ export const WardenDashboard: React.FC = () => {
     }
   }, [selectedHostelId, selectedFloor]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (hostelId?: number | null) => {
     try {
-      const res = await apiClient.get<WardenStats>('/warden/dashboard/');
+      const url = hostelId ? `/warden/dashboard/?hostel_id=${hostelId}` : '/warden/dashboard/';
+      const res = await apiClient.get<WardenStats>(url);
       setStats(res.data);
-      if (res.data.managed_hostels.length > 0) {
+      if (!hostelId && res.data.managed_hostels.length > 0) {
         setSelectedHostelId(res.data.managed_hostels[0].id);
       }
     } catch (err) {
@@ -166,19 +169,26 @@ export const WardenDashboard: React.FC = () => {
             <p className="text-xs text-slate-400">Click any room card to view residents and bed allocations</p>
           </div>
 
-          {/* Floor Filter Selector: Mobile & Desktop Dropdown / Pills */}
+          {/* Dynamic Floor Selector based on selected Hostel Block */}
           <div className="flex items-center gap-2">
-            <div className="w-[160px]">
-              <Select value={selectedFloor} onValueChange={setSelectedFloor}>
-                <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold text-slate-800">
+            <div className="w-[170px]">
+              <Select
+                value={selectedFloor}
+                onValueChange={setSelectedFloor}
+                disabled={!selectedHostelId}
+              >
+                <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold text-slate-800 disabled:opacity-50">
                   <SelectValue placeholder="Select Floor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Floors</SelectItem>
-                  <SelectItem value="1">Floor 1</SelectItem>
-                  <SelectItem value="2">Floor 2</SelectItem>
-                  <SelectItem value="3">Floor 3</SelectItem>
-                  <SelectItem value="4">Floor 4</SelectItem>
+                  <SelectItem value="all">
+                    All Floors ({currentHostel ? `${currentHostel.floors || 4} Floors` : 'All'})
+                  </SelectItem>
+                  {Array.from({ length: currentHostel?.floors || 4 }, (_, i) => i + 1).map((fl) => (
+                    <SelectItem key={fl} value={String(fl)}>
+                      Floor {fl}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
