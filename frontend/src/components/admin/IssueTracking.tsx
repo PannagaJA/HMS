@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2 } from 'lucide-react';
+import { Building2, History, X, Clock } from 'lucide-react';
 import type { HostelIssue, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -16,6 +16,7 @@ export const IssueTracking: React.FC = () => {
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const [selectedIssue, setSelectedIssue] = useState<HostelIssue | null>(null);
+  const [viewingUpdatesIssue, setViewingUpdatesIssue] = useState<HostelIssue | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string>('in_progress');
   const [updateNote, setUpdateNote] = useState<string>('');
 
@@ -106,8 +107,31 @@ export const IssueTracking: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Filter Pill Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+        {/* Mobile View: Status Filter Dropdown (< 768px) */}
+        <div className="block md:hidden w-full">
+          <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+            Filter Ticket Status:
+          </label>
+          <Select
+            value={activeFilter}
+            onValueChange={setActiveFilter}
+            disabled={!selectedHostelId}
+          >
+            <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 disabled:opacity-50">
+              <SelectValue placeholder="Select Status Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Tickets</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="waiting_for_workers">Waiting for Workers</SelectItem>
+              <SelectItem value="completed">Resolved</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop View: Status Filter Pill Tabs (>= 768px) */}
+        <div className="hidden md:flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {[
             { id: 'ALL', label: 'All Tickets' },
             { id: 'pending', label: 'Pending' },
@@ -196,13 +220,20 @@ export const IssueTracking: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setViewingUpdatesIssue(issue)}
+                      className="px-3.5 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <History className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Updates ({issue.updates?.length || 0})</span>
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedIssue(issue);
                         setUpdateStatus(issue.status);
                       }}
-                      className="w-full sm:w-auto px-4 py-2 rounded-full bg-[#D1F2EA] text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-sm cursor-pointer"
+                      className="flex-1 px-4 py-2 rounded-full bg-[#D1F2EA] text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-sm cursor-pointer text-center"
                     >
                       Update Status / Note
                     </button>
@@ -235,14 +266,18 @@ export const IssueTracking: React.FC = () => {
                   ) : (
                     filtered.map((issue) => (
                       <tr key={issue.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-4 pl-6 max-w-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 uppercase">
+                        <td className="py-4 pl-6 min-w-[280px] max-w-md">
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 uppercase tracking-wider shrink-0">
                               {issue.category}
                             </span>
-                            <h4 className="font-bold text-slate-900 text-sm truncate">{issue.title}</h4>
+                            <h4 className="font-bold text-slate-900 text-sm leading-snug break-words">
+                              {issue.title}
+                            </h4>
                           </div>
-                          <p className="text-xs text-slate-500 line-clamp-2 italic">"{issue.description}"</p>
+                          <p className="text-xs text-slate-600 italic leading-relaxed break-words whitespace-normal bg-slate-50/60 p-2.5 rounded-xl border border-slate-100">
+                            "{issue.description}"
+                          </p>
                         </td>
                         <td className="py-4 px-4 text-xs font-semibold text-slate-800">
                           <div>{issue.student_name}</div>
@@ -263,15 +298,24 @@ export const IssueTracking: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-4 pr-6 text-right">
-                          <button
-                            onClick={() => {
-                              setSelectedIssue(issue);
-                              setUpdateStatus(issue.status);
-                            }}
-                            className="px-4 py-1.5 rounded-full bg-[#D1F2EA] text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
-                          >
-                            Update Status / Note
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setViewingUpdatesIssue(issue)}
+                              className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                            >
+                              <History className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Updates ({issue.updates?.length || 0})</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedIssue(issue);
+                                setUpdateStatus(issue.status);
+                              }}
+                              className="px-4 py-1.5 rounded-full bg-[#D1F2EA] text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                            >
+                              Update Status / Note
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -281,6 +325,71 @@ export const IssueTracking: React.FC = () => {
             </div>
           </div>
         </>
+      )}
+
+      {/* VIEW ALL UPDATES / REMARKS MODAL */}
+      {viewingUpdatesIssue && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 leading-tight">Warden & Maintenance Updates</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Ticket #{viewingUpdatesIssue.id}: <strong className="text-slate-800">{viewingUpdatesIssue.title}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingUpdatesIssue(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-1">
+              <div><span className="text-slate-400">Resident:</span> <strong>{viewingUpdatesIssue.student_name}</strong> ({viewingUpdatesIssue.enrollment_no})</div>
+              <div><span className="text-slate-400">Location:</span> <strong>{viewingUpdatesIssue.hostel_name} · Room {viewingUpdatesIssue.room_no}</strong></div>
+              <div><span className="text-slate-400">Issue:</span> <span className="italic">"{viewingUpdatesIssue.description}"</span></div>
+            </div>
+
+            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+              {!viewingUpdatesIssue.updates || viewingUpdatesIssue.updates.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs rounded-2xl border border-dashed border-slate-200">
+                  No status notes or updates recorded for this ticket yet.
+                </div>
+              ) : (
+                viewingUpdatesIssue.updates.map((up) => (
+                  <div key={up.id} className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-200/80 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-teal-100/90 text-teal-950 uppercase">
+                        {up.new_status.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-700">
+                        — {up.updated_by_name || 'Hostel Administrator'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-800 italic bg-white/80 p-2.5 rounded-xl border border-teal-100/80">
+                      "{up.note || 'Status updated'}"
+                    </p>
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1 justify-end font-mono">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <span>{new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
+              <button
+                onClick={() => setViewingUpdatesIssue(null)}
+                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] cursor-pointer shadow-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {selectedIssue && (

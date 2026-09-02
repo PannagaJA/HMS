@@ -159,6 +159,15 @@ export interface Menu {
   items_detail?: MenuItem[];
 }
 
+export interface IssueUpdate {
+  id: number;
+  old_status?: string;
+  new_status: string;
+  note?: string;
+  updated_by_name?: string;
+  created_at: string;
+}
+
 export interface HostelIssue {
   id: number;
   student_name: string;
@@ -173,6 +182,7 @@ export interface HostelIssue {
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | string;
   status: 'pending' | 'in_progress' | 'waiting_for_workers' | 'completed' | 'resolved';
   created_at: string;
+  updates?: IssueUpdate[];
 }
 
 export type IssueTicket = HostelIssue;

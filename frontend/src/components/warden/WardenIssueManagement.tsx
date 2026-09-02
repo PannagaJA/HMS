@@ -134,6 +134,30 @@ export const WardenIssueManagement: React.FC = () => {
                 <h4 className="text-sm font-bold text-slate-900 mb-1">{iss.title}</h4>
                 <p className="text-xs text-slate-600 line-clamp-2 mb-3">{iss.description}</p>
 
+                {/* Resolution Notes History */}
+                {iss.updates && iss.updates.length > 0 && (
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-xs space-y-2 mb-3">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Previous Notes & Actions
+                    </span>
+                    {iss.updates.map((up) => (
+                      <div key={up.id} className="text-slate-700 bg-white p-2.5 rounded-xl border border-slate-200/70">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase">
+                            {up.new_status.replace(/_/g, ' ')}
+                          </span>
+                          <span className="text-[11px] font-semibold text-slate-700">
+                            — {up.updated_by_name || 'Staff Member'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 italic">
+                          "{up.note || 'Status modified'}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="text-[11px] text-slate-400 mb-3">
                   Reported by: <span className="font-semibold text-slate-700">{iss.student_name}</span> ({iss.enrollment_no})
                 </div>
