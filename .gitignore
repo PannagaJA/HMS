@@ -1,0 +1,116 @@
+# =============================================================================
+# Root .gitignore for Hostel Management System (HMS)
+# =============================================================================
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# IDE & Editor Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+*.env
+
+# =============================================================================
+# Backend (Python / Django)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+conda-env/
+
+# Django Media & SQLite (keep schema, exclude local database & user uploads)
+*.sqlite3
+*.db
+db.sqlite3
+hms_db.sqlite3
+backend/media/*
+!backend/media/.gitkeep
+backend/staticfiles/
+staticfiles/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# =============================================================================
+# Frontend (Node / React / Vite)
+# =============================================================================
+node_modules/
+frontend/node_modules/
+.pnp
+.pnp.js
+
+# Build Outputs
+dist/
+frontend/dist/
+build/
+frontend/build/
+.next/
+out/
+
+# Coverage & Test Results
+coverage/
+.nyc_output/
+*.lcov
+
+# Package Manager Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite & Bundler Caches
+.vite/
+frontend/.vite/
+.rollup.cache/
+.parcel-cache/
+.turbo/
+.cache/
+
+# Oxlint / Linter Caches
+.oxlint-cache
+.eslintcache

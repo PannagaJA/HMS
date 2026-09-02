@@ -1,0 +1,243 @@
+import React, { useEffect, useState } from 'react';
+import { Plus, Trash2, Phone, Mail } from 'lucide-react';
+import type { HostelWarden, HostelCaretaker } from '../../types';
+import { apiClient } from '../../api/apiClient';
+
+export const StaffManagement: React.FC = () => {
+  const [wardens, setWardens] = useState<HostelWarden[]>([]);
+  const [caretakers, setCaretakers] = useState<HostelCaretaker[]>([]);
+  const [activeTab, setActiveTab] = useState<'wardens' | 'caretakers'>('wardens');
+  const [showModal, setShowModal] = useState(false);
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [experience, setExperience] = useState(2);
+
+  useEffect(() => {
+    fetchStaff();
+  }, []);
+
+  const fetchStaff = async () => {
+    try {
+      const [wRes, cRes] = await Promise.all([
+        apiClient.get<HostelWarden[]>('/hms/wardens/'),
+        apiClient.get<HostelCaretaker[]>('/hms/caretakers/'),
+      ]);
+      setWardens(wRes.data);
+      setCaretakers(cRes.data);
+    } catch (err) {
+      console.error('Failed to load staff list', err);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const endpoint = activeTab === 'wardens' ? '/hms/wardens/' : '/hms/caretakers/';
+    try {
+      await apiClient.post(endpoint, {
+        name,
+        email,
+        phone,
+        designation: activeTab === 'wardens' ? designation : undefined,
+        experience,
+      });
+      setShowModal(false);
+      setName('');
+      setEmail('');
+      setPhone('');
+      setDesignation('');
+      fetchStaff();
+    } catch (err) {
+      alert('Failed to add staff member');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to remove this staff profile?')) return;
+    const endpoint = activeTab === 'wardens' ? `/hms/wardens/${id}/` : `/hms/caretakers/${id}/`;
+    try {
+      await apiClient.delete(endpoint);
+      fetchStaff();
+    } catch (err) {
+      alert('Failed to delete staff member');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Staff & Wardens</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Manage residential wardens, block caretakers, and supervision staff</p>
+        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Add {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}</span>
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setActiveTab('wardens')}
+          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
+            activeTab === 'wardens'
+              ? 'bg-[#0D3833] text-white shadow-sm'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Chief & Block Wardens ({wardens.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('caretakers')}
+          className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
+            activeTab === 'caretakers'
+              ? 'bg-[#0D3833] text-white shadow-sm'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Hostel Caretakers ({caretakers.length})
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {(activeTab === 'wardens' ? wardens : caretakers).map((staff) => (
+          <div
+            key={staff.id}
+            className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
+          >
+            <div>
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-full bg-[#E0E7FF] text-indigo-950 flex items-center justify-center font-bold text-base">
+                  {staff.name[0]}
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                  {staff.experience} YRS EXP
+                </span>
+              </div>
+
+              <h3 className="text-base font-bold text-slate-900">{staff.name}</h3>
+              <p className="text-xs text-slate-400 mb-4">
+                {(staff as HostelWarden).designation || (activeTab === 'wardens' ? 'Hostel Warden' : 'Residential Caretaker')}
+              </p>
+
+              <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{staff.email || 'No institutional email'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="font-mono">{staff.phone || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+              <button
+                onClick={() => handleDelete(staff.id)}
+                className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors"
+                title="Remove staff"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              Add New {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}
+            </h3>
+            <p className="text-xs text-slate-500 mb-5">Enter staff contact information and experience credentials.</p>
+
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Dr. Rajesh Sharma"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                />
+              </div>
+
+              {activeTab === 'wardens' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Designation</label>
+                  <input
+                    type="text"
+                    value={designation}
+                    onChange={(e) => setDesignation(e.target.value)}
+                    placeholder="e.g. Senior Warden - Block A"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 98..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Experience (Years)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={experience}
+                    onChange={(e) => setExperience(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Institutional Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@university.edu"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm"
+                >
+                  Save Staff Member
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
