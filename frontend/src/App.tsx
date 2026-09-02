@@ -16,8 +16,12 @@ import { IssueTracking } from './components/admin/IssueTracking';
 import { VisitorLogsManagement } from './components/admin/VisitorLogsManagement';
 import { HMSProfile } from './components/admin/HMSProfile';
 
-// Warden Pages
+// Warden Dedicated Pages
+import { WardenDashboard } from './components/warden/WardenDashboard';
+import { WardenResidentManagement } from './components/warden/WardenResidentManagement';
 import { WardenGatePassManagement } from './components/warden/WardenGatePassManagement';
+import { WardenIssueManagement } from './components/warden/WardenIssueManagement';
+import { WardenVisitorLogs } from './components/warden/WardenVisitorLogs';
 
 // Security Pages
 import { GatePassScanner } from './components/security/GatePassScanner';
@@ -52,11 +56,13 @@ function App() {
             <Route path="/admin/profile" element={<HMSProfile />} />
           </Route>
 
-          {/* Warden Protected Routes */}
+          {/* Warden Protected Routes (Dedicated Modules matching reference architecture) */}
           <Route element={<ProtectedRoute allowedRoles={['WARDEN']} />}>
-            <Route path="/warden/dashboard" element={<AdminDashboard />} />
+            <Route path="/warden/dashboard" element={<WardenDashboard />} />
+            <Route path="/warden/residents" element={<WardenResidentManagement />} />
             <Route path="/warden/passes" element={<WardenGatePassManagement />} />
-            <Route path="/warden/issues" element={<IssueTracking />} />
+            <Route path="/warden/issues" element={<WardenIssueManagement />} />
+            <Route path="/warden/visitors" element={<WardenVisitorLogs />} />
             <Route path="/warden/profile" element={<HMSProfile />} />
           </Route>
 

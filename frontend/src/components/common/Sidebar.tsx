@@ -46,8 +46,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
 
   const wardenNavItems = [
     { path: '/warden/dashboard', name: 'Warden Dashboard', icon: LayoutDashboard },
+    { path: '/warden/residents', name: 'Resident Students', icon: Users },
     { path: '/warden/passes', name: 'Gate Pass Review', icon: Ticket },
     { path: '/warden/issues', name: 'Hostel Issues', icon: Wrench },
+    { path: '/warden/visitors', name: 'Visitor Register', icon: ClipboardList },
     { path: '/warden/profile', name: 'My Profile', icon: User },
   ];
 

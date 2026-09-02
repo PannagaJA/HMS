@@ -47,6 +47,13 @@ export interface Hostel {
   occupancy_rate: number;
 }
 
+export interface RoomOccupant {
+  id?: number;
+  student_name: string;
+  enrollment_no: string;
+  bed_number?: string;
+}
+
 export interface HostelRoom {
   id: number;
   hostel: number;
@@ -56,6 +63,8 @@ export interface HostelRoom {
   floor: number;
   capacity: number;
   occupied_count: number;
+  current_occupancy?: number;
+  occupants?: RoomOccupant[];
   vacant: boolean;
   room_type: string;
   room_type_display?: string;
@@ -70,9 +79,14 @@ export interface HostelStudent {
   guardian_phone?: string;
   emergency_contact?: string;
   room_allotted: boolean;
+  hostel?: number;
   hostel_name?: string;
+  room?: number;
+  room_no?: string;
+  room_number?: string;
   room_detail?: { id: number; no: string; name: string } | null;
   bed_number?: string;
+  no_dues?: boolean;
 }
 
 export interface HostelOutsideStudent {
@@ -170,6 +184,8 @@ export interface HostelIssue {
   created_at: string;
 }
 
+export type IssueTicket = HostelIssue;
+
 export interface GatePassRequest {
   id: number;
   student_name: string;
@@ -200,14 +216,15 @@ export interface VisitorLog {
   visitor_name: string;
   visitor_phone?: string;
   mobile_number?: string;
+  student?: number;
   student_name: string;
   student_room?: string;
   enrollment_no?: string;
-  relation: string;
+  relation?: string;
   purpose: string;
   entry_time?: string;
   exit_time?: string | null;
   check_in_time?: string;
   check_out_time?: string | null;
-  status: 'CHECKED_IN' | 'CHECKED_OUT';
+  status?: 'CHECKED_IN' | 'CHECKED_OUT';
 }

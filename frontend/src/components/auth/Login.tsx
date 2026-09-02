@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Sparkles, ArrowRight, User, Lock, Eye, EyeOff } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login, isLoading } = useAuth();
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -17,12 +19,30 @@ export const Login: React.FC = () => {
     }
     setError('');
     try {
-      await login(username.trim(), password);
+      const loggedInUser = await login(username.trim(), password);
+      // Explicit programmatic navigation based on role
+      switch (loggedInUser?.role) {
+        case 'ADMIN':
+          navigate('/admin/dashboard', { replace: true });
+          break;
+        case 'WARDEN':
+          navigate('/warden/dashboard', { replace: true });
+          break;
+        case 'SECURITY':
+          navigate('/security/scanner', { replace: true });
+          break;
+        case 'STUDENT':
+          navigate('/student/dashboard', { replace: true });
+          break;
+        default:
+          navigate('/admin/dashboard', { replace: true });
+      }
     } catch (err: any) {
+      console.error('Login submit error:', err);
       setError(
         err.response?.data?.detail || 
         err.response?.data?.error || 
-        'Invalid username or password. Please try again.'
+        'Invalid username or password. Please check your credentials.'
       );
     }
   };
@@ -87,7 +107,7 @@ export const Login: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

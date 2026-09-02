@@ -1,0 +1,209 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Search,
+  Eye,
+  X
+} from 'lucide-react';
+import { apiClient } from '../../api/apiClient';
+import type { HostelStudent } from '../../types';
+
+export const WardenResidentManagement: React.FC = () => {
+  const [residents, setResidents] = useState<HostelStudent[]>([]);
+  const [search, setSearch] = useState('');
+  const [floorFilter, setFloorFilter] = useState('all');
+  const [selectedStudent, setSelectedStudent] = useState<HostelStudent | null>(null);
+
+  useEffect(() => {
+    fetchResidents();
+  }, [floorFilter]);
+
+  const fetchResidents = async () => {
+    try {
+      const url = floorFilter === 'all'
+        ? '/warden/students/'
+        : `/warden/students/?floor=${floorFilter}`;
+      const res = await apiClient.get<HostelStudent[]>(url);
+      setResidents(res.data);
+    } catch (err) {
+      console.error('Failed to load resident students', err);
+    }
+  };
+
+  const filteredResidents = residents.filter((r) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const roomStr = r.room_detail?.no || r.room_no || r.room_number || '';
+    return (
+      r.student_name.toLowerCase().includes(q) ||
+      r.enrollment_no.toLowerCase().includes(q) ||
+      roomStr.toLowerCase().includes(q) ||
+      (r.guardian_phone && r.guardian_phone.includes(q))
+    );
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Resident Students Directory</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Assigned block roster with room allocation and emergency contacts</p>
+        </div>
+        <div className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 self-start sm:self-auto">
+          {filteredResidents.length} Active Residents
+        </div>
+      </div>
+
+      {/* Search & Floor Filters */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search by student name, USN / ID, room number, or guardian phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white pl-10 pr-4 py-2.5 rounded-full text-xs border border-slate-200 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          {['all', '1', '2', '3', '4'].map((fl) => (
+            <button
+              key={fl}
+              onClick={() => setFloorFilter(fl)}
+              className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                floorFilter === fl
+                  ? 'bg-[#0D3833] text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {fl === 'all' ? 'All Floors' : `Floor ${fl}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Resident Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredResidents.length === 0 ? (
+          <div className="col-span-full bg-white p-12 rounded-3xl border border-slate-200 text-center text-slate-400 text-xs">
+            No resident students found matching the criteria.
+          </div>
+        ) : (
+          filteredResidents.map((st) => {
+            const roomNo = st.room_detail?.no || st.room_no || st.room_number || 'N/A';
+            return (
+              <div
+                key={st.id}
+                className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#0D3833] text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                        {st.student_name[0]}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 leading-tight">{st.student_name}</h4>
+                        <p className="text-[11px] text-slate-400 font-medium">{st.enrollment_no}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Room {roomNo}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-1.5 text-xs text-slate-600 mb-4">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Gender & Bed:</span>
+                      <span className="font-semibold text-slate-800">{st.gender} · Bed {st.bed_number || '1'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Guardian Phone:</span>
+                      <span className="font-semibold text-slate-800">{st.guardian_phone || 'Not recorded'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Emergency Contact:</span>
+                      <span className="font-semibold text-slate-800">{st.emergency_contact || 'None'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSelectedStudent(st)}
+                  className="w-full py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" /> View Resident Profile
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Resident Details Modal */}
+      {selectedStudent && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#0D3833] text-white font-bold flex items-center justify-center text-lg shadow-xs">
+                  {selectedStudent.student_name[0]}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">{selectedStudent.student_name}</h3>
+                  <p className="text-xs text-slate-400">{selectedStudent.enrollment_no} · {selectedStudent.gender}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedStudent(null)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Room & Bed</span>
+                  <p className="text-sm font-bold text-slate-800 mt-0.5">
+                    Room {selectedStudent.room_detail?.no || selectedStudent.room_no || '101'} (Bed {selectedStudent.bed_number || '1'})
+                  </p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Dues Clearance</span>
+                  <p className="text-sm font-bold text-emerald-700 mt-0.5">{selectedStudent.no_dues !== false ? 'Clear (No Dues)' : 'Pending Bills'}</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2 text-xs">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Emergency & Parent Contact Info</h4>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Father / Guardian Name:</span>
+                  <span className="font-semibold text-slate-800">{selectedStudent.father_name || 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Primary Guardian Mobile:</span>
+                  <span className="font-semibold text-slate-800">{selectedStudent.guardian_phone || 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Emergency Phone:</span>
+                  <span className="font-semibold text-rose-700">{selectedStudent.emergency_contact || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedStudent(null)}
+              className="w-full py-2.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
