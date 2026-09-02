@@ -11,11 +11,16 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    // Auto-refresh telemetry every 30 seconds dynamically
+    const interval = setInterval(() => {
+      fetchDashboardData(true);
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (isBackground = false) => {
     try {
-      setIsLoading(true);
+      if (!isBackground) setIsLoading(true);
       const [statsRes, passesRes] = await Promise.all([
         apiClient.get<any>('/hms/dashboard/stats/'),
         apiClient.get<GatePassRequest[]>('/hms/gate-passes/'),
@@ -27,7 +32,7 @@ export const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('Failed to load dashboard data', err);
     } finally {
-      setIsLoading(false);
+      if (!isBackground) setIsLoading(false);
     }
   };
 
@@ -46,14 +51,6 @@ export const AdminDashboard: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Operations Dashboard</h1>
           <p className="text-sm text-slate-500 mt-0.5">Real-time overview of residential occupancy, gate movements, and facilities</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchDashboardData}
-            className="px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
-          >
-            Refresh Telemetry
-          </button>
         </div>
       </div>
 
