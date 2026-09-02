@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import type { Role } from '../../types';
 import { Sidebar } from '../common/Sidebar';
-import { Header } from '../common/Header';
 
 interface ProtectedRouteProps {
   allowedRoles?: Role[];
@@ -34,10 +34,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F0FDF9]">
+      {/* Left Sidebar */}
       <Sidebar isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <Header onMenuClick={() => setMobileSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+
+      {/* Main Content Area (Full Height without top navbar) */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
+        {/* Floating Mobile Hamburger Button (Only on small screens when sidebar is hidden) */}
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="lg:hidden fixed top-4 left-4 z-30 p-2.5 rounded-2xl bg-white/90 backdrop-blur-sm border border-slate-200/80 shadow-md text-slate-700 hover:bg-slate-100 cursor-pointer"
+          aria-label="Open Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-16 lg:pt-8">
           <Outlet />
         </main>
       </div>
