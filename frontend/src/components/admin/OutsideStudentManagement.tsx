@@ -107,21 +107,23 @@ export const OutsideStudentManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Responsive Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Outside & Guest Residents</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage non-institutional students, interns, and researchers staying in hostel guest rooms</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Register Outside Student</span>
         </button>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+      {/* Search Bar */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
         <div className="relative w-full sm:w-96">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -129,12 +131,85 @@ export const OutsideStudentManagement: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by student name, college, or ID..."
-            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+            className="w-full bg-slate-50 pl-10 pr-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
           />
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+      {/* Mobile Card View (< 768px) */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {filtered.length === 0 ? (
+          <div className="bg-white p-10 rounded-3xl border border-slate-200/80 text-center text-slate-400 text-sm">
+            No outside students registered yet.
+          </div>
+        ) : (
+          filtered.map((s) => {
+            const isPaid = (s as any).dues_cleared;
+            return (
+              <div
+                key={s.id}
+                className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-xs shadow-2xs">
+                      {s.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base">{s.name}</h3>
+                      <div className="text-xs font-mono text-slate-500">ID: {s.usn}</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleToggleDues(s)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${
+                      isPaid
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                    }`}
+                  >
+                    {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                    <span>{isPaid ? 'PAID' : 'PENDING'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <span className="block text-[10px] font-semibold text-slate-400 uppercase">Institution</span>
+                    <span className="font-bold text-slate-800 mt-0.5 block truncate">{s.outside_college_name}</span>
+                    <span className="text-[11px] text-slate-500 block truncate">{s.outside_course_name}</span>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <span className="block text-[10px] font-semibold text-slate-400 uppercase">Allotted Room</span>
+                    {s.room ? (
+                      <span className="font-bold text-slate-800 mt-0.5 block">Room {s.room_no || 'Guest'}</span>
+                    ) : (
+                      <span className="text-slate-400 italic mt-0.5 block">Unassigned</span>
+                    )}
+                    <span className="text-[10px] font-mono text-slate-500 block truncate mt-0.5">{s.phone}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleDelete(s.id)}
+                    className="p-2 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                    title="Delete record"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Record</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop Table View (>= 768px) */}
+      <div className="hidden md:block bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
