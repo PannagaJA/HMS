@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Search, QrCode, CheckCircle2, XCircle, ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, QrCode, CheckCircle2, XCircle, ArrowRight, ArrowLeft, ShieldCheck, Camera, StopCircle } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 import type { GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
 
@@ -10,6 +11,16 @@ export const GatePassScanner: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Camera Scanner State
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  useEffect(() => {
+    return () => {
+      stopCameraScanner();
+    };
+  }, []);
 
   const handleSearch = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
@@ -25,12 +36,59 @@ export const GatePassScanner: React.FC = () => {
         `/security/gate-passes/verify_token/?code=${encodeURIComponent(query)}`
       );
       setScannedPass(res.data.pass);
+      // Auto stop camera once verified
+      stopCameraScanner();
     } catch (err: any) {
       setScannedPass(null);
       setErrorMsg(err.response?.data?.message || 'No approved gate pass found matching this Token or Student ID.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const startCameraScanner = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsCameraActive(true);
+
+    // Short timeout to let the container render in DOM
+    setTimeout(async () => {
+      try {
+        const qrCodeScanner = new Html5Qrcode('qr-reader-container');
+        scannerRef.current = qrCodeScanner;
+
+        await qrCodeScanner.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+          },
+          (decodedText) => {
+            // QR Code Detected & Scanned!
+            setSearchInput(decodedText);
+            handleSearch(undefined, decodedText);
+          },
+          () => {
+            // Ignore frame parse errors
+          }
+        );
+      } catch (err: any) {
+        setIsCameraActive(false);
+        setErrorMsg('Unable to access camera. Ensure camera permissions are allowed in your browser.');
+      }
+    }, 150);
+  };
+
+  const stopCameraScanner = async () => {
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch (err) {
+        console.error('Error stopping QR scanner', err);
+      }
+    }
+    setIsCameraActive(false);
   };
 
   const handleLogMovement = async (movementType: 'EXIT' | 'ENTRY') => {
@@ -60,13 +118,13 @@ export const GatePassScanner: React.FC = () => {
       {/* Header */}
       <div className="text-center">
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Main Campus Security Gate Terminal</h1>
-        <p className="text-sm text-slate-500 mt-1">Scan student digital QR code or enter USN / Enrollment Number for Departure & Return verification</p>
+        <p className="text-sm text-slate-500 mt-1">Scan student digital QR code with camera or enter USN / Enrollment Number</p>
       </div>
 
       {/* Verification Input Box */}
-      <div className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-sm">
-        <form onSubmit={handleSearch} className="flex items-center gap-3">
-          <div className="relative flex-1">
+      <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
             <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -76,25 +134,59 @@ export const GatePassScanner: React.FC = () => {
               className="w-full bg-slate-50 pl-12 pr-4 py-3.5 rounded-full text-base border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833]"
             />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-8 py-3.5 rounded-full bg-[#0D3833] text-white font-semibold text-sm hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <QrCode className="w-4 h-4" />
-            <span>{loading ? 'Verifying...' : 'Verify Pass'}</span>
-          </button>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 sm:flex-none px-6 py-3.5 rounded-full bg-[#0D3833] text-white font-semibold text-xs hover:bg-[#064E3B] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>{loading ? 'Verifying...' : 'Verify Pass'}</span>
+            </button>
+
+            {!isCameraActive ? (
+              <button
+                type="button"
+                onClick={startCameraScanner}
+                className="px-5 py-3.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 border border-teal-300 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+              >
+                <Camera className="w-4 h-4 text-teal-900" />
+                <span>Open Camera</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={stopCameraScanner}
+                className="px-5 py-3.5 rounded-full bg-rose-50 text-rose-800 font-bold text-xs hover:bg-rose-100 border border-rose-200 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <StopCircle className="w-4 h-4 text-rose-600" />
+                <span>Close Camera</span>
+              </button>
+            )}
+          </div>
         </form>
 
+        {/* Live Camera Scanner Viewport */}
+        {isCameraActive && (
+          <div className="p-4 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col items-center animate-in fade-in duration-200">
+            <div className="text-white text-xs font-semibold mb-3 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>Point Camera at Student's Phone Screen QR Code</span>
+            </div>
+            <div id="qr-reader-container" className="w-full max-w-sm rounded-2xl overflow-hidden bg-black" />
+          </div>
+        )}
+
         {errorMsg && (
-          <div className="mt-4 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
+          <div className="mt-2 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
             <XCircle className="w-5 h-5 flex-shrink-0 text-rose-600" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
+          <div className="mt-2 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
             <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
             <span>{successMsg}</span>
           </div>
