@@ -50,10 +50,10 @@ export const GatePassScanner: React.FC = () => {
       const passes = res.data;
 
       const outside = passes.filter(
-        (p) => p.actual_exit_time && !p.actual_entry_time
+        (p: GatePassRequest) => p.actual_exit_time && !p.actual_entry_time
       );
       const completed = passes.filter(
-        (p) => p.actual_exit_time && p.actual_entry_time
+        (p: GatePassRequest) => p.actual_exit_time && p.actual_entry_time
       );
 
       setActiveOutsidePasses(outside);

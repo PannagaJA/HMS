@@ -29,7 +29,7 @@ export const StudentManagement: React.FC = () => {
   useEffect(() => {
     if (selectedHostelId) {
       apiClient.get<HostelRoom[]>(`/hms/rooms/?hostel=${selectedHostelId}`).then((res) => {
-        setRooms(res.data.filter((r) => r.vacant || r.occupied_count < r.capacity));
+        setRooms(res.data.filter((r: HostelRoom) => r.vacant || (r.occupied_count ?? 0) < r.capacity));
       });
     }
   }, [selectedHostelId]);
