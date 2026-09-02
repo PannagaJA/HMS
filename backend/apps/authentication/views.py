@@ -6,6 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from .serializers import CustomTokenObtainPairSerializer, UserSerializer
+from apps.hms_admin.models import HostelWarden, HostelCaretaker
+from apps.student.models import HostelStudent
 
 User = get_user_model()
 
@@ -33,10 +35,32 @@ class CurrentUserProfileView(APIView):
         return Response(serializer.data)
 
     def patch(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        user = request.user
+        serializer = UserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
+            updated_user = serializer.save()
+
+            # Synchronize full name and phone across domain profile records
+            full_name = f"{updated_user.first_name} {updated_user.last_name}".strip() or updated_user.username
+
+            if updated_user.role == 'WARDEN':
+                HostelWarden.objects.filter(user=updated_user).update(
+                    name=full_name,
+                    phone=updated_user.phone or '',
+                    email=updated_user.email or ''
+                )
+            elif updated_user.role == 'SECURITY':
+                HostelCaretaker.objects.filter(user=updated_user).update(
+                    name=full_name,
+                    phone=updated_user.phone or '',
+                    email=updated_user.email or ''
+                )
+            elif updated_user.role == 'STUDENT':
+                HostelStudent.objects.filter(user=updated_user).update(
+                    student_name=full_name
+                )
+
+            return Response(UserSerializer(updated_user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):

@@ -5,6 +5,7 @@ import {
   logoutUser, 
   getStoredUser, 
   getAccessToken,
+  saveAuthSession,
   apiClient 
 } from '../utils/authService';
 
@@ -13,6 +14,8 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
+  updateCurrentUser: (updatedUser: User) => void;
+  refreshUserProfile: () => Promise<User | null>;
   isLoading: boolean;
 }
 
@@ -23,22 +26,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(() => getAccessToken());
   const [isLoading, setIsLoading] = useState(false);
 
+  const refreshUserProfile = async (): Promise<User | null> => {
+    const currentToken = getAccessToken();
+    if (currentToken) {
+      try {
+        const res = await apiClient.get<User>('/auth/me/');
+        setUser(res.data);
+        saveAuthSession(currentToken, undefined, res.data);
+        return res.data;
+      } catch (err) {
+        // Token expired or invalid
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     // Verify session on mount
-    const verifySession = async () => {
-      const currentToken = getAccessToken();
-      if (currentToken) {
-        try {
-          const res = await apiClient.get<User>('/auth/me/');
-          setUser(res.data);
-          setToken(currentToken);
-        } catch (err) {
-          // Token expired or invalid
-        }
-      }
-    };
-    verifySession();
+    refreshUserProfile();
   }, []);
+
+  const updateCurrentUser = (updatedUser: User) => {
+    setUser(updatedUser);
+    const currentToken = getAccessToken();
+    if (currentToken) {
+      saveAuthSession(currentToken, undefined, updatedUser);
+    }
+  };
 
   const login = async (username: string, password: string): Promise<User> => {
     setIsLoading(true);
@@ -59,7 +73,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      token, 
+      login, 
+      logout, 
+      updateCurrentUser, 
+      refreshUserProfile, 
+      isLoading 
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,8 +4,12 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/apiClient';
 
 export const HMSProfile: React.FC = () => {
-  const { user } = useAuth();
-  const [name, setName] = useState(user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : (user?.username || 'Administrator'));
+  const { user, updateCurrentUser } = useAuth();
+  const [name, setName] = useState(
+    user?.first_name 
+      ? `${user.first_name} ${user.last_name || ''}`.trim() 
+      : (user?.username || 'Administrator')
+  );
   const [email, setEmail] = useState(user?.email || 'admin@hms.local');
   const [phone, setPhone] = useState(user?.phone || '9876543210');
   const [isSaving, setIsSaving] = useState(false);
@@ -27,13 +31,17 @@ export const HMSProfile: React.FC = () => {
       const firstName = names[0] || '';
       const lastName = names.slice(1).join(' ') || '';
 
-      await apiClient.patch('/auth/profile/', {
+      const res = await apiClient.patch('/auth/profile/', {
         first_name: firstName,
         last_name: lastName,
         email,
         phone,
       });
-      setSuccessMsg('Profile updated successfully!');
+
+      // Update global AuthContext and persistent session state immediately
+      updateCurrentUser(res.data);
+
+      setSuccessMsg('Profile updated successfully! New details are now active across all screens.');
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
       const errorMsg =
@@ -78,36 +86,44 @@ export const HMSProfile: React.FC = () => {
     }
   };
 
+  const displayName = user?.first_name 
+    ? `${user.first_name} ${user.last_name || ''}`.trim() 
+    : (user?.username || name);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Administrator Account & Profile</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage administrative credentials, institutional contact details, and security keys</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Account & Profile Settings</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Manage personal credentials, institutional contact details, and security keys</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Profile Overview Card */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col items-center text-center">
           <div className="w-24 h-24 rounded-full bg-[#0D3833] text-white flex items-center justify-center text-3xl font-bold mb-4 shadow-md">
-            {name[0]?.toUpperCase() || 'A'}
+            {displayName[0]?.toUpperCase() || 'A'}
           </div>
-          <h3 className="text-lg font-bold text-slate-900">{name}</h3>
+          <h3 className="text-lg font-bold text-slate-900">{displayName}</h3>
           <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#D1F2EA] text-teal-950 mt-1 mb-4 border border-teal-200">
-            {user?.role || 'HMS ADMIN'}
+            {user?.role || 'HMS USER'}
           </span>
 
           <div className="w-full border-t border-slate-100 pt-4 space-y-2.5 text-xs text-left text-slate-600">
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Username:</span>
-              <span className="font-mono font-semibold text-slate-800">{user?.username || 'admin'}</span>
+              <span className="font-mono font-semibold text-slate-800">{user?.username}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Account Type:</span>
-              <span className="font-semibold text-slate-800">Super Administrator</span>
+              <span className="text-slate-400">Role:</span>
+              <span className="font-semibold text-slate-800">{user?.role}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Access Scope:</span>
-              <span className="font-semibold text-emerald-700">Full Campus HMS</span>
+              <span className="text-slate-400">Email:</span>
+              <span className="truncate max-w-[140px] text-slate-700">{user?.email}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Phone:</span>
+              <span className="font-mono text-slate-700">{user?.phone || 'Not set'}</span>
             </div>
           </div>
         </div>
