@@ -3,14 +3,21 @@ import { Plus, X } from 'lucide-react';
 import type { IssueTicket } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const StudentIssues: React.FC = () => {
   const [issues, setIssues] = useState<IssueTicket[]>([]);
   const [showRaiseModal, setShowRaiseModal] = useState(false);
-  const [issueCategory, setIssueCategory] = useState<'ELECTRICAL' | 'PLUMBING' | 'CARPENTRY' | 'CLEANLINESS' | 'INTERNET' | 'OTHER'>('ELECTRICAL');
+  const [issueCategory, setIssueCategory] = useState<string>('ELECTRICAL');
   const [issueTitle, setIssueTitle] = useState('');
   const [issueDesc, setIssueDesc] = useState('');
-  const [issuePriority, setIssuePriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('MEDIUM');
+  const [issuePriority, setIssuePriority] = useState<string>('MEDIUM');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -110,18 +117,19 @@ export const StudentIssues: React.FC = () => {
             <form onSubmit={handleRaiseIssue} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Issue Category</label>
-                <select
-                  value={issueCategory}
-                  onChange={(e: any) => setIssueCategory(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-                >
-                  <option value="ELECTRICAL">Electrical (Lights, Fan, Switchboard)</option>
-                  <option value="PLUMBING">Plumbing (Tap, Pipe, Drainage)</option>
-                  <option value="CARPENTRY">Carpentry (Bed, Desk, Door, Cupboard)</option>
-                  <option value="CLEANLINESS">Cleanliness & Hygiene</option>
-                  <option value="INTERNET">Wi-Fi & Internet</option>
-                  <option value="OTHER">Other Issue</option>
-                </select>
+                <Select value={issueCategory} onValueChange={(val) => setIssueCategory(val)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ELECTRICAL">Electrical (Lights, Fan, Switchboard)</SelectItem>
+                    <SelectItem value="PLUMBING">Plumbing (Tap, Pipe, Drainage)</SelectItem>
+                    <SelectItem value="CARPENTRY">Carpentry (Bed, Desk, Door, Cupboard)</SelectItem>
+                    <SelectItem value="CLEANLINESS">Cleanliness & Hygiene</SelectItem>
+                    <SelectItem value="INTERNET">Wi-Fi & Internet</SelectItem>
+                    <SelectItem value="OTHER">Other Issue</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -150,16 +158,17 @@ export const StudentIssues: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Priority Level</label>
-                <select
-                  value={issuePriority}
-                  onChange={(e: any) => setIssuePriority(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-                >
-                  <option value="LOW">Low - Can wait a few days</option>
-                  <option value="MEDIUM">Medium - Normal resolution</option>
-                  <option value="HIGH">High - Urgent attention needed</option>
-                  <option value="URGENT">Urgent - Emergency breakdown</option>
-                </select>
+                <Select value={issuePriority} onValueChange={(val) => setIssuePriority(val)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low - Can wait a few days</SelectItem>
+                    <SelectItem value="MEDIUM">Medium - Normal resolution</SelectItem>
+                    <SelectItem value="HIGH">High - Urgent attention needed</SelectItem>
+                    <SelectItem value="URGENT">Urgent - Emergency breakdown</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">

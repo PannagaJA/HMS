@@ -2,6 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Download, Check, X } from 'lucide-react';
 import type { MealType, MenuItem, Menu } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 const DAYS = [
   { id: '0', name: 'Monday' },
@@ -353,18 +360,19 @@ export const MenuManagement: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Category</label>
-                <select
-                  value={itemCategory}
-                  onChange={(e) => setItemCategory(e.target.value)}
-                  className="w-full bg-slate-50 px-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833]"
-                >
-                  <option value="Breakfast">Breakfast</option>
-                  <option value="Main Course">Main Course</option>
-                  <option value="Curry / Gravy">Curry / Gravy</option>
-                  <option value="Rice & Breads">Rice & Breads</option>
-                  <option value="Snacks & Beverages">Snacks & Beverages</option>
-                  <option value="Dessert">Dessert</option>
-                </select>
+                <Select value={itemCategory} onValueChange={(val) => setItemCategory(val)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Breakfast">Breakfast</SelectItem>
+                    <SelectItem value="Main Course">Main Course</SelectItem>
+                    <SelectItem value="Curry / Gravy">Curry / Gravy</SelectItem>
+                    <SelectItem value="Rice & Breads">Rice & Breads</SelectItem>
+                    <SelectItem value="Snacks & Beverages">Snacks & Beverages</SelectItem>
+                    <SelectItem value="Dessert">Dessert</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>

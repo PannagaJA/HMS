@@ -2,6 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Search, Download, DollarSign, Calculator } from 'lucide-react';
 import type { MessBilling } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const MessBillingManagement: React.FC = () => {
   const [bills, setBills] = useState<MessBilling[]>([]);
@@ -126,15 +133,18 @@ export const MessBillingManagement: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Billing Cycle:</span>
-          <select
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800"
-          >
-            <option value="2026-09">September 2026</option>
-            <option value="2026-08">August 2026</option>
-            <option value="2026-07">July 2026</option>
-          </select>
+          <div className="w-44">
+            <Select value={filterMonth} onValueChange={(val) => setFilterMonth(val)}>
+              <SelectTrigger className="h-9 rounded-xl text-xs font-semibold">
+                <SelectValue placeholder="Select Cycle" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2026-09">September 2026</SelectItem>
+                <SelectItem value="2026-08">August 2026</SelectItem>
+                <SelectItem value="2026-07">July 2026</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

@@ -6,6 +6,13 @@ import {
 import { apiClient } from '../../api/apiClient';
 import { StatusBadge } from '../common/StatusBadge';
 import type { HostelIssue } from '../../types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const WardenIssueManagement: React.FC = () => {
   const [issues, setIssues] = useState<HostelIssue[]>([]);
@@ -158,16 +165,17 @@ export const WardenIssueManagement: React.FC = () => {
             <form onSubmit={handleUpdateStatus} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Change Status</label>
-                <select
-                  value={updateStatus}
-                  onChange={(e) => setUpdateStatus(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress (Worker Dispatched)</option>
-                  <option value="waiting_for_workers">Waiting for Workers / Spare Parts</option>
-                  <option value="completed">Completed / Resolved</option>
-                </select>
+                <Select value={updateStatus} onValueChange={(val) => setUpdateStatus(val)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="in_progress">In Progress (Worker Dispatched)</SelectItem>
+                    <SelectItem value="waiting_for_workers">Waiting for Workers / Spare Parts</SelectItem>
+                    <SelectItem value="completed">Completed / Resolved</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>

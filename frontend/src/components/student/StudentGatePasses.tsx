@@ -4,6 +4,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import type { GatePassRequest } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const StudentGatePasses: React.FC = () => {
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
@@ -11,7 +18,7 @@ export const StudentGatePasses: React.FC = () => {
   const [selectedQRPass, setSelectedQRPass] = useState<GatePassRequest | null>(null);
 
   // Form State
-  const [passType, setPassType] = useState<'DAY_OUT' | 'NIGHT_OUT' | 'HOME_VISIT' | 'EMERGENCY'>('DAY_OUT');
+  const [passType, setPassType] = useState<string>('DAY_OUT');
   const [reason, setReason] = useState('');
   const [outDate, setOutDate] = useState('');
   const [outTime, setOutTime] = useState('');
@@ -214,16 +221,17 @@ export const StudentGatePasses: React.FC = () => {
             <form onSubmit={handleApplyPass} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Pass Type</label>
-                <select
-                  value={passType}
-                  onChange={(e: any) => setPassType(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-                >
-                  <option value="DAY_OUT">Day Outing (Return Today)</option>
-                  <option value="NIGHT_OUT">Night Out</option>
-                  <option value="HOME_VISIT">Home Visit / Multi-Day Leave</option>
-                  <option value="EMERGENCY">Emergency Leave</option>
-                </select>
+                <Select value={passType} onValueChange={(val) => setPassType(val)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Pass Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DAY_OUT">Day Outing (Return Today)</SelectItem>
+                    <SelectItem value="NIGHT_OUT">Night Out</SelectItem>
+                    <SelectItem value="HOME_VISIT">Home Visit / Multi-Day Leave</SelectItem>
+                    <SelectItem value="EMERGENCY">Emergency Leave</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

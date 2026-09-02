@@ -5,6 +5,13 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { VisitorLog, HostelStudent } from '../../types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const WardenVisitorLogs: React.FC = () => {
   const [logs, setLogs] = useState<VisitorLog[]>([]);
@@ -194,19 +201,18 @@ export const WardenVisitorLogs: React.FC = () => {
             <form onSubmit={handleCreateLog} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Visiting Student *</label>
-                <select
-                  required
-                  value={formData.student}
-                  onChange={(e) => setFormData({ ...formData, student: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-                >
-                  <option value="">Select Resident Student</option>
-                  {students.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.student_name} ({st.enrollment_no}) - Room {st.room_detail?.no || st.room_no || 'N/A'}
-                    </option>
-                  ))}
-                </select>
+                <Select value={formData.student} onValueChange={(val) => setFormData({ ...formData, student: val })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Resident Student" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {students.map((st) => (
+                      <SelectItem key={st.id} value={String(st.id)}>
+                        {st.student_name} ({st.enrollment_no}) - Room {st.room_detail?.no || st.room_no || 'N/A'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>

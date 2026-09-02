@@ -7,6 +7,13 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { HostelRoom } from '../../types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 interface ManagedHostel {
   id: number;
@@ -79,17 +86,23 @@ export const WardenDashboard: React.FC = () => {
         {stats && stats.managed_hostels.length > 0 && (
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-slate-500">Hostel Block:</label>
-            <select
-              value={selectedHostelId || ''}
-              onChange={(e) => setSelectedHostelId(Number(e.target.value))}
-              className="bg-white border border-slate-200 rounded-full px-4 py-2 text-xs font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 cursor-pointer"
-            >
-              {stats.managed_hostels.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name} ({h.gender})
-                </option>
-              ))}
-            </select>
+            <div className="w-56">
+              <Select
+                value={selectedHostelId ? String(selectedHostelId) : ''}
+                onValueChange={(val) => setSelectedHostelId(Number(val))}
+              >
+                <SelectTrigger className="h-9 rounded-full bg-white text-xs font-semibold shadow-xs">
+                  <SelectValue placeholder="Select Hostel Block" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stats.managed_hostels.map((h) => (
+                    <SelectItem key={h.id} value={String(h.id)}>
+                      {h.name} ({h.gender})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         )}
       </div>
