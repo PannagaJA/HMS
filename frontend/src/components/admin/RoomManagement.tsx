@@ -141,56 +141,77 @@ export const RoomManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {filteredRooms.map((room) => {
-          const isFull = room.occupied_count >= room.capacity;
-          const isPartiallyOccupied = room.occupied_count > 0 && !isFull;
+      {filteredRooms.length === 0 ? (
+        <div className="bg-white p-12 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <BedDouble className="w-8 h-8 text-[#0D3833]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">No Rooms Configured for this Block</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              There are currently no room allocations setup for the selected floor or hostel block. Generate room slots in bulk to start assigning residents.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowBulkModal(true)}
+            className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Generate Rooms for this Block</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {filteredRooms.map((room) => {
+            const isFull = room.occupied_count >= room.capacity;
+            const isPartiallyOccupied = room.occupied_count > 0 && !isFull;
 
-          return (
-            <div
-              key={room.id}
-              onClick={() => handleViewRoom(room)}
-              className={`p-4 rounded-3xl border transition-all cursor-pointer relative overflow-hidden ${
-                isFull
-                  ? 'bg-rose-50/60 border-rose-200 hover:border-rose-400'
-                  : isPartiallyOccupied
-                  ? 'bg-amber-50/60 border-amber-200 hover:border-amber-400'
-                  : 'bg-emerald-50/60 border-emerald-200 hover:border-emerald-400'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-700">Fl {room.floor}</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  isFull ? 'bg-rose-100 text-rose-800' : isPartiallyOccupied ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                }`}>
-                  {isFull ? 'FULL' : isPartiallyOccupied ? 'PARTIAL' : 'VACANT'}
-                </span>
-              </div>
+            return (
+              <div
+                key={room.id}
+                onClick={() => handleViewRoom(room)}
+                className={`p-4 rounded-3xl border transition-all cursor-pointer relative overflow-hidden ${
+                  isFull
+                    ? 'bg-rose-50/60 border-rose-200 hover:border-rose-400'
+                    : isPartiallyOccupied
+                    ? 'bg-amber-50/60 border-amber-200 hover:border-amber-400'
+                    : 'bg-emerald-50/60 border-emerald-200 hover:border-emerald-400'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-700">Fl {room.floor}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    isFull ? 'bg-rose-100 text-rose-800' : isPartiallyOccupied ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {isFull ? 'FULL' : isPartiallyOccupied ? 'PARTIAL' : 'VACANT'}
+                  </span>
+                </div>
 
-              <div className="text-lg font-bold text-slate-900 mb-1">
-                Room {room.no}
-              </div>
+                <div className="text-lg font-bold text-slate-900 mb-1">
+                  Room {room.no}
+                </div>
 
-              <div className="text-xs text-slate-500 mb-3 flex items-center gap-1">
-                <BedDouble className="w-3.5 h-3.5 text-slate-400" />
-                <span>{room.room_type_display || `${room.capacity}-Bed`}</span>
-              </div>
+                <div className="text-xs text-slate-500 mb-3 flex items-center gap-1">
+                  <BedDouble className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{room.room_type_display || `${room.capacity}-Bed`}</span>
+                </div>
 
-              <div className="flex items-center gap-1 pt-2 border-t border-slate-200/60">
-                {Array.from({ length: room.capacity }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-2 flex-1 rounded-full ${
-                      i < room.occupied_count ? 'bg-[#0D3833]' : 'bg-white border border-slate-300'
-                    }`}
-                    title={`Bed ${i + 1}: ${i < room.occupied_count ? 'Occupied' : 'Vacant'}`}
-                  />
-                ))}
+                <div className="flex items-center gap-1 pt-2 border-t border-slate-200/60">
+                  {Array.from({ length: room.capacity }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-2 flex-1 rounded-full ${
+                        i < room.occupied_count ? 'bg-[#0D3833]' : 'bg-white border border-slate-300'
+                      }`}
+                      title={`Bed ${i + 1}: ${i < room.occupied_count ? 'Occupied' : 'Vacant'}`}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Room Occupants Centered Modal Popup */}
       {showOccupantsDrawer && selectedRoom && (
