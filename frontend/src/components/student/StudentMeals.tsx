@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Calendar } from 'lucide-react';
 import type { Menu, MealType } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { formatTimeRange12 } from '../../lib/utils';
 
 export const StudentMeals: React.FC = () => {
   const [todayMenu, setTodayMenu] = useState<{ day_name: string; meals: Menu[] } | null>(null);
@@ -71,7 +72,7 @@ export const StudentMeals: React.FC = () => {
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-bold text-slate-800 tracking-tight">{mealType.name}</span>
                     <span className="text-[10px] font-mono text-slate-400 font-semibold">
-                      {mealType.start_time || mealType.time_from || '08:00'} - {mealType.end_time || mealType.time_to || '10:00'}
+                      {formatTimeRange12(mealType.start_time || mealType.time_from, mealType.end_time || mealType.time_to)}
                     </span>
                   </div>
 

@@ -13,6 +13,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import type { HostelStudent, GatePassRequest, IssueTicket } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { formatTime12 } from '../../lib/utils';
 
 export const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -309,11 +310,11 @@ export const StudentDashboard: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Permitted Out:</span>
-                <span className="text-slate-700 font-semibold">{activeApprovedPass.out_date} ({activeApprovedPass.out_time})</span>
+                <span className="text-slate-700 font-semibold">{activeApprovedPass.out_date} ({formatTime12(activeApprovedPass.out_time)})</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Curfew Return:</span>
-                <span className="text-rose-700 font-bold">{activeApprovedPass.expected_return_date} ({activeApprovedPass.expected_return_time})</span>
+                <span className="text-rose-700 font-bold">{activeApprovedPass.expected_return_date} ({formatTime12(activeApprovedPass.expected_return_time)})</span>
               </div>
             </div>
           </div>

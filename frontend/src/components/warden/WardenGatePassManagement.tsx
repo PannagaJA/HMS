@@ -3,6 +3,7 @@ import { Check, X } from 'lucide-react';
 import type { GatePassRequest } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
+import { formatTime12 } from '../../lib/utils';
 
 export const WardenGatePassManagement: React.FC = () => {
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
@@ -103,11 +104,11 @@ export const WardenGatePassManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400 font-medium">Out Time:</span>
-                    <span className="font-semibold text-slate-800">{pass.out_date} at {pass.out_time}</span>
+                    <span className="font-semibold text-slate-800">{pass.out_date} at {formatTime12(pass.out_time)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400 font-medium">Expected Return:</span>
-                    <span className="font-semibold text-slate-800">{pass.expected_return_date} at {pass.expected_return_time}</span>
+                    <span className="font-semibold text-slate-800">{pass.expected_return_date} at {formatTime12(pass.expected_return_time)}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-200/60 text-xs">
                     <span className="text-slate-400 font-medium block mb-0.5">Reason:</span>

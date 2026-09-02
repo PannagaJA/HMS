@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, ChefHat } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed } from 'lucide-react';
 import type { MealType, MenuItem, Menu } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { formatTimeRange12 } from '../../lib/utils';
 
 const DAYS = [
   { id: '0', name: 'Monday' },
@@ -39,6 +40,8 @@ export const MenuManagement: React.FC = () => {
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [targetMealType, setTargetMealType] = useState<MealType | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [slotStartTime, setSlotStartTime] = useState('07:30');
+  const [slotEndTime, setSlotEndTime] = useState('09:30');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -113,6 +116,11 @@ export const MenuManagement: React.FC = () => {
 
   const handleOpenConfigureSlot = (mealType: MealType) => {
     setTargetMealType(mealType);
+    const rawStart = mealType.start_time || mealType.time_from || '07:30';
+    const rawEnd = mealType.end_time || mealType.time_to || '09:30';
+    setSlotStartTime(rawStart.substring(0, 5));
+    setSlotEndTime(rawEnd.substring(0, 5));
+
     const existing = menus.find(
       (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(mealType.id)
     );
@@ -127,6 +135,16 @@ export const MenuManagement: React.FC = () => {
     setIsSaving(true);
 
     try {
+      // 1. Update meal slot timing (e.g. 07:30 - 09:30)
+      const formattedStart = slotStartTime.length === 5 ? `${slotStartTime}:00` : slotStartTime;
+      const formattedEnd = slotEndTime.length === 5 ? `${slotEndTime}:00` : slotEndTime;
+
+      await apiClient.patch(`/hms/meal-types/${targetMealType.id}/`, {
+        start_time: formattedStart,
+        end_time: formattedEnd,
+      });
+
+      // 2. Update menu items for this day and slot
       const existing = menus.find(
         (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(targetMealType.id)
       );
@@ -215,7 +233,27 @@ export const MenuManagement: React.FC = () => {
 
       {activeTab === 'timetable' && (
         <div className="space-y-5">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {/* Mobile View: Clean Select Dropdown (< 768px) */}
+          <div className="block md:hidden bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+            <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+              Select Day of Week:
+            </label>
+            <Select value={activeDay} onValueChange={(val) => setActiveDay(val)}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-bold text-slate-800">
+                <SelectValue placeholder="Select day" />
+              </SelectTrigger>
+              <SelectContent>
+                {DAYS.map((day) => (
+                  <SelectItem key={day.id} value={day.id}>
+                    {day.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Desktop View: Horizontal Day Pills (>= 768px) */}
+          <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-2">
             {DAYS.map((day) => (
               <button
                 key={day.id}
@@ -231,15 +269,14 @@ export const MenuManagement: React.FC = () => {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Modern Minimalist Dining Schedule Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {mealTypes.map((mealType) => {
               const menuForSlot = menus.find(
                 (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(mealType.id)
               );
-              // Check both items_detail (full objects) or items (IDs/objects)
               const itemsList = menuForSlot?.items_detail || menuForSlot?.items || [];
 
-              // Map code to friendly titles and themed colors
               const slotCode = mealType.name.toUpperCase();
               const isBreakfast = slotCode === 'BR' || slotCode.includes('BREAKFAST');
               const isLunch = slotCode === 'LN' || slotCode.includes('LUNCH');
@@ -247,106 +284,100 @@ export const MenuManagement: React.FC = () => {
               const isDinner = slotCode === 'DN' || slotCode.includes('DINNER');
 
               const slotTitle = isBreakfast ? 'Breakfast' : isLunch ? 'Lunch' : isSnacks ? 'Evening Snacks' : isDinner ? 'Dinner' : mealType.name;
-              const slotIcon = isBreakfast ? <Coffee className="w-5 h-5" /> : isLunch ? <Sun className="w-5 h-5" /> : isSnacks ? <Sunset className="w-5 h-5" /> : <Moon className="w-5 h-5" />;
-              
-              const headerBg = isBreakfast ? 'bg-amber-50 text-amber-900 border-amber-200' :
-                               isLunch ? 'bg-orange-50 text-orange-900 border-orange-200' :
-                               isSnacks ? 'bg-teal-50 text-teal-900 border-teal-200' :
-                               'bg-indigo-50 text-indigo-900 border-indigo-200';
-
-              const badgeBg = isBreakfast ? 'bg-amber-100 text-amber-800' :
-                              isLunch ? 'bg-orange-100 text-orange-800' :
-                              isSnacks ? 'bg-teal-100 text-teal-800' :
-                              'bg-indigo-100 text-indigo-800';
+              const slotIcon = isBreakfast ? <Coffee className="w-4 h-4" /> : isLunch ? <Sun className="w-4 h-4" /> : isSnacks ? <Sunset className="w-4 h-4" /> : <Moon className="w-4 h-4 text-indigo-400" />;
 
               return (
                 <div
                   key={mealType.id}
-                  className="bg-white rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between overflow-hidden hover:border-slate-300 hover:shadow-md transition-all"
+                  className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden"
                 >
-                  <div className="p-5">
-                    {/* Card Header */}
-                    <div className="flex items-start justify-between gap-3 mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${headerBg} shadow-2xs`}>
-                          {slotIcon}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="font-bold text-slate-900 text-base">{slotTitle}</h3>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${badgeBg}`}>
-                              {mealType.name}
-                            </span>
-                          </div>
-                          <span className="flex items-center gap-1 text-[11px] text-slate-500 font-mono mt-0.5">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            <span>{mealType.start_time || mealType.time_from || '08:00'} - {mealType.end_time || mealType.time_to || '10:00'}</span>
+                  {/* Card Header Bar */}
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                        {slotIcon}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-slate-900 text-base">{slotTitle}</h3>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                            {mealType.name}
                           </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono mt-0.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{formatTimeRange12(mealType.start_time || mealType.time_from, mealType.end_time || mealType.time_to)}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Meal Items List */}
-                    <div className="min-h-[130px] space-y-2 py-1">
-                      {itemsList.length === 0 ? (
-                        <div className="h-28 flex flex-col items-center justify-center rounded-2xl bg-slate-50/70 border border-dashed border-slate-200 text-xs text-slate-400">
-                          <UtensilsCrossed className="w-5 h-5 text-slate-300 mb-1" />
-                          <span>No items configured</span>
-                        </div>
-                      ) : (
-                        itemsList.map((item: any, idx: number) => {
-                          const itemObj = typeof item === 'object' ? item : menuItems.find((mi) => mi.id === item);
-                          const isVegetarian = itemObj?.is_veg ?? itemObj?.vegetarian ?? true;
-                          return (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200/90 hover:border-slate-300 shadow-2xs hover:shadow-xs transition-all group/item"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 group-hover/item:bg-[#D1F2EA] group-hover/item:text-teal-950 transition-colors">
-                                  <ChefHat className="w-3.5 h-3.5" />
-                                </div>
-                                <div className="min-w-0">
-                                  <span className="text-xs font-bold text-slate-900 block truncate">
-                                    {itemObj?.name || `Item #${item}`}
-                                  </span>
-                                  {itemObj?.category && (
-                                    <span className="text-[10px] text-slate-400 font-medium block truncate">
-                                      {itemObj.category}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-1 ${
-                                  isVegetarian
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-rose-50 text-rose-700 border-rose-200'
-                                }`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                <span>{isVegetarian ? 'Veg' : 'Non-Veg'}</span>
-                              </span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Card Footer Action */}
-                  <div className="p-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-slate-500">
-                      {itemsList.length} {itemsList.length === 1 ? 'Dish' : 'Dishes'}
-                    </span>
                     <button
                       onClick={() => handleOpenConfigureSlot(mealType)}
-                      className="px-4 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-[#0D3833] text-slate-700 hover:text-white border border-slate-200 hover:border-transparent text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Configure Slot</span>
+                      <Edit2 className="w-3 h-3" />
+                      <span>Configure</span>
                     </button>
+                  </div>
+
+                  {/* Card Body: Minimalist Dish List */}
+                  <div className="p-5 flex-1 space-y-2">
+                    {itemsList.length === 0 ? (
+                      <div className="py-8 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-xs text-slate-400">
+                        <UtensilsCrossed className="w-4 h-4 mx-auto mb-1.5 text-slate-300" />
+                        <span>No dishes configured for {slotTitle.toLowerCase()}</span>
+                      </div>
+                    ) : (
+                      itemsList.map((item: any, idx: number) => {
+                        const itemObj = typeof item === 'object' ? item : menuItems.find((mi) => mi.id === item);
+                        const isVegetarian = itemObj?.is_veg ?? itemObj?.vegetarian ?? true;
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 border border-slate-100 hover:bg-white hover:border-slate-200/90 transition-all"
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* Clean Veg/Non-Veg Square Stamp Indicator */}
+                              <div
+                                className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
+                                  isVegetarian ? 'border-emerald-600' : 'border-rose-600'
+                                }`}
+                                title={isVegetarian ? 'Vegetarian' : 'Non-Vegetarian'}
+                              >
+                                <div
+                                  className={`w-2 h-2 rounded-full ${
+                                    isVegetarian ? 'bg-emerald-600' : 'bg-rose-600'
+                                  }`}
+                                />
+                              </div>
+
+                              <div>
+                                <span className="text-xs font-bold text-slate-800 block">
+                                  {itemObj?.name || `Item #${item}`}
+                                </span>
+                                {itemObj?.category && (
+                                  <span className="text-[10px] font-medium text-slate-400 block">
+                                    {itemObj.category}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] font-semibold font-mono text-slate-400 uppercase">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Card Bottom Meta */}
+                  <div className="px-5 py-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                    <span>Menu Slot</span>
+                    <span className="font-semibold text-slate-700">
+                      {itemsList.length} {itemsList.length === 1 ? 'Dish Active' : 'Dishes Active'}
+                    </span>
                   </div>
                 </div>
               );
@@ -506,21 +537,54 @@ export const MenuManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveSlotMenu} className="space-y-4">
-              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                {menuItems.map((item) => {
-                  const isSelected = selectedItemIds.includes(item.id);
-                  const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+              {/* Customizable Slot Timing Fields */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Slot Operational Timings
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 block mb-1">Start Time</span>
+                    <input
+                      type="time"
+                      value={slotStartTime}
+                      onChange={(e) => setSlotStartTime(e.target.value)}
+                      required
+                      className="w-full bg-white px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 block mb-1">End Time</span>
+                    <input
+                      type="time"
+                      value={slotEndTime}
+                      onChange={(e) => setSlotEndTime(e.target.value)}
+                      required
+                      className="w-full bg-white px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    />
+                  </div>
+                </div>
+              </div>
 
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => handleToggleItemSelection(item.id)}
-                      className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-emerald-50/60 border-emerald-300'
-                          : 'bg-slate-50 border-slate-200/80 hover:border-slate-300'
-                      }`}
-                    >
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-2">
+                  Select Menu Items ({selectedItemIds.length} Selected)
+                </label>
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {menuItems.map((item) => {
+                    const isSelected = selectedItemIds.includes(item.id);
+                    const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => handleToggleItemSelection(item.id)}
+                        className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-50/60 border-emerald-300'
+                            : 'bg-slate-50 border-slate-200/80 hover:border-slate-300'
+                        }`}
+                      >
                       <div className="flex items-center gap-2.5">
                         <span className={`w-2.5 h-2.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         <div>
@@ -538,8 +602,9 @@ export const MenuManagement: React.FC = () => {
                   );
                 })}
               </div>
+            </div>
 
-              <div className="pt-4 flex justify-end gap-2 border-t border-slate-100">
+            <div className="pt-4 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowConfigureModal(false)}

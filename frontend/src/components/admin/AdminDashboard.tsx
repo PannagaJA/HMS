@@ -3,6 +3,7 @@ import { Building2, BedDouble, AlertCircle, Clock } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import type { DashboardStats, GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { formatTime12 } from '../../lib/utils';
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -218,7 +219,7 @@ export const AdminDashboard: React.FC = () => {
                       {p.pass_type}
                     </td>
                     <td className="py-4 px-4 text-xs font-mono text-slate-600">
-                      {p.out_date} {p.out_time ? `(${p.out_time})` : ''}
+                      {p.out_date} {p.out_time ? `(${formatTime12(p.out_time)})` : ''}
                     </td>
                     <td className="py-4 px-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${

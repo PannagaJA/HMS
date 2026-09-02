@@ -14,6 +14,7 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import type { GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { formatTime12 } from '../../lib/utils';
 
 export const GatePassScanner: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
@@ -302,11 +303,11 @@ export const GatePassScanner: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Permitted Departure</span>
-              <div className="text-sm font-bold text-slate-800">{scannedPass.out_date} at {scannedPass.out_time || 'Morning'}</div>
+              <div className="text-sm font-bold text-slate-800">{scannedPass.out_date} at {formatTime12(scannedPass.out_time) || 'Morning'}</div>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Curfew Return Deadline</span>
-              <div className="text-sm font-bold text-rose-700">{scannedPass.expected_return_date} at {scannedPass.expected_return_time || '09:30 PM'}</div>
+              <div className="text-sm font-bold text-rose-700">{scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time) || '09:30 PM'}</div>
             </div>
           </div>
 

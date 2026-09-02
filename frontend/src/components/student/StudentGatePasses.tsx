@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { formatTime12 } from '../../lib/utils';
 
 export const StudentGatePasses: React.FC = () => {
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
@@ -104,10 +105,10 @@ export const StudentGatePasses: React.FC = () => {
                       {String(pass.pass_type).replace(/_/g, ' ')}
                     </td>
                     <td className="py-4 text-slate-600 text-xs">
-                      {pass.out_date} at {pass.out_time || 'N/A'}
+                      {pass.out_date} at {formatTime12(pass.out_time) || 'N/A'}
                     </td>
                     <td className="py-4 text-slate-600 text-xs">
-                      {pass.expected_return_date || pass.return_date} at {pass.expected_return_time || 'N/A'}
+                      {pass.expected_return_date || pass.return_date} at {formatTime12(pass.expected_return_time) || 'N/A'}
                     </td>
                     <td className="py-4 text-slate-600 text-xs italic max-w-xs truncate">
                       "{pass.reason || pass.purpose || 'Personal'}"
@@ -180,11 +181,11 @@ export const StudentGatePasses: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Permitted Out:</span>
-                <span className="text-slate-700 font-semibold">{selectedQRPass.out_date} ({selectedQRPass.out_time})</span>
+                <span className="text-slate-700 font-semibold">{selectedQRPass.out_date} ({formatTime12(selectedQRPass.out_time)})</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Curfew Return:</span>
-                <span className="text-rose-700 font-bold">{selectedQRPass.expected_return_date} ({selectedQRPass.expected_return_time})</span>
+                <span className="text-rose-700 font-bold">{selectedQRPass.expected_return_date} ({formatTime12(selectedQRPass.expected_return_time)})</span>
               </div>
               {selectedQRPass.actual_exit_time && (
                 <div className="flex justify-between pt-1 border-t border-slate-200 text-emerald-800 font-medium">
