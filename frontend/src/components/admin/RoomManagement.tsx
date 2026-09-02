@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BedDouble, Plus, X, Layers, Building2 } from 'lucide-react';
+import { BedDouble, Plus, X, Layers, Building2, Pencil, Trash2 } from 'lucide-react';
 import type { HostelRoom, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -17,10 +17,12 @@ export const RoomManagement: React.FC = () => {
   const [selectedFloor, setSelectedFloor] = useState<number | 'ALL'>('ALL');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showSingleRoomModal, setShowSingleRoomModal] = useState(false);
+  const [showEditRoomModal, setShowEditRoomModal] = useState(false);
   const [showOccupantsDrawer, setShowOccupantsDrawer] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<HostelRoom | null>(null);
+  const [editingRoom, setEditingRoom] = useState<HostelRoom | null>(null);
 
-  // Single Room Form State
+  // Single Room Form State (Add / Create)
   const [singleHostelId, setSingleHostelId] = useState<string>('');
   const [singleFloor, setSingleFloor] = useState<string>('0');
   const [singleRoomNo, setSingleRoomNo] = useState<string>('');
@@ -28,6 +30,15 @@ export const RoomManagement: React.FC = () => {
   const [singleRoomType, setSingleRoomType] = useState<string>('S');
   const [singleCapacity, setSingleCapacity] = useState<number>(1);
   const [isSubmittingSingle, setIsSubmittingSingle] = useState<boolean>(false);
+
+  // Edit Room Form State
+  const [editHostelId, setEditHostelId] = useState<string>('');
+  const [editFloor, setEditFloor] = useState<string>('0');
+  const [editRoomNo, setEditRoomNo] = useState<string>('');
+  const [editRoomName, setEditRoomName] = useState<string>('');
+  const [editRoomType, setEditRoomType] = useState<string>('S');
+  const [editCapacity, setEditCapacity] = useState<number>(1);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState<boolean>(false);
 
   // Bulk room generator state
   const [bulkFloor, setBulkFloor] = useState(1);
@@ -114,6 +125,65 @@ export const RoomManagement: React.FC = () => {
     }
   };
 
+  const handleOpenEditRoom = (e: React.MouseEvent, room: HostelRoom) => {
+    e.stopPropagation(); // prevent opening occupants drawer
+    setEditingRoom(room);
+    setEditHostelId(String(room.hostel));
+    setEditFloor(String(room.floor));
+    setEditRoomNo(room.no || room.room_no || '');
+    setEditRoomName(room.name || '');
+    setEditRoomType(room.room_type || 'S');
+    setEditCapacity(room.capacity || 1);
+    setShowEditRoomModal(true);
+  };
+
+  const handleEditRoomTypeChange = (type: string) => {
+    setEditRoomType(type);
+    if (type === 'S') setEditCapacity(1);
+    else if (type === 'D') setEditCapacity(2);
+    else if (type === 'T') setEditCapacity(3);
+    else if (type === 'P') setEditCapacity(4);
+  };
+
+  const handleUpdateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRoom || !editRoomNo.trim() || !editHostelId) return;
+
+    setIsSubmittingEdit(true);
+    try {
+      await apiClient.patch(`/hms/rooms/${editingRoom.id}/`, {
+        hostel: Number(editHostelId),
+        no: editRoomNo.trim(),
+        name: editRoomName.trim() || `Room ${editRoomNo.trim()}`,
+        floor: Number(editFloor),
+        capacity: Number(editCapacity),
+        room_type: editRoomType,
+      });
+
+      setShowEditRoomModal(false);
+      setEditingRoom(null);
+      fetchRooms(selectedHostelId);
+    } catch (err: any) {
+      console.error('Failed to update room:', err);
+      alert('Failed to update room: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteRoom = async (e: React.MouseEvent, roomId: number, roomNo: string) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete Room ${roomNo}?`)) return;
+
+    try {
+      await apiClient.delete(`/hms/rooms/${roomId}/`);
+      fetchRooms(selectedHostelId);
+    } catch (err: any) {
+      console.error('Failed to delete room:', err);
+      alert('Failed to delete room: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
   const handleBulkGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -165,46 +235,52 @@ export const RoomManagement: React.FC = () => {
       </div>
 
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Select Block:</span>
-          <div className="w-64">
-            <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose hostel block" />
-              </SelectTrigger>
-              <SelectContent>
-                {hostels.map((h) => (
-                  <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+          {/* Block Selector Dropdown */}
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Select Block:</span>
+            <div className="w-56 sm:w-64">
+              <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose hostel block" />
+                </SelectTrigger>
+                <SelectContent>
+                  {hostels.map((h) => (
+                    <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Floor Selector Dropdown */}
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Floor:</span>
+            <div className="w-44 sm:w-48">
+              <Select
+                value={String(selectedFloor)}
+                onValueChange={(val) => setSelectedFloor(val === 'ALL' ? 'ALL' : Number(val))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Floors" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Floors</SelectItem>
+                  {floors.map((f) => (
+                    <SelectItem key={f} value={String(f)}>
+                      {f === 0 ? 'Ground Floor' : `Floor ${f}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-          <button
-            onClick={() => setSelectedFloor('ALL')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-              selectedFloor === 'ALL'
-                ? 'bg-[#0D3833] text-white shadow-sm'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            All Floors
-          </button>
-          {floors.map((f) => (
-            <button
-              key={f}
-              onClick={() => setSelectedFloor(f)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                selectedFloor === f
-                  ? 'bg-[#0D3833] text-white shadow-sm'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {f === 0 ? 'Ground Floor' : `Floor ${f}`}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 w-full md:w-auto justify-end">
+          <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700">
+            {filteredRooms.length} {filteredRooms.length === 1 ? 'Room' : 'Rooms'} Shown
+          </span>
         </div>
       </div>
 
@@ -246,7 +322,7 @@ export const RoomManagement: React.FC = () => {
               <div
                 key={room.id}
                 onClick={() => handleViewRoom(room)}
-                className={`p-4 rounded-3xl border transition-all cursor-pointer relative overflow-hidden ${
+                className={`group p-4 rounded-3xl border transition-all cursor-pointer relative overflow-hidden hover:shadow-md ${
                   isFull
                     ? 'bg-rose-50/60 border-rose-200 hover:border-rose-400'
                     : isPartiallyOccupied
@@ -258,11 +334,23 @@ export const RoomManagement: React.FC = () => {
                   <span className="text-xs font-bold text-slate-700">
                     {room.floor === 0 ? 'GF' : `Fl ${room.floor}`}
                   </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isFull ? 'bg-rose-100 text-rose-800' : isPartiallyOccupied ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                  }`}>
-                    {isFull ? 'FULL' : isPartiallyOccupied ? 'PARTIAL' : 'VACANT'}
-                  </span>
+                  
+                  <div className="flex items-center gap-1">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isFull ? 'bg-rose-100 text-rose-800' : isPartiallyOccupied ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {isFull ? 'FULL' : isPartiallyOccupied ? 'PARTIAL' : 'VACANT'}
+                    </span>
+
+                    {/* Edit Room Quick Icon Button */}
+                    <button
+                      onClick={(e) => handleOpenEditRoom(e, room)}
+                      className="p-1 rounded-lg bg-white/80 hover:bg-white text-slate-500 hover:text-[#0D3833] transition-colors border border-slate-200 shadow-2xs cursor-pointer opacity-90 group-hover:opacity-100"
+                      title="Edit Room Details"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="text-lg font-bold text-slate-900 mb-1">
@@ -288,6 +376,149 @@ export const RoomManagement: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Edit Room Modal Popup */}
+      {showEditRoomModal && editingRoom && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xl">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#D1F2EA] text-[#0D3833] flex items-center justify-center">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight">Edit Room {editingRoom.no}</h3>
+                  <p className="text-xs text-slate-400">Update room configuration, floor, or bed slots</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEditRoomModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateRoom} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Block</label>
+                <Select value={editHostelId} onValueChange={setEditHostelId}>
+                  <SelectTrigger className="w-full bg-slate-50">
+                    <SelectValue placeholder="Select hostel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hostels.map((h) => (
+                      <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
+                  <Select value={editFloor} onValueChange={setEditFloor}>
+                    <SelectTrigger className="w-full bg-slate-50">
+                      <SelectValue placeholder="Select floor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Ground Floor</SelectItem>
+                      <SelectItem value="1">1st Floor</SelectItem>
+                      <SelectItem value="2">2nd Floor</SelectItem>
+                      <SelectItem value="3">3rd Floor</SelectItem>
+                      <SelectItem value="4">4th Floor</SelectItem>
+                      <SelectItem value="5">5th Floor</SelectItem>
+                      <SelectItem value="6">6th Floor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Number</label>
+                  <input
+                    type="text"
+                    required
+                    value={editRoomNo}
+                    onChange={(e) => setEditRoomNo(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Room Name <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Deluxe Suite"
+                  value={editRoomName}
+                  onChange={(e) => setEditRoomName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type</label>
+                  <Select value={editRoomType} onValueChange={handleEditRoomTypeChange}>
+                    <SelectTrigger className="w-full bg-slate-50">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="S">Single</SelectItem>
+                      <SelectItem value="D">Double</SelectItem>
+                      <SelectItem value="T">Triple</SelectItem>
+                      <SelectItem value="P">Scholar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    required
+                    value={editCapacity}
+                    onChange={(e) => setEditCapacity(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteRoom(e, editingRoom.id, editingRoom.no || '')}
+                  className="px-3.5 py-2 rounded-full border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditRoomModal(false)}
+                    className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingEdit}
+                    className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -371,11 +602,20 @@ export const RoomManagement: React.FC = () => {
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-6 mt-6 border-t border-slate-100 flex justify-end">
+            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={(e) => handleOpenEditRoom(e, selectedRoom)}
+                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                <span>Edit Room Configuration</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowOccupantsDrawer(false)}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
+                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
               >
                 Done
               </button>
