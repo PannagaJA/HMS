@@ -163,6 +163,8 @@ export interface HostelIssue {
   id: number;
   student_name: string;
   enrollment_no: string;
+  hostel?: number;
+  hostel_id?: number;
   hostel_name: string;
   room_no: string;
   category: string;
