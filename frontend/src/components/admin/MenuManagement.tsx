@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, ChefHat } from 'lucide-react';
 import type { MealType, MenuItem, Menu } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import {
@@ -287,7 +287,7 @@ export const MenuManagement: React.FC = () => {
                     </div>
 
                     {/* Meal Items List */}
-                    <div className="min-h-[120px] space-y-2 py-1">
+                    <div className="min-h-[130px] space-y-2 py-1">
                       {itemsList.length === 0 ? (
                         <div className="h-28 flex flex-col items-center justify-center rounded-2xl bg-slate-50/70 border border-dashed border-slate-200 text-xs text-slate-400">
                           <UtensilsCrossed className="w-5 h-5 text-slate-300 mb-1" />
@@ -300,15 +300,34 @@ export const MenuManagement: React.FC = () => {
                           return (
                             <div
                               key={idx}
-                              className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-800 font-medium hover:bg-slate-100/80 transition-colors shadow-2xs"
+                              className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200/90 hover:border-slate-300 shadow-2xs hover:shadow-xs transition-all group/item"
                             >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 group-hover/item:bg-[#D1F2EA] group-hover/item:text-teal-950 transition-colors">
+                                  <ChefHat className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-slate-900 block truncate">
+                                    {itemObj?.name || `Item #${item}`}
+                                  </span>
+                                  {itemObj?.category && (
+                                    <span className="text-[10px] text-slate-400 font-medium block truncate">
+                                      {itemObj.category}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
                               <span
-                                className={`w-2 h-2 rounded-full shrink-0 ${
-                                  isVegetarian ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-rose-500 ring-2 ring-rose-100'
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-1 ${
+                                  isVegetarian
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border-rose-200'
                                 }`}
-                                title={isVegetarian ? 'Vegetarian' : 'Non-Veg'}
-                              />
-                              <span className="truncate">{itemObj?.name || `Item #${item}`}</span>
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                <span>{isVegetarian ? 'Veg' : 'Non-Veg'}</span>
+                              </span>
                             </div>
                           );
                         })
