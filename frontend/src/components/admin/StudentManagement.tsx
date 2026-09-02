@@ -97,21 +97,23 @@ export const StudentManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Responsive Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Resident Directory</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage student enrollments, room allotments, and resident records</p>
         </div>
         <button
           onClick={handleExportPDF}
-          className="px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+          className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Export Resident Roster</span>
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+      {/* Filter & Search Toolbar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -119,16 +121,16 @@ export const StudentManagement: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by student name or USN..."
-            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+            className="w-full bg-slate-50 pl-10 pr-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
           {(['ALL', 'ALLOTTED', 'UNALLOTTED'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilterAllotted(tab)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial text-center px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 filterAllotted === tab
                   ? 'bg-[#0D3833] text-white shadow-sm'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
@@ -140,7 +142,92 @@ export const StudentManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+      {/* Mobile Card View (< 768px) */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {filteredStudents.length === 0 ? (
+          <div className="bg-white p-10 rounded-3xl border border-slate-200/80 text-center text-slate-400 text-sm">
+            No resident students found.
+          </div>
+        ) : (
+          filteredStudents.map((s) => (
+            <div
+              key={s.id}
+              className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#E8F8CE] text-emerald-950 font-bold flex items-center justify-center text-xs shadow-2xs">
+                    {s.student_name[0]}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">{s.student_name}</h3>
+                    <div className="text-xs font-mono text-slate-500">{s.enrollment_no}</div>
+                  </div>
+                </div>
+
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                  s.gender === 'M' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}>
+                  {s.gender === 'M' ? 'Male' : 'Female'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <span className="block text-[10px] font-semibold text-slate-400 uppercase">Room Allocation</span>
+                  {s.room_allotted && s.room_detail ? (
+                    <div className="mt-0.5">
+                      <span className="font-bold text-slate-800">{s.hostel_name || 'Block A'}</span>
+                      <div className="text-slate-500 font-medium">Room {s.room_detail.no} (Bed {s.bed_number || '1'})</div>
+                    </div>
+                  ) : (
+                    <span className="text-amber-600 font-semibold mt-0.5 block">Unallocated</span>
+                  )}
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <span className="block text-[10px] font-semibold text-slate-400 uppercase">Guardian Contact</span>
+                  <span className="font-mono text-slate-700 mt-0.5 block truncate">
+                    {s.guardian_phone || s.emergency_contact || 'N/A'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block truncate">Father: {s.father_name || 'N/A'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                  s.room_allotted
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                  {s.room_allotted ? 'RESIDENT' : 'PENDING'}
+                </span>
+
+                <div>
+                  {s.room_allotted ? (
+                    <button
+                      onClick={() => handleVacate(s.id)}
+                      className="text-xs font-semibold text-rose-600 hover:bg-rose-50 px-3.5 py-1.5 rounded-full border border-rose-200 transition-colors cursor-pointer"
+                    >
+                      Vacate Bed
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenAllocate(s)}
+                      className="text-xs font-semibold text-teal-900 bg-[#D1F2EA] px-4 py-1.5 rounded-full hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer"
+                    >
+                      Allocate Room
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table View (>= 768px) */}
+      <div className="hidden md:block bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
