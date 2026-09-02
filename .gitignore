@@ -42,8 +42,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -71,10 +69,13 @@ backend/media/*
 backend/staticfiles/
 staticfiles/
 
-# Logs
+# Logs & Temporary Test Files
 *.log
 logs/
 *.log.*
+*.tmp
+*.bak
+scratch/
 
 # =============================================================================
 # Frontend (Node / React / Vite)
@@ -114,5 +115,7 @@ frontend/.vite/
 # Oxlint / Linter Caches
 .oxlint-cache
 .eslintcache
-# Added by code-review-graph
+
+# Tooling Knowledge Graphs & IDE Local Metadata
 .code-review-graph/
+.agents/
