@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, QrCode, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import type { GatePassRequest } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
@@ -7,6 +8,9 @@ import { apiClient } from '../../api/apiClient';
 export const StudentGatePasses: React.FC = () => {
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [selectedQRPass, setSelectedQRPass] = useState<GatePassRequest | null>(null);
+
+  // Form State
   const [passType, setPassType] = useState<'DAY_OUT' | 'NIGHT_OUT' | 'HOME_VISIT' | 'EMERGENCY'>('DAY_OUT');
   const [reason, setReason] = useState('');
   const [outDate, setOutDate] = useState('');
@@ -55,7 +59,7 @@ export const StudentGatePasses: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Gate Passes & Outpasses</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Apply for hostel departure permits and view live approvals</p>
+          <p className="text-sm text-slate-500 mt-0.5">Apply for hostel departure permits, view warden approvals, and present your Security QR Pass</p>
         </div>
         <button
           onClick={() => setShowApplyModal(true)}
@@ -76,12 +80,13 @@ export const StudentGatePasses: React.FC = () => {
                 <th className="pb-3">Expected Return</th>
                 <th className="pb-3">Reason / Purpose</th>
                 <th className="pb-3">Status</th>
+                <th className="pb-3 text-right pr-2">Security QR</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {passes.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400 text-xs italic">
+                  <td colSpan={6} className="py-12 text-center text-slate-400 text-xs italic">
                     No gate passes applied yet. Click "Apply New Pass" above to create one.
                   </td>
                 </tr>
@@ -103,6 +108,23 @@ export const StudentGatePasses: React.FC = () => {
                     <td className="py-4">
                       <StatusBadge status={pass.status} />
                     </td>
+                    <td className="py-4 text-right pr-2">
+                      {pass.status === 'approved' ? (
+                        <button
+                          onClick={() => setSelectedQRPass(pass)}
+                          className="px-4 py-1.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center gap-1.5 ml-auto cursor-pointer shadow-xs"
+                        >
+                          <QrCode className="w-3.5 h-3.5 text-teal-900" />
+                          <span>Show QR</span>
+                        </button>
+                      ) : pass.status === 'completed' ? (
+                        <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 justify-end">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Completed
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Pending Approval</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -111,7 +133,68 @@ export const StudentGatePasses: React.FC = () => {
         </div>
       </div>
 
-      {/* Apply Pass Modal */}
+      {/* DYNAMIC QR CODE MODAL FOR APPROVED GATE PASS */}
+      {selectedQRPass && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-7 border border-slate-200 shadow-2xl text-center relative animate-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setSelectedQRPass(null)}
+              className="absolute right-4 top-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto mb-3 border border-emerald-200">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-900 leading-tight">Official Campus Outpass</h3>
+            <p className="text-xs text-slate-500 mb-5">Present this QR code to the Security Guard at the main gate</p>
+
+            {/* High-Resolution SVG QR Code */}
+            <div className="p-4 bg-white rounded-2xl border-2 border-dashed border-teal-400 inline-block shadow-sm mb-4">
+              <QRCodeSVG
+                value={selectedQRPass.token || selectedQRPass.enrollment_no}
+                size={180}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            {/* Pass Token & Student Details */}
+            <div className="bg-slate-50 p-4 rounded-2xl text-left border border-slate-200/80 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Student:</span>
+                <strong className="text-slate-800">{selectedQRPass.student_name}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Enrollment / USN:</span>
+                <span className="font-mono font-bold text-teal-950">{selectedQRPass.enrollment_no}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Permitted Out:</span>
+                <span className="text-slate-700 font-semibold">{selectedQRPass.out_date} ({selectedQRPass.out_time})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Curfew Return:</span>
+                <span className="text-rose-700 font-bold">{selectedQRPass.expected_return_date} ({selectedQRPass.expected_return_time})</span>
+              </div>
+              {selectedQRPass.actual_exit_time && (
+                <div className="flex justify-between pt-1 border-t border-slate-200 text-emerald-800 font-medium">
+                  <span>Exit Scanned:</span>
+                  <span>{new Date(selectedQRPass.actual_exit_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-slate-400 mt-4">
+              Security token is digitally authenticated. Misuse is strictly punishable.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* APPLY PASS MODAL */}
       {showApplyModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-3xl p-7 border border-slate-200 shadow-xl">

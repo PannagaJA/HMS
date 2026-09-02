@@ -195,27 +195,29 @@ export type IssueTicket = HostelIssue;
 
 export interface GatePassRequest {
   id: number;
+  token?: string;
   student_name: string;
   enrollment_no: string;
   hostel_name: string;
   room_no: string;
   pass_type: 'day_out' | 'night_out' | 'home' | 'DAY_OUT' | 'NIGHT_OUT' | 'HOME_VISIT' | 'EMERGENCY' | string;
-  purpose: string;
+  purpose?: string;
   reason?: string;
   out_date: string;
   out_time?: string;
-  return_date: string;
+  return_date?: string;
   expected_return_date?: string;
   expected_return_time?: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed' | string;
   created_at: string;
   destination?: string;
-  actual_exit_time?: string;
-  actual_entry_time?: string;
-  actual_out_time?: string;
-  actual_in_time?: string;
-  approved_by_name?: string;
+  actual_exit_time?: string | null;
+  actual_entry_time?: string | null;
+  actual_out_time?: string | null;
+  actual_in_time?: string | null;
+  approved_by_name?: string | null;
   action_note?: string;
+  actioned_at?: string;
 }
 
 export interface VisitorLog {
