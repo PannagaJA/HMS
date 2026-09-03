@@ -83,10 +83,6 @@ export const adminService = {
       supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true)
     ]);
 
-    // Fetch staff for mapping names
-    const wardensList = await adminService.getWardens();
-    const caretakersList = await adminService.getCaretakers();
-
     const activeAllocs = activeAllocsRes.data || [];
 
     return combinedHostels.map((h: any) => {
