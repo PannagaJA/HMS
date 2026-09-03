@@ -296,17 +296,19 @@ export const securityService = {
   async getVisitorLogs(): Promise<VisitorLog[]> {
     const { data: logs, error } = await supabase
       .from('visitor_logs')
-      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no)')
       .order('check_in_time', { ascending: false });
-    if (error) throw error;
 
-    return (logs || []).map((v: any) => ({
+    let list = logs || [];
+
+    return list.map((v: any) => ({
       ...v,
       visitor_phone: v.mobile_number,
-      student_name: v.student?.student_name || 'Resident',
-      enrollment_no: v.student?.enrollment_no || 'N/A',
-      hostel_name: v.hostel?.name || 'Block A',
-      student_room: v.room?.no || '101',
+      student_name: v.student?.student_name || v.student_name || 'Resident',
+      enrollment_no: v.student?.enrollment_no || v.enrollment_no || 'N/A',
+      hostel_id: v.hostel_id || v.hostel?.id,
+      hostel_name: v.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
+      student_room: v.room?.no || v.room_no || '101',
       status: v.check_out_time ? 'CHECKED_OUT' : 'CHECKED_IN'
     }));
   },

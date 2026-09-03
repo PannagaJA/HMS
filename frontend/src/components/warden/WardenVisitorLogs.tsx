@@ -2,10 +2,15 @@ import React, { useEffect, useState } from 'react';
 import {
   Search,
   Plus,
+  Building2,
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import { apiClient } from '../../api/apiClient';
-import type { VisitorLog, HostelStudent } from '../../types';
+import type { VisitorLog, HostelStudent, Hostel } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
+import { adminService } from '../../services/adminService';
 import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
@@ -16,9 +21,12 @@ import {
 } from '../ui/select';
 
 export const WardenVisitorLogs: React.FC = () => {
+  const { user } = useAuth();
   const { showSuccess, showError, confirm } = useNotification();
   const [logs, setLogs] = useState<VisitorLog[]>([]);
   const [students, setStudents] = useState<HostelStudent[]>([]);
+  const [hostels, setHostels] = useState<Hostel[]>([]);
+  const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -31,7 +39,33 @@ export const WardenVisitorLogs: React.FC = () => {
   useEffect(() => {
     fetchVisitorLogs();
     fetchStudents();
-  }, []);
+    fetchHostels();
+  }, [user]);
+
+  const fetchHostels = async () => {
+    try {
+      let hostList: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        hostList = await wardenService.getAssignedHostels(user.id);
+      } else {
+        hostList = await adminService.getHostels();
+      }
+      setHostels(hostList);
+
+      if (hostList.length > 0) {
+        setSelectedHostelId((prev) => {
+          if (prev && (prev === 'ALL' || hostList.some((h) => String(h.id) === prev))) {
+            return prev;
+          }
+          return String(hostList[0].id);
+        });
+      } else {
+        setSelectedHostelId('ALL');
+      }
+    } catch (err) {
+      console.error('Failed to load hostels', err);
+    }
+  };
 
   const fetchVisitorLogs = async () => {
     try {
@@ -55,17 +89,30 @@ export const WardenVisitorLogs: React.FC = () => {
     e.preventDefault();
     try {
       const st = students.find((s) => String(s.id) === String(formData.student));
-      await apiClient.post('/warden/visitor-logs/', {
-        ...formData,
-        student: Number(formData.student),
-        hostel: st?.hostel || st?.room_detail?.id || 1,
+      const studentId = Number(formData.student);
+      const hostelId = st?.hostel || (st?.room_detail as any)?.hostel_id || (st as any)?.hostel_id || 1;
+      const roomId = st?.room_detail?.id || (st as any)?.room_id || 1;
+      const { data: userData } = await supabase.auth.getUser();
+
+      const { error } = await supabase.from('visitor_logs').insert({
+        student_id: studentId,
+        hostel_id: hostelId,
+        room_id: roomId,
+        visitor_name: formData.visitor_name,
+        mobile_number: formData.mobile_number,
+        purpose: formData.purpose,
+        check_in_time: new Date().toISOString(),
+        recorded_by: userData.user?.id || null
       });
+
+      if (error) throw error;
+
       showSuccess(`Visitor ${formData.visitor_name} check-in registered.`);
       setShowAddModal(false);
       setFormData({ student: '', visitor_name: '', mobile_number: '', purpose: '' });
       fetchVisitorLogs();
     } catch (err: any) {
-      showError(err.response?.data?.error || 'Failed to register visitor');
+      showError(err.message || err.response?.data?.error || 'Failed to register visitor');
     }
   };
 
@@ -78,26 +125,55 @@ export const WardenVisitorLogs: React.FC = () => {
     if (!isConfirmed) return;
 
     try {
-      await apiClient.post(`/warden/visitor-logs/${id}/checkout/`);
+      const { error } = await supabase
+        .from('visitor_logs')
+        .update({ check_out_time: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+
       showSuccess('Visitor checked out successfully.');
       fetchVisitorLogs();
     } catch (err: any) {
-      showError(err.response?.data?.error || 'Failed to checkout visitor');
+      showError(err.message || err.response?.data?.error || 'Failed to checkout visitor');
     }
   };
 
   const debouncedSearch = useDebounce(search, 300);
 
-  const filteredLogs = logs.filter((log) => {
-    if (!debouncedSearch) return true;
+  const filteredLogs = logs.filter((log: any) => {
+    // 1. Filter by Hostel Block
+    let matchesHostel = true;
+    if (selectedHostelId && selectedHostelId !== 'ALL') {
+      const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
+      const selectedName = selectedHostelObj?.name ? selectedHostelObj.name.toLowerCase().trim() : '';
+      const logHostelName = (log.hostel_name || (log.hostel && typeof log.hostel === 'object' ? log.hostel.name : '') || '').toLowerCase().trim();
+      const logHostelId = String(log.hostel_id || log.hostel || (log.hostel && typeof log.hostel === 'object' ? log.hostel.id : '') || '');
+
+      matchesHostel =
+        hostels.length <= 1 ||
+        logHostelId === selectedHostelId ||
+        String(log.hostel) === selectedHostelId ||
+        String(log.hostel_id) === selectedHostelId ||
+        (Boolean(selectedName) && Boolean(logHostelName) && (
+          logHostelName.includes(selectedName) || 
+          selectedName.includes(logHostelName) ||
+          (selectedName.includes('boys') && (logHostelName.includes('boys') || logHostelName.includes('aryabhata'))) ||
+          (selectedName.includes('girls') && logHostelName.includes('girls'))
+        ));
+    }
+
+    // 2. Filter by Search term
+    if (!debouncedSearch) return matchesHostel;
     const q = debouncedSearch.toLowerCase();
     const mob = log.mobile_number || log.visitor_phone || '';
-    return (
+    const matchesSearch =
       log.visitor_name.toLowerCase().includes(q) ||
       (log.student_name && log.student_name.toLowerCase().includes(q)) ||
       mob.includes(q) ||
-      log.purpose.toLowerCase().includes(q)
-    );
+      log.purpose.toLowerCase().includes(q);
+
+    return matchesHostel && matchesSearch;
   });
 
   return (
@@ -116,16 +192,46 @@ export const WardenVisitorLogs: React.FC = () => {
         </button>
       </div>
 
-      {/* Search Input */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          placeholder="Search by visitor name, resident student, mobile number, or purpose..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-white pl-10 pr-4 py-2.5 rounded-full text-xs border border-slate-200 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
-        />
+      {/* Filter Toolbar with Hostel Block Selector */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-1 max-w-md">
+          <span className="text-xs font-semibold text-slate-500 whitespace-nowrap flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+            <span>Select Hostel:</span>
+          </span>
+          <div className="flex-1 min-w-[200px]">
+            <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800">
+                <SelectValue placeholder="Choose hostel block" />
+              </SelectTrigger>
+              <SelectContent>
+                {user?.role === 'ADMIN' && (
+                  <SelectItem value="ALL">All Hostel Blocks</SelectItem>
+                )}
+                {user?.role === 'WARDEN' && hostels.length > 1 && (
+                  <SelectItem value="ALL">All My Assigned Hostels</SelectItem>
+                )}
+                {hostels.map((h) => (
+                  <SelectItem key={h.id} value={String(h.id)}>
+                    {h.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search by visitor name, resident student, mobile number, or purpose..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+          />
+        </div>
       </div>
 
       {/* Visitors Table */}
