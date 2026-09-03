@@ -157,6 +157,35 @@ export const wardenService = {
   },
 
   /**
+   * Fetch gate passes scoped for warden review directly from Supabase
+   */
+  async getGatePasses(hostelId?: string | number): Promise<any[]> {
+    let query = supabase
+      .from('gate_passes')
+      .select('*, student:students(*), hostel:hostels(*), room:hostel_rooms(id, no, floor)')
+      .order('created_at', { ascending: false });
+
+    if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
+      query = query.eq('hostel_id', hostelId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Error fetching warden gate passes from Supabase:', error);
+      return [];
+    }
+
+    return (data || []).map((gp: any) => ({
+      ...gp,
+      student_name: gp.student?.student_name || 'Resident Student',
+      enrollment_no: gp.student?.enrollment_no || 'N/A',
+      hostel_name: gp.hostel?.name || 'Hostel Block',
+      room_no: gp.room?.no || '101',
+      hostel_id: gp.hostel_id || gp.hostel?.id
+    }));
+  },
+
+  /**
    * Action gate pass: Approve or Reject
    */
   async actionGatePass(passId: number, action: 'approve' | 'reject', note = '') {

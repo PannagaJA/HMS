@@ -12,7 +12,7 @@ export const securityService = {
   async getGatePasses(): Promise<GatePassRequest[]> {
     const { data, error } = await supabase
       .from('gate_passes')
-      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(no)')
       .order('created_at', { ascending: false });
     if (error) throw error;
 
@@ -21,7 +21,8 @@ export const securityService = {
       student_name: gp.student?.student_name || 'Student Resident',
       enrollment_no: gp.student?.enrollment_no || 'N/A',
       hostel_name: gp.hostel?.name || 'Aryabhata Bhavan',
-      room_no: gp.room?.no || '101'
+      room_no: gp.room?.no || '101',
+      hostel_id: gp.hostel_id || gp.hostel?.id
     }));
   },
 

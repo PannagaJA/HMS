@@ -43,21 +43,22 @@ export const WardenGatePassManagement: React.FC = () => {
         hostList = await adminService.getHostels();
       }
 
-      const passesRes = await apiClient.get<GatePassRequest[]>('/security/gate-passes/');
-      let allPasses = passesRes.data || [];
+      // Fetch gate passes directly using wardenService backed by Supabase
+      const allPasses = await wardenService.getGatePasses();
 
       // If user is a warden, strictly scope gate passes to their assigned hostels only
+      let scopedPasses = allPasses;
       if (user?.role === 'WARDEN') {
         const assignedIds = hostList.map((h) => String(h.id));
-        const assignedNames = hostList.map((h) => h.name.toLowerCase());
-        allPasses = allPasses.filter((p) => {
-          const passHostelId = String(p.hostel || (p as any).hostel_id || '');
-          const passHostelName = (p.hostel_name || '').toLowerCase();
-          return assignedIds.includes(passHostelId) || assignedNames.some(name => passHostelName.includes(name));
+        const assignedNames = hostList.map((h) => h.name.toLowerCase().trim());
+        scopedPasses = allPasses.filter((p: any) => {
+          const passHostelId = String(p.hostel_id || (p.hostel && typeof p.hostel === 'object' ? p.hostel.id : p.hostel) || '');
+          const passHostelName = (p.hostel_name || (p.hostel && typeof p.hostel === 'object' ? p.hostel.name : '') || '').toLowerCase().trim();
+          return assignedIds.includes(passHostelId) || assignedNames.some(name => passHostelName.includes(name) || name.includes(passHostelName));
         });
       }
 
-      setPasses(allPasses);
+      setPasses(scopedPasses);
       setHostels(hostList);
 
       if (hostList.length > 0) {
@@ -93,23 +94,20 @@ export const WardenGatePassManagement: React.FC = () => {
   };
 
   // 1. Filter by Selected Hostel first
-  const hostelFilteredPasses = passes.filter((p) => {
+  const hostelFilteredPasses = passes.filter((p: any) => {
     if (!selectedHostelId) return false;
     if (selectedHostelId === 'ALL') {
-      if (user?.role === 'WARDEN') {
-        const assignedIds = hostels.map((h) => String(h.id));
-        const assignedNames = hostels.map((h) => h.name.toLowerCase());
-        return assignedIds.includes(String(p.hostel || (p as any).hostel_id || '')) ||
-               assignedNames.some((name) => (p.hostel_name || '').toLowerCase().includes(name));
-      }
       return true;
     }
 
+    const passHostelId = String(p.hostel_id || (p.hostel && typeof p.hostel === 'object' ? p.hostel.id : p.hostel) || '');
+    const passHostelName = (p.hostel_name || (p.hostel && typeof p.hostel === 'object' ? p.hostel.name : '') || '').toLowerCase().trim();
     const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
+    const selectedName = (selectedHostelObj?.name || '').toLowerCase().trim();
+
     return (
-      String(p.hostel) === selectedHostelId ||
-      String((p as any).hostel_id) === selectedHostelId ||
-      (Boolean(selectedHostelObj) && Boolean(p.hostel_name) && p.hostel_name.toLowerCase().includes(selectedHostelObj!.name.toLowerCase()))
+      passHostelId === selectedHostelId ||
+      (selectedName && (passHostelName.includes(selectedName) || selectedName.includes(passHostelName)))
     );
   });
 
