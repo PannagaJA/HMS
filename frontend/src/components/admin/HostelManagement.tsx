@@ -111,16 +111,8 @@ export const HostelManagement: React.FC = () => {
     }
   };
 
-  const assignedWardenIds = hostels.map(h => h.warden).filter(Boolean);
-  const assignedCaretakerIds = hostels.map(h => h.caretaker).filter(Boolean);
-
-  const availableWardens = wardens.filter(w => 
-    !assignedWardenIds.includes(String(w.id)) || String(w.id) === wardenId
-  );
-
-  const availableCaretakers = caretakers.filter(c => 
-    !assignedCaretakerIds.includes(String(c.id)) || String(c.id) === caretakerId
-  );
+  const availableWardens = wardens;
+  const availableCaretakers = caretakers;
 
   return (
     <div className="space-y-6">

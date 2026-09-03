@@ -203,6 +203,12 @@ export const adminService = {
         } catch (we) {
           console.warn('Warden assignment update failed:', we);
         }
+      } else if (payload.warden === null || payload.warden === 'none') {
+        try {
+          await supabase.from('warden_hostel_assignments').delete().eq('hostel_id', id);
+        } catch (we) {
+          console.warn('Warden assignment clear failed:', we);
+        }
       }
     } catch (e) {
       console.warn('Hostel update in Supabase failed:', e);
@@ -487,7 +493,7 @@ export const adminService = {
     // Fetch registered warden profiles
     try {
       const { data: profileWardens } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
-      if (profileWardens) {
+      if (profileWardens && profileWardens.length > 0) {
         const mapped = profileWardens.map((w: any) => ({
           id: w.id,
           name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
@@ -496,7 +502,10 @@ export const adminService = {
           designation: 'Hostel Warden',
           experience: 5
         }));
-        combined = [...mapped, ...combined];
+
+        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+        const nonDuplicateCustom = (customWardens || []).filter((cw: any) => !profileEmails.includes((cw.email || '').toLowerCase()));
+        combined = [...mapped, ...nonDuplicateCustom];
       }
     } catch (err) {
       console.warn('Could not fetch WARDEN profiles:', err);
