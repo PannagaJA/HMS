@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, BedDouble, AlertCircle, Clock } from 'lucide-react';
+import { Building2, BedDouble, AlertCircle, Clock, Eye, X } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import type { DashboardStats, GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
@@ -8,6 +8,7 @@ import { formatTime12 } from '../../lib/utils';
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPasses, setRecentPasses] = useState<GatePassRequest[]>([]);
+  const [selectedReasonPass, setSelectedReasonPass] = useState<GatePassRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -232,11 +233,15 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="text-xs text-slate-600">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-0.5">Reason</span>
-                  <p className="bg-slate-50/50 p-2 rounded-lg border border-slate-100/80 text-slate-700 text-xs italic">
-                    "{p.purpose || p.reason || 'Personal Visit'}"
-                  </p>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-medium">Outpass Reason</span>
+                  <button
+                    onClick={() => setSelectedReasonPass(p)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 text-teal-800 hover:bg-teal-100 text-xs font-semibold shrink-0 transition-colors border border-teal-200/70 shadow-2xs active:scale-95"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-teal-700" />
+                    <span>View Reason</span>
+                  </button>
                 </div>
               </div>
             ))
@@ -254,7 +259,7 @@ export const AdminDashboard: React.FC = () => {
                 <th className="py-3.5 px-4">Pass Type</th>
                 <th className="py-3.5 px-4">Out Date & Time</th>
                 <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 pr-6 text-right">Reason</th>
+                <th className="py-3.5 pr-6 text-center">Reason</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
@@ -295,8 +300,15 @@ export const AdminDashboard: React.FC = () => {
                         {p.status.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-4 pr-6 text-right text-xs text-slate-500 max-w-xs truncate">
-                      {p.purpose || p.reason || 'Personal Visit'}
+                    <td className="py-4 pr-6 text-center">
+                      <button
+                        onClick={() => setSelectedReasonPass(p)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 text-teal-800 hover:bg-teal-100 text-xs font-medium border border-teal-200/70 shadow-xs hover:shadow transition-all group"
+                        title="Click to view full reason"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-teal-700 group-hover:scale-110 transition-transform" />
+                        <span>View Reason</span>
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -305,6 +317,90 @@ export const AdminDashboard: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Reason Details Modal Dialog */}
+      {selectedReasonPass && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setSelectedReasonPass(null)}
+        >
+          <div 
+            className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-sm shadow-xs">
+                  {selectedReasonPass.student_name?.[0] || 'S'}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 leading-tight">
+                    {selectedReasonPass.student_name || 'Student'}
+                  </h3>
+                  <p className="text-xs font-mono text-slate-500 mt-0.5">
+                    {selectedReasonPass.enrollment_no} · {selectedReasonPass.hostel_name || 'Block A'} (Rm {selectedReasonPass.room_no || '101'})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedReasonPass(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Metadata Pill Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-0.5">Pass Type</span>
+                <span className="font-semibold text-slate-800 uppercase">
+                  {selectedReasonPass.pass_type?.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-0.5">Status</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  selectedReasonPass.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  selectedReasonPass.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  selectedReasonPass.status === 'completed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                  'bg-rose-50 text-rose-700 border-rose-200'
+                }`}>
+                  {selectedReasonPass.status.toUpperCase()}
+                </span>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-0.5">Out Time</span>
+                <span className="font-mono text-slate-700">
+                  {selectedReasonPass.out_date} {selectedReasonPass.out_time ? `(${formatTime12(selectedReasonPass.out_time)})` : ''}
+                </span>
+              </div>
+            </div>
+
+            {/* Reason Body */}
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                Reason / Purpose for Outpass
+              </label>
+              <div className="bg-amber-50/40 border border-amber-200/70 p-4 rounded-2xl text-slate-800 text-sm leading-relaxed whitespace-pre-wrap">
+                {selectedReasonPass.purpose || selectedReasonPass.reason || 'No specific reason provided.'}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedReasonPass(null)}
+                className="px-5 py-2.5 rounded-full bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold transition-colors shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
