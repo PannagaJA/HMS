@@ -102,7 +102,10 @@ export const apiClient = {
 
     // 7. Maintenance Issues (/hms/issues/, /warden/issues/, /student/issues/)
     if (endpoint.includes('/issues/')) {
-      const issues = await issueService.getIssues();
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const hostelId = urlParams.get('hostel') || urlParams.get('hostel_id') || undefined;
+      const statusParam = urlParams.get('status') || undefined;
+      const issues = await issueService.getIssues(undefined, hostelId, statusParam);
       return { data: issues as T };
     }
 

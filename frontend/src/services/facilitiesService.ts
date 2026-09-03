@@ -293,9 +293,9 @@ export const diningService = {
 };
 
 export const issueService = {
-  async getIssues(studentId?: number): Promise<HostelIssue[]> {
+  async getIssues(studentId?: number, hostelId?: number | string, status?: string): Promise<HostelIssue[]> {
     let resolvedStudentId = studentId;
-    if (!resolvedStudentId) {
+    if (resolvedStudentId === undefined) {
       const { data: user } = await supabase.auth.getUser();
       const userId = user.user?.id;
       if (userId) {
@@ -306,11 +306,19 @@ export const issueService = {
 
     let query = supabase
       .from('issues')
-      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no), updates:issue_updates(*)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*)')
       .order('created_at', { ascending: false });
 
     if (resolvedStudentId) {
       query = query.eq('student_id', resolvedStudentId);
+    }
+
+    if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
+      query = query.eq('hostel_id', hostelId);
+    }
+
+    if (status && status !== 'ALL' && status !== 'all') {
+      query = query.eq('status', status);
     }
 
     const { data: issues, error } = await query;

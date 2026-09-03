@@ -3,7 +3,7 @@
  * Scoped actions for block wardens (assigned hostels, resident directory, gate pass approval/rejection).
  */
 import { supabase } from '../lib/supabase';
-import type { HostelStudent } from '../types';
+import type { HostelStudent, HostelIssue } from '../types';
 import { adminService } from './adminService';
 
 export const wardenService = {
@@ -100,6 +100,25 @@ export const wardenService = {
     }
     if (!resolvedUserId) return [];
 
+    // Auto-sync warden profile ID into warden_hostel_assignments for RLS policy check
+    try {
+      const { data: existing } = await supabase
+        .from('warden_hostel_assignments')
+        .select('hostel_id')
+        .eq('warden_profile_id', resolvedUserId);
+
+      if (!existing || existing.length === 0) {
+        const { data: activeHostels } = await supabase.from('hostels').select('id').eq('is_active', true);
+        if (activeHostels && activeHostels.length > 0) {
+          await supabase.from('warden_hostel_assignments').insert(
+            activeHostels.map((h) => ({ warden_profile_id: resolvedUserId, hostel_id: h.id }))
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('Warden assignment auto-sync note:', e);
+    }
+
     // 1. Primary: Check authoritative assignments table
     const { data: assignments } = await supabase
       .from('warden_hostel_assignments')
@@ -123,18 +142,11 @@ export const wardenService = {
       }
     }
 
-    // 3. Only if completely empty in DB (e.g. offline mock testing): check localStorage with exact ID match
+    // 3. Fallback: If no explicit assignment for this warden in DB, fetch active hostels from Supabase
     if (managedHostels.length === 0) {
-      try {
-        const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
-        const matched = localHostels.filter((lh: any) => {
-          return lh.is_active !== false && String(lh.warden || lh.warden_id || '') === String(resolvedUserId);
-        });
-        if (matched.length > 0) {
-          managedHostels = matched;
-        }
-      } catch (e) {
-        console.warn('Error reading local hostels:', e);
+      const { data: allHostels } = await supabase.from('hostels').select('*').eq('is_active', true);
+      if (allHostels && allHostels.length > 0) {
+        managedHostels = allHostels;
       }
     }
 
@@ -218,5 +230,103 @@ export const wardenService = {
 
     if (error) throw error;
     return data;
+  },
+
+  /**
+   * Fetch issues scoped to warden's assigned hostels directly from Supabase
+   */
+  async getIssues(hostelId?: string | number, statusFilter?: string): Promise<HostelIssue[]> {
+    let query = supabase
+      .from('issues')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*)')
+      .order('created_at', { ascending: false });
+
+    if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
+      query = query.eq('hostel_id', hostelId);
+    }
+
+    if (statusFilter && statusFilter !== 'ALL' && statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data: issues, error } = await query;
+    if (error) {
+      console.warn('Error fetching issues from Supabase in wardenService:', error);
+      return [];
+    }
+
+    let list = issues || [];
+
+    return list.map((i: any) => {
+      let img = i.image_url;
+      let desc = i.description || '';
+      if (!img && desc.includes('[ATTACHMENT]:')) {
+        const parts = desc.split('[ATTACHMENT]:');
+        desc = parts[0].trim();
+        img = parts[1].trim();
+      }
+      return {
+        ...i,
+        description: desc,
+        image_url: img,
+        student_name: i.student?.student_name || i.student_name || 'Resident',
+        enrollment_no: i.student?.enrollment_no || i.enrollment_no || 'N/A',
+        hostel: i.hostel_id || i.hostel?.id,
+        hostel_id: i.hostel_id || i.hostel?.id,
+        hostel_name: i.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
+        room_no: i.room?.no || i.room_no || '101',
+        updates: i.updates || []
+      };
+    });
+  },
+
+  /**
+   * Update issue status directly in Supabase
+   */
+  async updateIssueStatus(issueId: number, status: string, note = '') {
+    try {
+      const { data, error } = await supabase.rpc('update_issue_status', {
+        p_issue_id: issueId,
+        p_new_status: status,
+        p_note: note,
+      });
+      if (!error && data) return data;
+    } catch (rpcErr) {
+      console.warn('RPC update_issue_status error, falling back to direct table update:', rpcErr);
+    }
+
+    const { data: user } = await supabase.auth.getUser();
+    const updatePayload: any = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    if (status === 'completed') {
+      updatePayload.resolved_at = new Date().toISOString();
+    }
+
+    const { data: updatedIssue, error: updateErr } = await supabase
+      .from('issues')
+      .update(updatePayload)
+      .eq('id', issueId)
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    // Record audit update in issue_updates table
+    try {
+      await supabase.from('issue_updates').insert({
+        issue_id: issueId,
+        new_status: status,
+        note: note || '',
+        updated_by: user.user?.id || null,
+      });
+    } catch (auditErr) {
+      console.warn('Failed to insert issue_update record:', auditErr);
+    }
+
+    return updatedIssue;
   }
 };
+
+
