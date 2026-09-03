@@ -81,8 +81,10 @@ export const apiClient = {
 
     // 6. Warden Dashboard & Scoped Rooms
     if (endpoint.includes('/warden/dashboard/')) {
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const hostelId = urlParams.get('hostel_id');
       const { data: user } = await supabase.auth.getUser();
-      const stats = await wardenService.getDashboardStats(user.user?.id);
+      const stats = await wardenService.getDashboardStats(user.user?.id, hostelId || undefined);
       return { data: stats as T };
     }
     if (endpoint.includes('/warden/rooms/')) {

@@ -55,13 +55,19 @@ export const WardenDashboard: React.FC = () => {
     }
   }, [selectedHostelId, selectedFloor]);
 
+  const handleHostelChange = (hostelId: number) => {
+    setSelectedHostelId(hostelId);
+    setSelectedFloor('all');
+  };
+
   const fetchDashboardData = async (hostelId?: number | null) => {
     try {
       const url = hostelId ? `/warden/dashboard/?hostel_id=${hostelId}` : '/warden/dashboard/';
       const res = await apiClient.get<WardenStats>(url);
       setStats(res.data);
-      if (!hostelId && res.data?.managed_hostels?.length > 0) {
+      if (!selectedHostelId && res.data?.managed_hostels?.length > 0) {
         setSelectedHostelId(res.data.managed_hostels[0].id);
+        setSelectedFloor('all');
       }
     } catch (err) {
       console.error('Failed to load warden dashboard', err);
@@ -96,7 +102,7 @@ export const WardenDashboard: React.FC = () => {
             <div className="w-56">
               <Select
                 value={selectedHostelId ? String(selectedHostelId) : ''}
-                onValueChange={(val) => setSelectedHostelId(Number(val))}
+                onValueChange={(val) => handleHostelChange(Number(val))}
               >
                 <SelectTrigger className="h-9 rounded-full bg-white text-xs font-semibold shadow-xs">
                   <SelectValue placeholder="Select Hostel Block" />

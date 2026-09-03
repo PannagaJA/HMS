@@ -10,26 +10,81 @@ export const wardenService = {
   /**
    * Fetch scoped stats for the logged-in warden's assigned hostels
    */
-  async getDashboardStats(userId?: string) {
-    const { data: assignments } = await supabase
-      .from('warden_hostel_assignments')
-      .select('hostel_id, hostel:hostels(*)')
-      .eq('warden_profile_id', userId || '');
+  async getDashboardStats(userId?: string, hostelId?: number | string) {
+    let resolvedUserId = userId;
+    if (!resolvedUserId) {
+      const { data: authData } = await supabase.auth.getUser();
+      resolvedUserId = authData?.user?.id;
+    }
 
-    const managedHostels = (assignments || []).map((a: any) => a.hostel).filter(Boolean);
-    const { data: viewStats } = await supabase.from('view_warden_dashboard_stats').select('*');
-    const primary = (viewStats && viewStats.length > 0) ? viewStats[0] : null;
+    const managedHostelsRaw = await this.getAssignedHostels(resolvedUserId);
+    const managedHostels = managedHostelsRaw.map((h: any) => ({
+      id: h.id,
+      name: h.name,
+      gender: h.gender,
+      floors: h.floor_count || h.floors || 3
+    }));
 
-    const totalCap = primary?.total_capacity || 0;
-    const occupied = primary?.occupied_beds || 0;
+    const targetHostelId = hostelId
+      ? Number(hostelId)
+      : managedHostels.length > 0 ? managedHostels[0].id : null;
+
+    let targetStat: any = null;
+
+    if (targetHostelId) {
+      const { data: viewStats } = await supabase
+        .from('view_warden_dashboard_stats')
+        .select('*')
+        .eq('hostel_id', targetHostelId)
+        .maybeSingle();
+
+      if (viewStats) {
+        targetStat = viewStats;
+      } else {
+        // Fallback: calculate live stats for targetHostelId
+        const [roomsRes, passesRes, issuesRes] = await Promise.all([
+          supabase.from('hostel_rooms').select('id, capacity, is_active, beds(id, allocations:room_allocations(id, is_active))').eq('hostel_id', targetHostelId).eq('is_active', true),
+          supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).eq('status', 'pending'),
+          supabase.from('issues').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).neq('status', 'completed')
+        ]);
+
+        const rooms = roomsRes.data || [];
+        const totalRooms = rooms.length;
+        let totalCap = 0;
+        let occupied = 0;
+
+        rooms.forEach((r: any) => {
+          totalCap += (r.capacity || 0);
+          (r.beds || []).forEach((b: any) => {
+            if ((b.allocations || []).some((a: any) => a.is_active)) {
+              occupied++;
+            }
+          });
+        });
+
+        targetStat = {
+          hostel_id: targetHostelId,
+          total_rooms: totalRooms,
+          total_capacity: totalCap,
+          occupied_beds: occupied,
+          pending_gate_passes: passesRes.count || 0,
+          open_issues: issuesRes.count || 0
+        };
+      }
+    }
+
+    const totalRooms = targetStat?.total_rooms || 0;
+    const totalCap = targetStat?.total_capacity || 0;
+    const occupied = targetStat?.occupied_beds || 0;
     const rate = totalCap > 0 ? Math.round((occupied / totalCap) * 100) : 0;
 
     return {
       managed_hostels: managedHostels,
-      total_rooms: primary?.total_rooms || 0,
+      total_residents: occupied,
+      total_rooms: totalRooms,
       total_capacity: totalCap,
-      pending_gate_passes: primary?.pending_gate_passes || 0,
-      open_issues: primary?.open_issues || 0,
+      pending_gate_passes: targetStat?.pending_gate_passes || 0,
+      open_issues: targetStat?.open_issues || 0,
       occupancy_rate: rate
     };
   },
