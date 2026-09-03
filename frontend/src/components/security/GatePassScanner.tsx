@@ -9,7 +9,8 @@ import {
   ArrowRight, 
   ArrowLeft, 
   ShieldCheck, 
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import type { GatePassRequest } from '../../types';
@@ -79,10 +80,13 @@ export const GatePassScanner: React.FC = () => {
         `/security/gate-passes/verify_token/?code=${encodeURIComponent(query)}`
       );
       setScannedPass(res.data.pass);
+      if (res.data.pass?.student_name) {
+        setSearchInput(`${res.data.pass.student_name} (${res.data.pass.enrollment_no})`);
+      }
       stopCameraScanner();
     } catch (err: any) {
       setScannedPass(null);
-      setErrorMsg(err.response?.data?.message || 'No approved gate pass found matching this Token or Student ID.');
+      setErrorMsg(err.message || err.response?.data?.message || err.response?.data?.error || 'No approved gate pass found matching this Token or Student ID.');
     } finally {
       setLoading(false);
     }
@@ -146,7 +150,7 @@ export const GatePassScanner: React.FC = () => {
       setScannedPass(res.data.pass);
       fetchGatePassRecords();
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.error || 'Failed to log gate movement');
+      setErrorMsg(err.message || err.response?.data?.error || err.response?.data?.message || 'Failed to log gate movement');
     } finally {
       setActionLoading(false);
     }
@@ -319,6 +323,23 @@ export const GatePassScanner: React.FC = () => {
           <div className="p-3.5 rounded-2xl bg-[#E8F8CE]/50 border border-emerald-200 text-xs text-emerald-950">
             <strong>Approved Purpose:</strong> "{scannedPass.reason || scannedPass.purpose || 'Personal'}"
           </div>
+
+          {isEntryDone && (
+            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="font-bold text-amber-950 block">⛔ QR Code Already Used / Outing Completed</span>
+                  <span className="text-[11px] text-amber-800 font-normal">
+                    Student {scannedPass.student_name} already completed this round-trip (Exited at {scannedPass.actual_exit_time ? new Date(scannedPass.actual_exit_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}, Returned at {scannedPass.actual_entry_time ? new Date(scannedPass.actual_entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}). This pass is closed.
+                  </span>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] uppercase tracking-wider shrink-0">
+                Closed / Used
+              </span>
+            </div>
+          )}
 
           <div className="pt-2">
             <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-600">

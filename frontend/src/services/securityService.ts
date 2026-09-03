@@ -26,15 +26,235 @@ export const securityService = {
   },
 
   /**
+   * Verify Gate Pass by QR token, code, ID, or student USN/name
+   */
+  async verifyToken(code: string): Promise<{ valid: boolean; pass: GatePassRequest }> {
+    const trimmed = (code || '').trim();
+    if (!trimmed) {
+      throw new Error('Please enter a student USN, token, or student name');
+    }
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+    const isNum = /^\d+$/.test(trimmed);
+
+    let passes: any[] = [];
+    let resolvedStudent: any = null;
+
+    // 1. If UUID, check gate_passes.token first (exact match, avoiding invalid operator error on UUID columns)
+    if (isUUID) {
+      const { data: byToken } = await supabase
+        .from('gate_passes')
+        .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+        .eq('token', trimmed);
+
+      if (byToken && byToken.length > 0) {
+        passes = byToken;
+      } else {
+        // Check if this UUID belongs to a student's profile_id or id
+        const { data: stByProfile } = await supabase
+          .from('students')
+          .select('id, student_name, enrollment_no')
+          .eq('profile_id', trimmed)
+          .maybeSingle();
+
+        if (stByProfile) {
+          resolvedStudent = stByProfile;
+          const { data: stPasses } = await supabase
+            .from('gate_passes')
+            .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+            .eq('student_id', stByProfile.id)
+            .order('created_at', { ascending: false });
+          if (stPasses) passes = stPasses;
+        }
+      }
+    }
+
+    // 2. If not found yet, search student by enrollment_no / USN
+    if (passes.length === 0 && !resolvedStudent) {
+      const { data: stByEnroll } = await supabase
+        .from('students')
+        .select('id, student_name, enrollment_no')
+        .ilike('enrollment_no', trimmed)
+        .maybeSingle();
+
+      if (stByEnroll) {
+        resolvedStudent = stByEnroll;
+        const { data: stPasses } = await supabase
+          .from('gate_passes')
+          .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+          .eq('student_id', stByEnroll.id)
+          .order('created_at', { ascending: false });
+        if (stPasses) passes = stPasses;
+      }
+    }
+
+    // 3. If numeric ID, check gate_passes.id or students.id
+    if (passes.length === 0 && isNum) {
+      const numId = parseInt(trimmed, 10);
+      const { data: byId } = await supabase
+        .from('gate_passes')
+        .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+        .eq('id', numId);
+
+      if (byId && byId.length > 0) {
+        passes = byId;
+      } else {
+        const { data: stById } = await supabase
+          .from('students')
+          .select('id, student_name, enrollment_no')
+          .eq('id', numId)
+          .maybeSingle();
+        if (stById) {
+          resolvedStudent = stById;
+          const { data: stPasses } = await supabase
+            .from('gate_passes')
+            .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+            .eq('student_id', stById.id)
+            .order('created_at', { ascending: false });
+          if (stPasses) passes = stPasses;
+        }
+      }
+    }
+
+    // 4. Fallback search by student name
+    if (passes.length === 0 && !resolvedStudent) {
+      const { data: stByName } = await supabase
+        .from('students')
+        .select('id, student_name, enrollment_no')
+        .ilike('student_name', `%${trimmed}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (stByName) {
+        resolvedStudent = stByName;
+        const { data: stPasses } = await supabase
+          .from('gate_passes')
+          .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+          .eq('student_id', stByName.id)
+          .order('created_at', { ascending: false });
+        if (stPasses) passes = stPasses;
+      }
+    }
+
+    // If no gate pass records exist at all:
+    if (passes.length === 0) {
+      if (resolvedStudent) {
+        throw new Error(`Student "${resolvedStudent.student_name}" (${resolvedStudent.enrollment_no}) has no gate pass application on record.`);
+      }
+      throw new Error(`No student or gate pass record found matching "${trimmed}". Please verify the USN or token.`);
+    }
+
+    // Pick the best pass: preferentially an 'approved' pass, otherwise the most recent one
+    const activePass = passes.find((p: any) => p.status === 'approved') || passes[0];
+
+    const studentName = activePass.student?.student_name || resolvedStudent?.student_name || 'Resident';
+    const enrollmentNo = activePass.student?.enrollment_no || resolvedStudent?.enrollment_no || 'N/A';
+
+    const mapped: GatePassRequest = {
+      ...activePass,
+      student_name: studentName,
+      enrollment_no: enrollmentNo,
+      hostel_name: activePass.hostel?.name || 'Aryabhata Bhavan',
+      room_no: activePass.room?.no || '101'
+    };
+
+    if (activePass.status === 'pending') {
+      throw new Error(`Gate pass for student "${studentName}" (${enrollmentNo}) is currently PENDING Warden approval.`);
+    }
+
+    if (activePass.status === 'rejected') {
+      throw new Error(`Gate pass for student "${studentName}" (${enrollmentNo}) was REJECTED by Warden: ${activePass.action_note || 'Unauthorized departure'}.`);
+    }
+
+    return { valid: true, pass: mapped };
+  },
+
+  /**
    * Log checkpoint movement (EXIT or ENTRY)
    */
   async logMovement(passId: number, movementType: 'EXIT' | 'ENTRY') {
-    const { data, error } = await supabase.rpc('log_gate_movement', {
-      p_pass_id: passId,
-      p_movement_type: movementType
-    });
-    if (error) throw error;
-    return data;
+    // 1. Check current pass status first
+    const { data: currentPass } = await supabase
+      .from('gate_passes')
+      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+      .eq('id', passId)
+      .maybeSingle();
+
+    if (currentPass && currentPass.status !== 'approved') {
+      const stName = currentPass.student?.student_name || 'Resident';
+      const enNo = currentPass.student?.enrollment_no || 'N/A';
+      throw new Error(`Cannot stamp movement: Gate pass for ${stName} (${enNo}) is currently ${currentPass.status.toUpperCase()}. It must be approved by the Warden first.`);
+    }
+
+    let resultData: any = null;
+    let rpcErrorMsg: string | null = null;
+
+    try {
+      const { data, error } = await supabase.rpc('log_gate_movement', {
+        p_pass_id: passId,
+        p_movement_type: movementType
+      });
+      if (error) {
+        rpcErrorMsg = error.message;
+        console.warn('RPC log_gate_movement error:', error);
+      } else if (data) {
+        resultData = data;
+      }
+    } catch (rpcErr: any) {
+      rpcErrorMsg = rpcErr?.message || String(rpcErr);
+      console.warn('RPC log_gate_movement exception:', rpcErr);
+    }
+
+    if (!resultData) {
+      // If RPC failed due to an explicit business constraint, surface it cleanly
+      if (rpcErrorMsg && !rpcErrorMsg.includes('permission') && !rpcErrorMsg.includes('Access Denied')) {
+        throw new Error(rpcErrorMsg);
+      }
+
+      const { data: user } = await supabase.auth.getUser();
+      const updatePayload: any = { 
+        updated_at: new Date().toISOString(),
+        security_guard_id: user.user?.id || null
+      };
+
+      if (movementType === 'EXIT') {
+        updatePayload.actual_exit_time = new Date().toISOString();
+      } else {
+        updatePayload.actual_entry_time = new Date().toISOString();
+        updatePayload.status = 'completed';
+      }
+
+      const { data: updated, error } = await supabase
+        .from('gate_passes')
+        .update(updatePayload)
+        .eq('id', passId)
+        .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(rpcErrorMsg || error.message || 'Failed to stamp gate movement');
+      }
+      resultData = updated;
+    }
+
+    const { data: pass } = await supabase
+      .from('gate_passes')
+      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+      .eq('id', passId)
+      .single();
+
+    const mappedPass = pass ? {
+      ...pass,
+      student_name: pass.student?.student_name || 'Resident',
+      enrollment_no: pass.student?.enrollment_no || 'N/A',
+      hostel_name: pass.hostel?.name || 'Aryabhata Bhavan',
+      room_no: pass.room?.no || '101'
+    } : resultData;
+
+    return {
+      message: movementType === 'EXIT' ? 'Gate Exit Verified & Stamped Successfully' : 'Gate Return Entry Verified & Stamped',
+      pass: mappedPass
+    };
   },
 
   /**

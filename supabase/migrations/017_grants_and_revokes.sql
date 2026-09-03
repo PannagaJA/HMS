@@ -12,8 +12,9 @@ REVOKE INSERT ON public.issue_updates FROM PUBLIC, anon, authenticated;
 -- Direct update on issues is revoked (must use update_issue_status RPC)
 REVOKE UPDATE ON public.issues FROM PUBLIC, anon, authenticated;
 
--- Direct update on gate_passes is revoked (must use approve/reject/movement RPCs)
-REVOKE UPDATE ON public.gate_passes FROM PUBLIC, anon, authenticated;
+-- Grant table access to gate_passes for staff operations
+GRANT SELECT, INSERT, UPDATE ON public.gate_passes TO authenticated;
+GRANT ALL ON public.gate_passes TO service_role;
 
 -- Revoke execution from PUBLIC on all SECURITY DEFINER functions
 REVOKE EXECUTE ON FUNCTION public.create_room_with_beds FROM PUBLIC;

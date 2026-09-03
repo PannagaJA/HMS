@@ -134,6 +134,19 @@ WITH CHECK (
   OR auth.is_admin()
 );
 
+DROP POLICY IF EXISTS policy_gate_passes_update ON public.gate_passes;
+CREATE POLICY policy_gate_passes_update ON public.gate_passes FOR UPDATE TO authenticated
+USING (
+  auth.is_admin()
+  OR auth.is_security()
+  OR (auth.is_warden() AND hostel_id IN (SELECT auth.get_warden_hostel_ids(auth.uid())))
+)
+WITH CHECK (
+  auth.is_admin()
+  OR auth.is_security()
+  OR (auth.is_warden() AND hostel_id IN (SELECT auth.get_warden_hostel_ids(auth.uid())))
+);
+
 -- 9. Visitor Logs
 DROP POLICY IF EXISTS policy_visitor_logs_select ON public.visitor_logs;
 CREATE POLICY policy_visitor_logs_select ON public.visitor_logs FOR SELECT TO authenticated

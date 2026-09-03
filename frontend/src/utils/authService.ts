@@ -104,6 +104,12 @@ export const apiClient = {
     }
 
     // 8. Gate Passes (/gate-passes/ & /security/gate-passes/)
+    if (endpoint.includes('/verify_token/') || endpoint.includes('verify_token')) {
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const code = urlParams.get('code') || urlParams.get('token') || '';
+      const result = await securityService.verifyToken(code);
+      return { data: result as T };
+    }
     if (endpoint.includes('/my_passes/')) {
       const passes = await studentService.getMyGatePasses();
       return { data: passes as T };
@@ -361,9 +367,11 @@ export const apiClient = {
     }
 
     // Gate Pass Movement Scan (Security)
+    // Gate Pass Movement Scan (Security)
     if (endpoint.includes('/log_movement/')) {
       const parts = endpoint.split('/').filter(Boolean);
-      const passId = parseInt(parts[parts.indexOf('gate-passes') + 1] || '0', 10);
+      const gpIdx = parts.findIndex(p => p.includes('gate-passes') || p.includes('passes') || p.includes('gatepass'));
+      const passId = parseInt(gpIdx !== -1 && parts[gpIdx + 1] ? parts[gpIdx + 1] : body?.pass_id || body?.id || '0', 10);
       const data = await securityService.logMovement(passId, body?.movement_type || 'EXIT');
       return { data: data as T };
     }

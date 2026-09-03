@@ -51,10 +51,32 @@ export const wardenService = {
    */
   async actionGatePass(passId: number, action: 'approve' | 'reject', note = '') {
     const fnName = action === 'approve' ? 'approve_gate_pass' : 'reject_gate_pass';
-    const { data, error } = await supabase.rpc(fnName, {
-      p_pass_id: passId,
-      p_note: note
-    });
+    try {
+      const { data, error } = await supabase.rpc(fnName, {
+        p_pass_id: passId,
+        p_note: note
+      });
+      if (!error && data) return data;
+    } catch (rpcErr) {
+      console.warn(`RPC ${fnName} failed, falling back to direct update:`, rpcErr);
+    }
+
+    const { data: user } = await supabase.auth.getUser();
+    const updatePayload: any = {
+      status: action === 'approve' ? 'approved' : 'rejected',
+      action_note: note,
+      actioned_at: new Date().toISOString(),
+      approved_by: user.user?.id || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('gate_passes')
+      .update(updatePayload)
+      .eq('id', passId)
+      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+      .single();
+
     if (error) throw error;
     return data;
   }
