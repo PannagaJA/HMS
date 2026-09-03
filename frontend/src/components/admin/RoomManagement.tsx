@@ -133,8 +133,9 @@ export const RoomManagement: React.FC = () => {
 
   const handleOpenEditRoom = (e: React.MouseEvent, room: HostelRoom) => {
     e.stopPropagation(); // prevent opening occupants drawer
+    setShowOccupantsDrawer(false); // dismiss occupants view so edit modal is clean
     setEditingRoom(room);
-    setEditHostelId(String(room.hostel));
+    setEditHostelId(String(room.hostel || selectedHostelId));
     setEditFloor(String(room.floor));
     setEditRoomNo(room.no || room.room_no || '');
     setEditRoomName(room.name || '');
@@ -424,10 +425,113 @@ export const RoomManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Room Occupants Centered Modal Popup */}
+      {showOccupantsDrawer && selectedRoom && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-200/80 shadow-2xl p-6 sm:p-7 relative max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center font-bold shadow-xs">
+                  <BedDouble className="w-6 h-6 text-[#0D3833]" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">Room {selectedRoom.no}</h3>
+                  <p className="text-xs text-slate-500">
+                    {selectedRoom.hostel_name || 'Hostel Block'} · {selectedRoom.floor === 0 ? 'Ground Floor' : `Floor ${selectedRoom.floor}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOccupantsDrawer(false)}
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Room Info Cards */}
+            <div className="grid grid-cols-2 gap-3 my-5">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="block text-[11px] font-medium text-slate-400">Room Category</span>
+                <span className="text-sm font-bold text-slate-800">{selectedRoom.room_type_display || 'Standard'}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="block text-[11px] font-medium text-slate-400">Total Capacity</span>
+                <span className="text-sm font-bold text-slate-800">{selectedRoom.capacity} Beds</span>
+              </div>
+            </div>
+
+            {/* Live Occupants List */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-bold text-slate-800 tracking-tight">
+                  CURRENT OCCUPANTS ({selectedRoom.occupied_count} / {selectedRoom.capacity})
+                </h4>
+                {selectedRoom.vacant ? (
+                  <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    {selectedRoom.capacity - selectedRoom.occupied_count} Available
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                    No Vacancy
+                  </span>
+                )}
+              </div>
+
+              {selectedRoom.occupants && selectedRoom.occupants.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedRoom.occupants.map((occ: any, i: number) => (
+                    <div
+                      key={i}
+                      className="p-3 rounded-2xl bg-slate-50/80 border border-slate-100 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-white text-slate-700 font-bold border border-slate-200 flex items-center justify-center text-xs shadow-2xs">
+                          {occ.student_name ? occ.student_name.charAt(0).toUpperCase() : 'S'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{occ.student_name}</div>
+                          <div className="text-xs text-slate-400 font-mono">{occ.enrollment_no}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-xs text-slate-400">No students currently assigned to this room.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={(e) => handleOpenEditRoom(e, selectedRoom)}
+                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                <span>Edit Room Configuration</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowOccupantsDrawer(false)}
+                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Room Modal Popup */}
       {showEditRoomModal && editingRoom && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl relative z-[10000]">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#D1F2EA] text-[#0D3833] flex items-center justify-center">
@@ -563,108 +667,6 @@ export const RoomManagement: React.FC = () => {
                 </div>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Room Occupants Centered Modal Popup */}
-      {showOccupantsDrawer && selectedRoom && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-200/80 shadow-2xl p-6 sm:p-7 relative max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center font-bold shadow-xs">
-                  <BedDouble className="w-6 h-6 text-[#0D3833]" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">Room {selectedRoom.no}</h3>
-                  <p className="text-xs text-slate-500">
-                    {selectedRoom.hostel_name || 'Hostel Block'} · {selectedRoom.floor === 0 ? 'Ground Floor' : `Floor ${selectedRoom.floor}`}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowOccupantsDrawer(false)}
-                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Room Info Cards */}
-            <div className="grid grid-cols-2 gap-3 my-5">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="block text-[11px] font-medium text-slate-400">Room Category</span>
-                <span className="text-sm font-bold text-slate-800">{selectedRoom.room_type_display || 'Standard'}</span>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="block text-[11px] font-medium text-slate-400">Total Capacity</span>
-                <span className="text-sm font-bold text-slate-800">{selectedRoom.capacity} Beds</span>
-              </div>
-            </div>
-
-            {/* Current Occupants List */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Current Occupants ({selectedRoom.occupants?.length || 0} / {selectedRoom.capacity})
-                </h4>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  (selectedRoom.occupants?.length || 0) >= selectedRoom.capacity ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
-                }`}>
-                  {(selectedRoom.occupants?.length || 0) >= selectedRoom.capacity ? 'No Vacancy' : `${selectedRoom.capacity - (selectedRoom.occupants?.length || 0)} Beds Open`}
-                </span>
-              </div>
-
-              {selectedRoom.occupants && selectedRoom.occupants.length > 0 ? (
-                <div className="space-y-2.5">
-                  {selectedRoom.occupants.map((occ) => (
-                    <div
-                      key={occ.id}
-                      className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700">
-                          {occ.student_name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 text-sm">{occ.student_name}</div>
-                          <div className="text-xs text-slate-400 font-mono">{occ.enrollment_no}</div>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                        {occ.course_name || 'Enrolled'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
-                  <p className="text-xs text-slate-400">No students currently assigned to this room.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions */}
-            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={(e) => handleOpenEditRoom(e, selectedRoom)}
-                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <Pencil className="w-3.5 h-3.5 text-slate-500" />
-                <span>Edit Room Configuration</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowOccupantsDrawer(false)}
-                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
-              >
-                Done
-              </button>
-            </div>
           </div>
         </div>
       )}
