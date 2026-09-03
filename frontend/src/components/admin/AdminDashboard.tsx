@@ -170,17 +170,81 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Gate Pass Requests Table */}
+      {/* Recent Gate Pass Requests - Responsive (Table on Desktop, Cards on Mobile) */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="font-bold text-slate-900 text-base">Recent Gate Pass Activity</h3>
             <p className="text-xs text-slate-400">Live requests logged by resident students across hostel blocks</p>
           </div>
-          <span className="text-xs font-semibold text-slate-500">Showing Last 5 Requests</span>
+          <span className="text-xs font-semibold text-slate-500 self-start sm:self-auto bg-slate-100 sm:bg-transparent px-2.5 py-1 rounded-full sm:p-0">
+            Showing Last 5 Requests
+          </span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {recentPasses.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-sm">
+              No recent gate pass requests found.
+            </div>
+          ) : (
+            recentPasses.map((p) => (
+              <div key={p.id} className="p-4 space-y-3 hover:bg-slate-50/70 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#E8F8CE] text-emerald-950 font-bold flex items-center justify-center text-sm shrink-0">
+                      {p.student_name?.[0] || 'S'}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-800 text-sm leading-snug">{p.student_name || 'Student'}</h4>
+                      <p className="font-mono text-xs text-slate-500 font-medium">{p.enrollment_no}</p>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${
+                    p.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    p.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    p.status === 'completed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {p.status.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Hostel & Room</span>
+                    <span className="font-medium text-slate-700 truncate block">
+                      {p.hostel_name || 'Block A'} (Rm {p.room_no || '101'})
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Pass Type</span>
+                    <span className="font-semibold text-slate-800 uppercase block">
+                      {p.pass_type}
+                    </span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-200/60">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Out Date & Time</span>
+                    <span className="font-mono text-slate-600 block">
+                      {p.out_date} {p.out_time ? `(${formatTime12(p.out_time)})` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-600">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-0.5">Reason</span>
+                  <p className="bg-slate-50/50 p-2 rounded-lg border border-slate-100/80 text-slate-700 text-xs italic">
+                    "{p.purpose || p.reason || 'Personal Visit'}"
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
