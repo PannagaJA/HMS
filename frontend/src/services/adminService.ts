@@ -149,6 +149,8 @@ export const adminService = {
           gender: payload.gender,
           floor_count: payload.floor_count,
           address: payload.address || '',
+          warden_id: payload.warden || null,
+          caretaker_id: payload.caretaker || null,
           is_active: true
         })
         .select()
@@ -211,7 +213,9 @@ export const adminService = {
         ...(payload.name ? { name: payload.name } : {}),
         ...(payload.gender ? { gender: payload.gender } : {}),
         ...(payload.floor_count !== undefined ? { floor_count: payload.floor_count } : {}),
-        ...(payload.address !== undefined ? { address: payload.address } : {})
+        ...(payload.address !== undefined ? { address: payload.address } : {}),
+        ...(payload.warden !== undefined ? { warden_id: payload.warden } : {}),
+        ...(payload.caretaker !== undefined ? { caretaker_id: payload.caretaker } : {})
       }).eq('id', id);
 
       const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
