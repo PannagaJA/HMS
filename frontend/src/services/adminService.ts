@@ -467,44 +467,48 @@ export const adminService = {
    * Staff: Wardens
    */
   async getWardens() {
-    // 1. Check local/custom wardens cache
     const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
-    
-    // 2. Fetch WARDEN profiles from Supabase
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
-      const profileWardens = (data || []).map((w: any) => ({
-        id: w.id,
-        name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
-        email: w.email,
-        phone: w.phone || '',
-        designation: 'Hostel Warden',
-        experience: 5
-      }));
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'WARDEN')
+        .order('created_at', { ascending: true });
 
-      // Merge avoiding duplicate IDs
-      const combined = [...profileWardens];
-      for (const sw of storedWardens) {
-        if (!combined.some(w => String(w.id) === String(sw.id))) {
-          combined.push(sw);
+      if (!error && data) {
+        const profileWardens = data.map((w: any) => ({
+          id: w.id,
+          name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email || 'Warden',
+          email: w.email || '',
+          phone: w.phone || '',
+          designation: 'Hostel Warden',
+          experience: 5
+        }));
+
+        const combined = [...profileWardens];
+        for (const sw of storedWardens) {
+          if (!combined.some(w => String(w.id) === String(sw.id))) {
+            combined.push(sw);
+          }
         }
+        return combined;
       }
-      return combined;
-    } catch {
-      return storedWardens;
+    } catch (e) {
+      console.warn('Could not load wardens from Supabase:', e);
     }
+    return storedWardens;
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
-    // Save to local custom wardens list
+    const email = payload.email?.trim() || `warden.${Date.now()}@amc.edu`;
     const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
     const newWarden = {
-      id: Date.now(),
+      id: `w-${Date.now()}`,
       name: payload.name,
-      email: payload.email || '',
-      phone: payload.phone,
+      email: email,
+      phone: payload.phone || '',
       designation: payload.designation || 'Hostel Warden',
-      experience: payload.experience || 0
+      experience: payload.experience || 5
     };
     storedWardens.push(newWarden);
     localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
@@ -512,6 +516,38 @@ export const adminService = {
   },
 
   async updateWarden(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
+    const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    if (isUuid) {
+      const updates: any = {};
+      if (payload.name) {
+        const names = payload.name.trim().split(' ');
+        updates.first_name = names[0] || '';
+        updates.last_name = names.slice(1).join(' ') || '';
+      }
+      if (payload.phone !== undefined) updates.phone = payload.phone;
+      if (payload.email) updates.email = payload.email;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        return {
+          id: data.id,
+          name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email,
+          email: data.email,
+          phone: data.phone,
+          designation: payload.designation || 'Hostel Warden',
+          experience: payload.experience || 5
+        };
+      }
+    }
+
+    // Update in local cache if not UUID or Supabase update failed
     const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
     const index = storedWardens.findIndex(w => String(w.id) === String(id));
     if (index !== -1) {
@@ -519,44 +555,26 @@ export const adminService = {
       localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
       return storedWardens[index];
     }
-    // Only query Supabase profiles table if ID is a valid UUID
-    const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (isUuid) {
-      try {
-        const names = (payload.name || '').trim().split(' ');
-        const firstName = names[0] || '';
-        const lastName = names.slice(1).join(' ') || '';
-        const { error } = await supabase.from('profiles').update({
-          first_name: firstName,
-          last_name: lastName,
-          phone: payload.phone
-        }).eq('id', id);
-        if (error) {
-          console.warn('Could not update profile in Supabase:', error);
-        }
-      } catch (e) {
-        console.warn('Could not update profile in Supabase:', e);
-      }
-    }
+
     return { id, ...payload };
   },
 
   async deleteWarden(id: string | number) {
+    const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    if (isUuid) {
+      try {
+        await supabase.from('warden_hostel_assignments').delete().eq('warden_profile_id', id);
+        await supabase.from('profiles').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Supabase warden delete failed:', e);
+      }
+    }
+
     const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
     const filtered = storedWardens.filter(w => String(w.id) !== String(id));
     localStorage.setItem('hms_custom_wardens', JSON.stringify(filtered));
 
-    // Only query Supabase profiles table if ID is a valid UUID
-    const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (isUuid) {
-      try {
-        // Clear warden assignments first
-        await supabase.from('warden_hostel_assignments').delete().eq('warden_profile_id', id);
-        await supabase.from('profiles').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Could not delete profile in Supabase:', e);
-      }
-    }
     return { success: true };
   },
 
