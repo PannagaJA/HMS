@@ -12,6 +12,7 @@ export const StaffManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'wardens' | 'caretakers' | 'security'>('wardens');
   const [showModal, setShowModal] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<number | string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -60,6 +61,7 @@ export const StaffManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const payload: any = {
         name,
@@ -88,7 +90,11 @@ export const StaffManagement: React.FC = () => {
       } else {
         const endpoint = endpointMap[activeTab];
         await apiClient.post(endpoint, payload);
-        showSuccess(`New ${roleName.toLowerCase()} profile registered.`);
+        if (email) {
+          showSuccess(`New ${roleName.toLowerCase()} enrolled. An email with a temporary password was sent!`);
+        } else {
+          showSuccess(`New ${roleName.toLowerCase()} profile registered.`);
+        }
       }
 
       setShowModal(false);
@@ -108,6 +114,8 @@ export const StaffManagement: React.FC = () => {
         err.response?.data?.phone?.[0] ||
         'Failed to save staff member';
       showError(errorMsg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -321,9 +329,10 @@ export const StaffManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingStaffId ? 'Update Staff Member' : 'Save Staff Member'}
+                  {isSubmitting ? 'Processing...' : editingStaffId ? 'Update Staff Member' : 'Save Staff Member'}
                 </button>
               </div>
             </form>

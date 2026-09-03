@@ -506,6 +506,23 @@ export const adminService = {
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
+    if (payload.email) {
+      try {
+        const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
+          body: { ...payload, role: 'WARDEN' }
+        });
+        if (!edgeError && edgeData?.success) {
+          // Fallback to fetch the newly created warden just to return it in the format the UI expects
+          return { id: edgeData.userId, name: payload.name, email: payload.email, phone: payload.phone };
+        }
+        if (edgeData && !edgeData.success) {
+          throw new Error(edgeData.error || "Edge function failed during user creation.");
+        }
+        if (edgeError) console.warn("Edge function failed, falling back to manual insert:", edgeError);
+      } catch (e) {
+        console.warn("Could not invoke edge function:", e);
+      }
+    }
     const { data, error } = await supabase.from('hostel_wardens').insert(payload).select().single();
     if (error) throw error;
     return data;
@@ -543,6 +560,18 @@ export const adminService = {
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
+    if (payload.email) {
+      try {
+        const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
+          body: { ...payload, role: 'CARETAKER' }
+        });
+        if (!edgeError && edgeData?.success) {
+          return { id: edgeData.userId, name: payload.name, email: payload.email, phone: payload.phone };
+        }
+      } catch (e) {
+        console.warn("Could not invoke edge function:", e);
+      }
+    }
     const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
     if (error) throw error;
     return data;
@@ -595,6 +624,18 @@ export const adminService = {
   },
 
   async createSecurityStaff(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
+    if (payload.email) {
+      try {
+        const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
+          body: { ...payload, role: 'SECURITY' }
+        });
+        if (!edgeError && edgeData?.success) {
+          return { id: edgeData.userId, name: payload.name, email: payload.email, phone: payload.phone };
+        }
+      } catch (e) {
+        console.warn("Could not invoke edge function:", e);
+      }
+    }
     const { data, error } = await supabase.from('security_staff').insert(payload).select().single();
     if (error) throw error;
     return data;
