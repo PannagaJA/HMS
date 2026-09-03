@@ -133,10 +133,11 @@ export const MenuManagement: React.FC = () => {
     setSlotEndTime(rawEnd.substring(0, 5));
 
     const existing = menus.find(
-      (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(mealType.id)
+      (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
     );
     if (existing) {
-      setSelectedItemIds(existing.items || ((existing as any).menu_items || []).map((i: any) => i.id));
+      const items = existing.items || existing.items_detail || (existing as any).menu_items || [];
+      setSelectedItemIds(items.map((i: any) => (typeof i === 'object' ? i.id : i)));
     } else {
       setSelectedItemIds([]);
     }
@@ -149,7 +150,7 @@ export const MenuManagement: React.FC = () => {
     setIsSaving(true);
     try {
       const existing = menus.find(
-        (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(targetMealType.id)
+        (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(targetMealType.id)
       );
       const payload = {
         day_of_week: Number(activeDay),
@@ -276,7 +277,7 @@ export const MenuManagement: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {mealTypes.map((mealType) => {
               const menuForSlot = menus.find(
-                (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(mealType.id)
+                (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
               );
               const itemsList = menuForSlot?.items_detail || menuForSlot?.items || [];
 

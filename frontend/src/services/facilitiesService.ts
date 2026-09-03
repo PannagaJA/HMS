@@ -46,31 +46,50 @@ export const diningService = {
       .from('menus')
       .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))');
     if (error) throw error;
-    return (data || []).map((m: any) => ({
-      ...m,
-      items: (m.links || []).map((l: any) => l.item).filter(Boolean)
-    }));
+    return (data || []).map((m: any) => {
+      const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
+        ...i,
+        is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
+      }));
+      return {
+        ...m,
+        meal_type: m.meal_type_id || m.meal_type?.id,
+        items,
+        items_detail: items
+      };
+    });
   },
 
-  async saveMenuSlot(dayOfWeek: number, mealTypeId: number, itemIds: number[]) {
+  async saveMenuSlot(dayOfWeek: number | string, mealTypeId: number | string, itemIds: (number | string)[]) {
+    const dayStr = String(dayOfWeek);
+    const mealIdNum = Number(mealTypeId);
+
     // 1. Find or create menu entry for day_of_week and meal_type
     let menuId: number | null = null;
-    const { data: existing } = await supabase
+    const { data: existing, error: findError } = await supabase
       .from('menus')
       .select('id')
-      .eq('day_of_week', dayOfWeek)
-      .eq('meal_type_id', mealTypeId)
+      .eq('day_of_week', dayStr)
+      .eq('meal_type_id', mealIdNum)
       .maybeSingle();
+
+    if (findError) {
+      console.warn('Error finding menu slot:', findError);
+    }
 
     if (existing) {
       menuId = existing.id;
     } else {
+      const { data: hostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      const hostelId = hostel?.id || 1;
+
       const { data: inserted, error } = await supabase
         .from('menus')
         .insert({
-          day_of_week: dayOfWeek,
-          meal_type_id: mealTypeId,
-          is_active: true
+          hostel_id: hostelId,
+          day_of_week: dayStr,
+          meal_type_id: mealIdNum,
+          is_recurring: true
         })
         .select()
         .single();
@@ -80,13 +99,18 @@ export const diningService = {
 
     if (menuId) {
       // 2. Clear old item links and insert new links
-      await supabase.from('menu_item_links').delete().eq('menu_id', menuId);
+      const { error: delError } = await supabase.from('menu_item_links').delete().eq('menu_id', menuId);
+      if (delError) {
+        console.warn('Error deleting old menu item links:', delError);
+      }
+
       if (itemIds.length > 0) {
         const linkInserts = itemIds.map(itemId => ({
           menu_id: menuId,
-          menu_item_id: itemId
+          item_id: Number(itemId)
         }));
-        await supabase.from('menu_item_links').insert(linkInserts);
+        const { error: insertError } = await supabase.from('menu_item_links').insert(linkInserts);
+        if (insertError) throw insertError;
       }
     }
     return { success: true, menu_id: menuId };

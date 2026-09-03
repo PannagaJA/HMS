@@ -66,10 +66,18 @@ export const studentService = {
       .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))')
       .eq('day_of_week', todayDayOfWeek);
 
-    const mappedMeals = (menus || []).map((m: any) => ({
-      ...m,
-      items: (m.links || []).map((l: any) => l.item).filter(Boolean)
-    }));
+    const mappedMeals = (menus || []).map((m: any) => {
+      const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
+        ...i,
+        is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
+      }));
+      return {
+        ...m,
+        meal_type: m.meal_type_id || m.meal_type?.id,
+        items,
+        items_detail: items
+      };
+    });
 
     return {
       day_name: dayNames[new Date().getDay()],
