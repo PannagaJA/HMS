@@ -110,12 +110,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
         }`}
       >
         {/* Pinned Header */}
-        <div className="h-16 px-6 border-b border-slate-200/80 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
+        <div className="h-16 px-4 border-b border-slate-200/80 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
             <img 
-              src="/174df9_bfc0c62f53bf48b2a6941250cfbf8a02~mv2.avif" 
+              src="/image.png" 
               alt="AMC Logo" 
-              className="h-9 w-auto object-contain"
+              className="h-10 w-auto object-contain"
             />
             <div className="w-px h-6 bg-slate-300 hidden sm:block"></div>
             <span className="font-semibold text-slate-700 text-[15px] tracking-tight hidden sm:block mt-0.5">HMS System</span>
