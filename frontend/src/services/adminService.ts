@@ -42,31 +42,187 @@ export const adminService = {
    * Fetch all active hostel blocks with occupancy metrics
    */
   async getHostels(): Promise<Hostel[]> {
-    const { data: hostels, error } = await supabase
-      .from('hostels')
-      .select('*, rooms:hostel_rooms(id, capacity, is_active), wardens:warden_hostel_assignments(warden_profile_id)')
-      .eq('is_active', true);
-    if (error) throw error;
+    let hostels: any[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('hostels')
+        .select('*, rooms:hostel_rooms(id, capacity, is_active), wardens:warden_hostel_assignments(warden_profile_id)')
+        .eq('is_active', true);
+      if (!error && data) {
+        hostels = data;
+      }
+    } catch (e) {
+      console.warn('Failed to load hostels from supabase:', e);
+    }
 
-    const { data: activeAllocs } = await supabase
-      .from('room_allocations')
-      .select('id, bed:beds(room:hostel_rooms(hostel_id))')
-      .eq('is_active', true);
+    // Merge fallback/local hostels if stored
+    const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
+    
+    // Map Supabase hostels and merge any custom assignments stored locally
+    const combinedHostels = hostels.map((h: any) => {
+      const localMatch = localHostels.find(lh => String(lh.id) === String(h.id));
+      if (localMatch) {
+        return {
+          ...h,
+          ...localMatch,
+          wardens: h.wardens?.length ? h.wardens : localMatch.warden ? [{ warden_profile_id: localMatch.warden }] : []
+        };
+      }
+      return h;
+    });
 
-    return (hostels || []).map((h: any) => {
+    for (const lh of localHostels) {
+      if (lh.is_active !== false && !combinedHostels.some(h => String(h.id) === String(lh.id))) {
+        combinedHostels.push(lh);
+      }
+    }
+
+    const [wardensList, caretakersList, activeAllocsRes] = await Promise.all([
+      adminService.getWardens(),
+      adminService.getCaretakers(),
+      supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true)
+    ]);
+
+    const activeAllocs = activeAllocsRes.data || [];
+
+    return combinedHostels.map((h: any) => {
       const totalRooms = (h.rooms || []).filter((r: any) => r.is_active).length;
       const totalCap = (h.rooms || []).filter((r: any) => r.is_active).reduce((sum: number, r: any) => sum + (r.capacity || 0), 0);
-      const occ = (activeAllocs || []).filter((a: any) => a.bed?.room?.hostel_id === h.id).length;
+      const occ = activeAllocs.filter((a: any) => a.bed?.room?.hostel_id === h.id).length;
+      
+      const assignedWardenId = h.warden || h.wardens?.[0]?.warden_profile_id || null;
+      const assignedCaretakerId = h.caretaker || null;
+
+      const wardenDetail = wardensList.find((w: any) => String(w.id) === String(assignedWardenId)) || null;
+      const caretakerDetail = caretakersList.find((c: any) => String(c.id) === String(assignedCaretakerId)) || null;
+
       return {
         ...h,
-        total_rooms: totalRooms,
-        total_capacity: totalCap,
-        occupied_beds: occ,
-        warden: h.wardens?.[0]?.warden_profile_id || null,
-        warden_detail: null,
-        caretaker: null
+        total_rooms: totalRooms || 0,
+        total_capacity: totalCap || 0,
+        occupied_beds: occ || 0,
+        warden: assignedWardenId,
+        warden_detail: wardenDetail,
+        caretaker: assignedCaretakerId,
+        caretaker_detail: caretakerDetail
       };
     });
+  },
+
+  async createHostel(payload: { name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }) {
+    let createdHostel: any = null;
+    try {
+      const { data, error } = await supabase
+        .from('hostels')
+        .insert({
+          name: payload.name,
+          gender: payload.gender,
+          floor_count: payload.floor_count,
+          address: payload.address || '',
+          is_active: true
+        })
+        .select()
+        .single();
+      if (!error && data) {
+        createdHostel = data;
+      }
+    } catch (e) {
+      console.warn('Hostels table insert failed, saving locally:', e);
+    }
+
+    if (!createdHostel) {
+      const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
+      createdHostel = {
+        id: Date.now(),
+        name: payload.name,
+        gender: payload.gender,
+        floor_count: payload.floor_count,
+        address: payload.address || '',
+        warden: payload.warden || null,
+        caretaker: payload.caretaker || null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      localHostels.push(createdHostel);
+      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
+    } else {
+      // If warden is UUID, try linking in DB
+      const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
+      if (isUuid) {
+        try {
+          await supabase.from('warden_hostel_assignments').insert({
+            warden_profile_id: payload.warden,
+            hostel_id: createdHostel.id
+          });
+        } catch (we) {
+          console.warn('Warden assignment insert failed:', we);
+        }
+      }
+
+      // Also store assignment attributes if custom
+      const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
+      const updated = {
+        ...createdHostel,
+        warden: payload.warden || null,
+        caretaker: payload.caretaker || null
+      };
+      localHostels.push(updated);
+      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
+      return updated;
+    }
+
+    return createdHostel;
+  },
+
+  async updateHostel(id: string | number, payload: Partial<{ name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }>) {
+    try {
+      await supabase.from('hostels').update({
+        ...(payload.name ? { name: payload.name } : {}),
+        ...(payload.gender ? { gender: payload.gender } : {}),
+        ...(payload.floor_count !== undefined ? { floor_count: payload.floor_count } : {}),
+        ...(payload.address !== undefined ? { address: payload.address } : {})
+      }).eq('id', id);
+
+      const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
+      if (isUuid) {
+        try {
+          await supabase.from('warden_hostel_assignments').delete().eq('hostel_id', id);
+          await supabase.from('warden_hostel_assignments').insert({
+            warden_profile_id: payload.warden,
+            hostel_id: id
+          });
+        } catch (we) {
+          console.warn('Warden assignment update failed:', we);
+        }
+      }
+    } catch (e) {
+      console.warn('Hostel update in Supabase failed:', e);
+    }
+
+    const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
+    const index = localHostels.findIndex(h => String(h.id) === String(id));
+    if (index !== -1) {
+      localHostels[index] = { ...localHostels[index], ...payload };
+      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
+      return localHostels[index];
+    } else {
+      localHostels.push({ id, ...payload, is_active: true });
+      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
+    }
+    return { id, ...payload };
+  },
+
+  async deleteHostel(id: string | number) {
+    try {
+      await supabase.from('hostels').update({ is_active: false }).eq('id', id);
+    } catch (e) {
+      console.warn('Hostel soft-delete in Supabase failed:', e);
+    }
+    const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
+    const filtered = localHostels.filter(h => String(h.id) !== String(id));
+    localStorage.setItem('hms_custom_hostels', JSON.stringify(filtered));
+    return { success: true };
   },
 
   /**

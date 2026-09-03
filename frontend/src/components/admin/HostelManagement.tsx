@@ -73,8 +73,8 @@ export const HostelManagement: React.FC = () => {
       name,
       gender,
       floor_count: floorCount,
-      warden: wardenId !== 'none' ? Number(wardenId) : null,
-      caretaker: caretakerId !== 'none' ? Number(caretakerId) : null,
+      warden: wardenId !== 'none' ? wardenId : null,
+      caretaker: caretakerId !== 'none' ? caretakerId : null,
       address,
     };
 

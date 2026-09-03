@@ -219,6 +219,19 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Hostel Creation
+    if (endpoint.includes('/hms/hostels/')) {
+      const data = await adminService.createHostel({
+        name: body?.name,
+        gender: body?.gender,
+        floor_count: body?.floor_count,
+        warden: body?.warden,
+        caretaker: body?.caretaker,
+        address: body?.address
+      });
+      return { data: data as T };
+    }
+
     // Create Maintenance Issue
     if (endpoint.includes('/hms/issues/') && !endpoint.includes('update_status')) {
       const data = await issueService.createIssue(body);
@@ -265,6 +278,13 @@ export const apiClient = {
   },
 
   async put<T = any>(endpoint: string, body: any) {
+    // Update Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1] || body?.id;
+      const data = await adminService.updateHostel(hostelId, body);
+      return { data: data as T };
+    }
     // Update Warden
     if (endpoint.includes('/hms/wardens/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -283,6 +303,13 @@ export const apiClient = {
   },
 
   async patch<T = any>(endpoint: string, body: any) {
+    // Update Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1] || body?.id;
+      const data = await adminService.updateHostel(hostelId, body);
+      return { data: data as T };
+    }
     // Update Warden
     if (endpoint.includes('/hms/wardens/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -326,6 +353,14 @@ export const apiClient = {
   },
 
   async delete<T = any>(endpoint: string) {
+    // Delete Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1];
+      await adminService.deleteHostel(hostelId);
+      return { data: { success: true } as T };
+    }
+
     // Decommission Room (RPC)
     if (endpoint.includes('/hms/rooms/')) {
       const parts = endpoint.split('/');
