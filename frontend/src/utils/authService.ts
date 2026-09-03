@@ -93,8 +93,8 @@ export const apiClient = {
       return { data: (data || []) as T };
     }
 
-    // 7. Maintenance Issues (/hms/issues/)
-    if (endpoint.includes('/hms/issues/') || endpoint.includes('/warden/issues/')) {
+    // 7. Maintenance Issues (/hms/issues/, /warden/issues/, /student/issues/)
+    if (endpoint.includes('/issues/')) {
       const issues = await issueService.getIssues();
       return { data: issues as T };
     }
@@ -302,17 +302,17 @@ export const apiClient = {
       return { data: data as T };
     }
 
-    // Create Maintenance Issue
-    if (endpoint.includes('/hms/issues/') && !endpoint.includes('update_status')) {
-      const data = await issueService.createIssue(body);
+    // Update Issue Status (RPC)
+    if (endpoint.includes('/update_status/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const issueId = parseInt(parts[parts.indexOf('issues') + 1] || '0', 10);
+      const data = await issueService.updateStatus(issueId, body?.status, body?.note || '');
       return { data: data as T };
     }
 
-    // Update Issue Status (RPC)
-    if (endpoint.includes('/update_status/')) {
-      const parts = endpoint.split('/');
-      const issueId = parseInt(parts[parts.indexOf('issues') + 1] || '0', 10);
-      const data = await issueService.updateStatus(issueId, body?.status, body?.note || '');
+    // Create Maintenance Issue
+    if (endpoint.includes('/issues/')) {
+      const data = await issueService.createIssue(body);
       return { data: data as T };
     }
 

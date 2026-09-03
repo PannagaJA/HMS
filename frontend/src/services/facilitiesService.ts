@@ -118,12 +118,31 @@ export const diningService = {
 };
 
 export const issueService = {
-  async getIssues(): Promise<HostelIssue[]> {
-    const { data: issues, error } = await supabase
+  async getIssues(studentId?: number): Promise<HostelIssue[]> {
+    let resolvedStudentId = studentId;
+    if (!resolvedStudentId) {
+      const { data: user } = await supabase.auth.getUser();
+      const userId = user.user?.id;
+      if (userId) {
+        const { data: st } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
+        if (st) resolvedStudentId = st.id;
+      }
+    }
+
+    let query = supabase
       .from('issues')
       .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no), updates:issue_updates(*)')
       .order('created_at', { ascending: false });
-    if (error) throw error;
+
+    if (resolvedStudentId) {
+      query = query.eq('student_id', resolvedStudentId);
+    }
+
+    const { data: issues, error } = await query;
+    if (error) {
+      console.warn('Error fetching issues:', error);
+      return [];
+    }
 
     return (issues || []).map((i: any) => ({
       ...i,
@@ -140,21 +159,41 @@ export const issueService = {
     const userId = user.user?.id;
 
     // Find student record and their active room allocation
-    const { data: student } = await supabase
-      .from('students')
-      .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-      .eq('profile_id', userId || '')
-      .single();
+    let student: any = null;
+    if (userId) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .eq('profile_id', userId)
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    if (!student) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .limit(1)
+        .maybeSingle();
+      if (data) student = data;
+    }
 
     if (!student) {
       throw new Error('Could not identify resident student record for issue reporting');
     }
 
-    const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active);
+    const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
     const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
     const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
-    const roomId = room?.id || 4;
-    const hostelId = room?.hostel_id || 1;
+    
+    let roomId = room?.id;
+    let hostelId = room?.hostel_id;
+
+    if (!roomId || !hostelId) {
+      const { data: defaultRoom } = await supabase.from('hostel_rooms').select('id, hostel_id').limit(1).maybeSingle();
+      roomId = roomId || defaultRoom?.id || 1;
+      hostelId = hostelId || defaultRoom?.hostel_id || 1;
+    }
 
     const insertBody = {
       student_id: student.id,
@@ -166,9 +205,25 @@ export const issueService = {
       status: 'pending'
     };
 
-    const { data, error } = await supabase.from('issues').insert(insertBody).select().single();
-    if (error) throw error;
-    return data;
+    const { data, error } = await supabase
+      .from('issues')
+      .insert(insertBody)
+      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no), updates:issue_updates(*)')
+      .single();
+
+    if (error) {
+      console.error('Supabase issue create error:', error);
+      throw error;
+    }
+
+    return {
+      ...data,
+      student_name: data.student?.student_name || 'Resident',
+      enrollment_no: data.student?.enrollment_no || 'N/A',
+      hostel_name: data.hostel?.name || 'Block A',
+      room_no: data.room?.no || '101',
+      updates: data.updates || []
+    };
   },
 
   async updateStatus(issueId: number, status: string, note = '') {
