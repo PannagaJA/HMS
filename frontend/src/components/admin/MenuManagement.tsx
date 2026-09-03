@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed } from 'lucide-react';
-import type { MealType, MenuItem, Menu } from '../../types';
+import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, Building2 } from 'lucide-react';
+import type { MealType, MenuItem, Menu, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
 import {
@@ -24,6 +24,8 @@ const DAYS = [
 
 export const MenuManagement: React.FC = () => {
   const { showSuccess, showError, confirm } = useNotification();
+  const [hostels, setHostels] = useState<Hostel[]>([]);
+  const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -47,21 +49,44 @@ export const MenuManagement: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    fetchHostelsAndData();
   }, []);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (selectedHostelId) {
+      fetchMenus(selectedHostelId);
+    }
+  }, [selectedHostelId]);
+
+  const fetchHostelsAndData = async () => {
     try {
-      const [mealTypesRes, menuItemsRes, menusRes] = await Promise.all([
+      const [hostelsRes, mealTypesRes, menuItemsRes] = await Promise.all([
+        apiClient.get<Hostel[]>('/hms/hostels/'),
         apiClient.get<MealType[]>('/hms/meal-types/'),
         apiClient.get<MenuItem[]>('/hms/menu-items/'),
-        apiClient.get<Menu[]>('/hms/menus/'),
       ]);
-      setMealTypes(mealTypesRes.data);
-      setMenuItems(menuItemsRes.data);
-      setMenus(menusRes.data);
+      const loadedHostels = hostelsRes.data || [];
+      setHostels(loadedHostels);
+      setMealTypes(mealTypesRes.data || []);
+      setMenuItems(menuItemsRes.data || []);
+
+      const initialHostelId = loadedHostels.length > 0 ? String(loadedHostels[0].id) : '';
+      setSelectedHostelId(initialHostelId);
+      if (initialHostelId) {
+        await fetchMenus(initialHostelId);
+      }
     } catch (err) {
-      console.error('Failed to load menu data', err);
+      console.error('Failed to load menu planner data', err);
+    }
+  };
+
+  const fetchMenus = async (hostelId: string) => {
+    try {
+      const endpoint = hostelId ? `/hms/menus/?hostel=${hostelId}` : '/hms/menus/';
+      const menusRes = await apiClient.get<Menu[]>(endpoint);
+      setMenus(menusRes.data || []);
+    } catch (err) {
+      console.error('Failed to load menus for hostel', err);
     }
   };
 
@@ -102,7 +127,8 @@ export const MenuManagement: React.FC = () => {
         showSuccess(`Food item "${itemName}" created successfully.`);
       }
       setShowItemModal(false);
-      fetchData();
+      const itemsRes = await apiClient.get<MenuItem[]>('/hms/menu-items/');
+      setMenuItems(itemsRes.data || []);
     } catch (err) {
       showError('Failed to save food item');
     }
@@ -119,13 +145,21 @@ export const MenuManagement: React.FC = () => {
     try {
       await apiClient.delete(`/hms/menu-items/${id}/`);
       showSuccess('Food item removed successfully.');
-      fetchData();
+      const itemsRes = await apiClient.get<MenuItem[]>('/hms/menu-items/');
+      setMenuItems(itemsRes.data || []);
+      if (selectedHostelId) {
+        fetchMenus(selectedHostelId);
+      }
     } catch (err) {
       showError('Failed to delete food item');
     }
   };
 
   const handleOpenConfigureSlot = (mealType: MealType) => {
+    if (!selectedHostelId) {
+      showError('Please select a hostel block first');
+      return;
+    }
     setTargetMealType(mealType);
     const rawStart = mealType.start_time || mealType.time_from || '07:30';
     const rawEnd = mealType.end_time || mealType.time_to || '09:30';
@@ -133,7 +167,10 @@ export const MenuManagement: React.FC = () => {
     setSlotEndTime(rawEnd.substring(0, 5));
 
     const existing = menus.find(
-      (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
+      (m) =>
+        String(m.day_of_week) === String(activeDay) &&
+        Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id) &&
+        (!m.hostel_id || String(m.hostel_id) === String(selectedHostelId) || String((m as any).hostel?.id || (m as any).hostel) === String(selectedHostelId))
     );
     if (existing) {
       const items = existing.items || existing.items_detail || (existing as any).menu_items || [];
@@ -146,13 +183,17 @@ export const MenuManagement: React.FC = () => {
 
   const handleSaveSlotMenu = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetMealType) return;
+    if (!targetMealType || !selectedHostelId) return;
     setIsSaving(true);
     try {
       const existing = menus.find(
-        (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(targetMealType.id)
+        (m) =>
+          String(m.day_of_week) === String(activeDay) &&
+          Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(targetMealType.id) &&
+          (!m.hostel_id || String(m.hostel_id) === String(selectedHostelId) || String((m as any).hostel?.id || (m as any).hostel) === String(selectedHostelId))
       );
       const payload = {
+        hostel: Number(selectedHostelId),
         day_of_week: Number(activeDay),
         meal_type: targetMealType.id,
         items: selectedItemIds,
@@ -163,9 +204,10 @@ export const MenuManagement: React.FC = () => {
       } else {
         await apiClient.post('/hms/menus/', payload);
       }
-      showSuccess(`Dining schedule updated for ${targetMealType.name}.`);
+      const selectedHostelName = hostels.find((h) => String(h.id) === String(selectedHostelId))?.name || 'Selected Hostel';
+      showSuccess(`Dining schedule updated for ${targetMealType.name} (${selectedHostelName}).`);
       setShowConfigureModal(false);
-      fetchData();
+      fetchMenus(selectedHostelId);
     } catch (err: any) {
       console.error('Failed to update dining slot:', err);
       showError('Failed to update dining menu slot: ' + (err.response?.data?.detail || err.message));
@@ -211,70 +253,112 @@ export const MenuManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Primary Tab Navigation */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-full w-fit">
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'timetable'
-              ? 'bg-[#0D3833] text-white shadow-sm'
-              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          Weekly Timetable Matrix
-        </button>
-        <button
-          onClick={() => setActiveTab('catalog')}
-          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'catalog'
-              ? 'bg-[#0D3833] text-white shadow-sm'
-              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          Food Items Catalog ({menuItems.length})
-        </button>
-      </div>
+      {/* Primary Navigation & Hostel Selector Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 shadow-xs">
+        {/* Primary Tab Navigation */}
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-full w-fit">
+          <button
+            onClick={() => setActiveTab('timetable')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'timetable'
+                ? 'bg-[#0D3833] text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Weekly Timetable Matrix
+          </button>
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'catalog'
+                ? 'bg-[#0D3833] text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Food Items Catalog ({menuItems.length})
+          </button>
+        </div>
 
-      {activeTab === 'timetable' && (
-        <div className="space-y-5">
-          {/* Mobile View: Clean Select Dropdown (< 768px) */}
-          <div className="block md:hidden bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-            <label className="text-xs font-semibold text-slate-500 block mb-1.5">
-              Select Day of Week:
-            </label>
-            <Select value={activeDay} onValueChange={(val) => setActiveDay(val)}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-bold text-slate-800">
-                <SelectValue placeholder="Select day" />
+        {/* Hostel Selection Dropdown */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 shrink-0">
+            <Building2 className="w-4 h-4 text-teal-700" />
+            <span>Select Hostel:</span>
+          </div>
+          <div className="w-full sm:w-64">
+            <Select
+              value={selectedHostelId}
+              onValueChange={(val) => setSelectedHostelId(val)}
+            >
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold rounded-2xl h-10">
+                <SelectValue placeholder="Choose Hostel Block" />
               </SelectTrigger>
               <SelectContent>
-                {DAYS.map((day) => (
-                  <SelectItem key={day.id} value={day.id}>
-                    {day.name}
+                {hostels.map((hostel) => (
+                  <SelectItem key={hostel.id} value={String(hostel.id)}>
+                    {hostel.name} ({hostel.gender === 'M' ? 'Boys' : hostel.gender === 'F' ? 'Girls' : 'Co-ed'})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+        </div>
+      </div>
 
-          {/* Desktop View: Horizontal Day Pills (>= 768px) */}
-          <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-2">
-            {DAYS.map((day) => (
-              <button
-                key={day.id}
-                onClick={() => setActiveDay(day.id)}
-                className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  activeDay === day.id
-                    ? 'bg-[#D1F2EA] text-teal-950 border border-teal-300 shadow-sm'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {day.name}
-              </button>
-            ))}
-          </div>
+      {activeTab === 'timetable' && (
+        <div className="space-y-5">
+          {hostels.length === 0 ? (
+            <div className="bg-amber-50 p-10 rounded-3xl border border-amber-200 text-center space-y-2">
+              <Building2 className="w-8 h-8 text-amber-600 mx-auto" />
+              <h3 className="font-bold text-amber-900 text-sm">No Hostels Found</h3>
+              <p className="text-xs text-amber-700">Please add hostel blocks first in Hostel Management.</p>
+            </div>
+          ) : !selectedHostelId ? (
+            <div className="bg-white p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2">
+              <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
+              <h3 className="font-bold text-slate-700 text-sm">Select a Hostel Block</h3>
+              <p className="text-xs text-slate-400">Please choose a hostel block from the dropdown above to view and configure its menu.</p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile View: Clean Select Dropdown (< 768px) */}
+              <div className="block md:hidden bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+                  Select Day of Week:
+                </label>
+                <Select value={activeDay} onValueChange={(val) => setActiveDay(val)}>
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-bold text-slate-800">
+                    <SelectValue placeholder="Select day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS.map((day) => (
+                      <SelectItem key={day.id} value={day.id}>
+                        {day.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Modern Minimalist Dining Schedule Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Desktop View: Horizontal Day Pills (>= 768px) */}
+              <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-2">
+                {DAYS.map((day) => (
+                  <button
+                    key={day.id}
+                    onClick={() => setActiveDay(day.id)}
+                    className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      activeDay === day.id
+                        ? 'bg-[#D1F2EA] text-teal-950 border border-teal-300 shadow-sm'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {day.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Modern Minimalist Dining Schedule Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {mealTypes.map((mealType) => {
               const menuForSlot = menus.find(
                 (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
@@ -387,8 +471,10 @@ export const MenuManagement: React.FC = () => {
               );
             })}
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )}
 
       {activeTab === 'catalog' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -528,8 +614,8 @@ export const MenuManagement: React.FC = () => {
                 <h3 className="text-lg font-bold text-slate-900">
                   Configure {targetMealType.name} Slot
                 </h3>
-                <p className="text-xs text-slate-400">
-                  Select menu items served on {DAYS.find((d) => d.id === activeDay)?.name}
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Hostel: <strong className="text-teal-950 font-semibold">{hostels.find((h) => String(h.id) === String(selectedHostelId))?.name || 'Selected Hostel'}</strong> · {DAYS.find((d) => d.id === activeDay)?.name}
                 </p>
               </div>
               <button

@@ -153,7 +153,9 @@ export const apiClient = {
       return { data: menuItems as T };
     }
     if (endpoint.includes('/menus/') || endpoint.includes('/menu/')) {
-      const menus = await diningService.getWeeklyMenus();
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const hostelId = urlParams.get('hostel') || urlParams.get('hostel_id') || undefined;
+      const menus = await diningService.getWeeklyMenus(hostelId);
       return { data: menus as T };
     }
     if (endpoint.includes('/skips/')) {
@@ -410,7 +412,8 @@ export const apiClient = {
       const data = await diningService.saveMenuSlot(
         body?.day_of_week ?? 0,
         body?.meal_type ?? 1,
-        body?.items || body?.item_ids || []
+        body?.items || body?.item_ids || [],
+        body?.hostel || body?.hostel_id
       );
       return { data: data as T };
     }
@@ -459,7 +462,8 @@ export const apiClient = {
       const data = await diningService.saveMenuSlot(
         Number(body?.day_of_week ?? 0),
         Number(body?.meal_type ?? 1),
-        body?.items || []
+        body?.items || [],
+        body?.hostel || body?.hostel_id
       );
       return { data: data as T };
     }

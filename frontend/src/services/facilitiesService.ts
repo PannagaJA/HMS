@@ -53,10 +53,14 @@ export const diningService = {
     return { success: true };
   },
 
-  async getWeeklyMenus(): Promise<Menu[]> {
-    const { data, error } = await supabase
+  async getWeeklyMenus(hostelId?: number | string): Promise<Menu[]> {
+    let query = supabase
       .from('menus')
       .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))');
+    if (hostelId) {
+      query = query.eq('hostel_id', Number(hostelId));
+    }
+    const { data, error } = await query;
     if (error) throw error;
     return (data || []).map((m: any) => {
       const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
@@ -227,15 +231,22 @@ export const diningService = {
     return { success: true };
   },
 
-  async saveMenuSlot(dayOfWeek: number | string, mealTypeId: number | string, itemIds: (number | string)[]) {
+  async saveMenuSlot(dayOfWeek: number | string, mealTypeId: number | string, itemIds: (number | string)[], hostelId?: number | string) {
     const dayStr = String(dayOfWeek);
     const mealIdNum = Number(mealTypeId);
 
-    // 1. Find or create menu entry for day_of_week and meal_type
+    let targetHostelId = hostelId ? Number(hostelId) : null;
+    if (!targetHostelId) {
+      const { data: hostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      targetHostelId = hostel?.id || 1;
+    }
+
+    // 1. Find or create menu entry for hostel, day_of_week and meal_type
     let menuId: number | null = null;
     const { data: existing, error: findError } = await supabase
       .from('menus')
       .select('id')
+      .eq('hostel_id', targetHostelId)
       .eq('day_of_week', dayStr)
       .eq('meal_type_id', mealIdNum)
       .maybeSingle();
@@ -247,13 +258,10 @@ export const diningService = {
     if (existing) {
       menuId = existing.id;
     } else {
-      const { data: hostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
-      const hostelId = hostel?.id || 1;
-
       const { data: inserted, error } = await supabase
         .from('menus')
         .insert({
-          hostel_id: hostelId,
+          hostel_id: targetHostelId,
           day_of_week: dayStr,
           meal_type_id: mealIdNum,
           is_recurring: true
