@@ -4,6 +4,7 @@ import type { GatePassRequest, Hostel } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
 import { formatTime12 } from '../../lib/utils';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -13,6 +14,7 @@ import {
 } from '../ui/select';
 
 export const WardenGatePassManagement: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
@@ -50,11 +52,12 @@ export const WardenGatePassManagement: React.FC = () => {
         action: actionType,
         note: actionNote,
       });
+      showSuccess(`Gate pass for ${actionModalPass.student_name} ${actionType === 'approve' ? 'approved' : 'rejected'}.`);
       setActionModalPass(null);
       setActionNote('');
       fetchGatePassesAndHostels();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Action failed');
+      showError(err.response?.data?.error || 'Action failed');
     }
   };
 

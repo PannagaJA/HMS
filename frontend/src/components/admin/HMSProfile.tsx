@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { User, Mail, Phone, Lock, Save, KeyRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 
 export const HMSProfile: React.FC = () => {
   const { user, updateCurrentUser } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [name, setName] = useState(
     user?.first_name 
       ? `${user.first_name} ${user.last_name || ''}`.trim() 
@@ -27,9 +29,9 @@ export const HMSProfile: React.FC = () => {
     setIsSaving(true);
     setSuccessMsg('');
     try {
-      const names = name.trim().split(' ');
-      const firstName = names[0] || '';
-      const lastName = names.slice(1).join(' ') || '';
+      const parts = name.trim().split(' ');
+      const firstName = parts[0] || '';
+      const lastName = parts.slice(1).join(' ') || '';
 
       const res = await apiClient.patch('/auth/profile/', {
         first_name: firstName,
@@ -41,6 +43,7 @@ export const HMSProfile: React.FC = () => {
       // Update global AuthContext and persistent session state immediately
       updateCurrentUser(res.data);
 
+      showSuccess('Profile updated successfully! New details are now active.');
       setSuccessMsg('Profile updated successfully! New details are now active across all screens.');
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
@@ -50,7 +53,7 @@ export const HMSProfile: React.FC = () => {
         err.response?.data?.phone?.[0] ||
         err.response?.data?.detail ||
         'Failed to update profile';
-      alert(errorMsg);
+      showError(errorMsg);
     } finally {
       setIsSaving(false);
     }

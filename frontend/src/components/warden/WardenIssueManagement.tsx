@@ -6,6 +6,7 @@ import {
 import { apiClient } from '../../api/apiClient';
 import { StatusBadge } from '../common/StatusBadge';
 import type { HostelIssue } from '../../types';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -15,6 +16,7 @@ import {
 } from '../ui/select';
 
 export const WardenIssueManagement: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [issues, setIssues] = useState<HostelIssue[]>([]);
   const [activeStatus, setActiveStatus] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -28,10 +30,8 @@ export const WardenIssueManagement: React.FC = () => {
 
   const fetchIssues = async () => {
     try {
-      const url = activeStatus === 'all'
-        ? '/warden/issues/'
-        : `/warden/issues/?status=${activeStatus}`;
-      const res = await apiClient.get<HostelIssue[]>(url);
+      const query = activeStatus !== 'all' ? `?status=${activeStatus}` : '';
+      const res = await apiClient.get<HostelIssue[]>(`/warden/issues/${query}`);
       setIssues(res.data);
     } catch (err) {
       console.error('Failed to load issues', err);
@@ -47,11 +47,12 @@ export const WardenIssueManagement: React.FC = () => {
         status: updateStatus,
         note: updateNote,
       });
+      showSuccess(`Issue #${selectedIssue.id} status updated to ${updateStatus}.`);
       setSelectedIssue(null);
       setUpdateNote('');
       fetchIssues();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update issue');
+      showError(err.response?.data?.error || 'Failed to update issue');
     }
   };
 

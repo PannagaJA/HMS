@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Building2, Plus, Edit2, Trash2 } from 'lucide-react';
 import type { Hostel, HostelWarden, HostelCaretaker } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 } from '../ui/select';
 
 export const HostelManagement: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [wardens, setWardens] = useState<HostelWarden[]>([]);
   const [caretakers, setCaretakers] = useState<HostelCaretaker[]>([]);
@@ -30,14 +32,14 @@ export const HostelManagement: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [hostelsRes, wardensRes, caretakersRes] = await Promise.all([
+      const [hRes, wRes, cRes] = await Promise.all([
         apiClient.get<Hostel[]>('/hms/hostels/'),
         apiClient.get<HostelWarden[]>('/hms/wardens/'),
         apiClient.get<HostelCaretaker[]>('/hms/caretakers/'),
       ]);
-      setHostels(hostelsRes.data);
-      setWardens(wardensRes.data);
-      setCaretakers(caretakersRes.data);
+      setHostels(hRes.data || []);
+      setWardens(wRes.data || []);
+      setCaretakers(cRes.data || []);
     } catch (err) {
       console.error('Failed to load hostel data', err);
     }
@@ -54,14 +56,14 @@ export const HostelManagement: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleOpenEdit = (h: Hostel) => {
-    setEditingHostel(h);
-    setName(h.name);
-    setGender(h.gender);
-    setFloorCount(h.floor_count);
-    setWardenId(h.warden ? String(h.warden) : 'none');
-    setCaretakerId(h.caretaker ? String(h.caretaker) : 'none');
-    setAddress(h.address || '');
+  const handleOpenEdit = (hostel: Hostel) => {
+    setEditingHostel(hostel);
+    setName(hostel.name);
+    setGender(hostel.gender);
+    setFloorCount(hostel.floor_count);
+    setWardenId(hostel.warden ? String(hostel.warden) : 'none');
+    setCaretakerId(hostel.caretaker ? String(hostel.caretaker) : 'none');
+    setAddress(hostel.address || '');
     setShowModal(true);
   };
 
@@ -79,23 +81,33 @@ export const HostelManagement: React.FC = () => {
     try {
       if (editingHostel) {
         await apiClient.put(`/hms/hostels/${editingHostel.id}/`, payload);
+        showSuccess(`Hostel block "${name}" updated successfully.`);
       } else {
         await apiClient.post('/hms/hostels/', payload);
+        showSuccess(`Hostel block "${name}" created successfully.`);
       }
       setShowModal(false);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.name?.[0] || 'Failed to save hostel');
+      showError(err.response?.data?.name?.[0] || err.message || 'Failed to save hostel');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this hostel? All associated rooms will also be removed.')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Hostel Block',
+      message: 'Are you sure you want to delete this hostel? All associated rooms and resident bed configurations will also be affected.',
+      confirmText: 'Delete Hostel',
+      isDestructive: true
+    });
+    if (!isConfirmed) return;
+
     try {
       await apiClient.delete(`/hms/hostels/${id}/`);
+      showSuccess('Hostel removed successfully.');
       fetchData();
-    } catch (err) {
-      alert('Failed to delete hostel');
+    } catch (err: any) {
+      showError(err.response?.data?.detail || 'Failed to delete hostel');
     }
   };
 
