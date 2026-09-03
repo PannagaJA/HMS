@@ -15,7 +15,7 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
-  updateCurrentUser: (updatedUser: User) => void;
+  updateCurrentUser: (updatedUser: Partial<User>) => void;
   refreshUserProfile: () => Promise<User | null>;
   isLoading: boolean;
 }
@@ -83,12 +83,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const updateCurrentUser = (updatedUser: User) => {
-    setUser(updatedUser);
-    const currentToken = getAccessToken();
-    if (currentToken) {
-      saveAuthSession(currentToken, undefined, updatedUser);
-    }
+  const updateCurrentUser = (updatedUser: Partial<User>) => {
+    setUser((prev) => {
+      const merged = prev ? ({ ...prev, ...updatedUser } as User) : (updatedUser as User);
+      const currentToken = getAccessToken();
+      if (currentToken) {
+        saveAuthSession(currentToken, undefined, merged);
+      }
+      return merged;
+    });
   };
 
   const login = async (username: string, password: string): Promise<User> => {

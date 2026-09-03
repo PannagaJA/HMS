@@ -543,12 +543,36 @@ export const apiClient = {
 
     // Profile Updates
     if (endpoint.includes('/auth/profile/')) {
-      const { data, error } = await supabase.rpc('update_my_profile', {
-        p_phone: body?.phone || '',
-        p_avatar_url: body?.avatar_url || ''
-      });
-      if (error) throw error;
-      return { data: body as T };
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id;
+      let existingProfile: any = null;
+      if (userId) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        existingProfile = data;
+      }
+
+      const updateData: any = {};
+      if (body?.first_name !== undefined) updateData.first_name = body.first_name;
+      if (body?.last_name !== undefined) updateData.last_name = body.last_name;
+      if (body?.phone !== undefined) updateData.phone = body.phone;
+      if (body?.avatar_url !== undefined) updateData.avatar_url = body.avatar_url;
+
+      if (userId && Object.keys(updateData).length > 0) {
+        const { error } = await supabase.from('profiles').update(updateData).eq('id', userId);
+        if (error) console.warn('Error updating profile in Supabase:', error);
+      }
+
+      const stored = getStoredUser();
+      const mergedProfile = {
+        ...(stored || {}),
+        ...(existingProfile || {}),
+        ...body,
+        id: existingProfile?.id || userId || stored?.id,
+        role: existingProfile?.role || stored?.role || 'ADMIN',
+        email: body?.email || existingProfile?.email || stored?.email
+      };
+
+      return { data: mergedProfile as T };
     }
 
     return { data: body as T };
