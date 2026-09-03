@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ArrowRight, User, Lock, Eye, EyeOff, ShieldCheck, Ticket, Utensils, Wrench, ArrowLeft, Mail, Key } from 'lucide-react';
+import { ArrowRight, User, Lock, Eye, EyeOff, ShieldCheck, Ticket, Utensils, Wrench, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export const Login: React.FC = () => {
@@ -31,7 +31,6 @@ export const Login: React.FC = () => {
     setError('');
     try {
       const loggedInUser = await login(username.trim(), password);
-      // Explicit programmatic navigation based on role
       switch (loggedInUser?.role) {
         case 'ADMIN':
           navigate('/admin/dashboard', { replace: true });
@@ -78,7 +77,7 @@ export const Login: React.FC = () => {
       } 
       else if (forgotStep === 'otp') {
         if (!otp.trim()) throw new Error('Please enter the OTP.');
-        setForgotSuccess(''); // clear previous success message when moving to next step
+        setForgotSuccess('');
         setForgotStep('new-password');
       } 
       else if (forgotStep === 'new-password') {
@@ -115,33 +114,34 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] flex items-center justify-center p-0 md:p-6 font-sans relative overflow-hidden">
-      
-      {/* Decorative background shapes */}
-      <div className="absolute top-[-10%] left-[-5%] w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
-      <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-slate-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+    <div className="min-h-screen bg-white md:bg-[#f3f4f6] flex items-center justify-center p-0 md:p-6 font-sans relative overflow-y-auto">
+      {/* Decorative background shapes (Desktop only) */}
+      <div className="hidden md:block absolute top-[-10%] left-[-5%] w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+      <div className="hidden md:block absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-slate-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
 
-      <div className="w-full max-w-[1200px] bg-white md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden min-h-screen md:min-h-[760px] relative z-10">
-        
-        {/* Left Side - Login Form */}
-        <div className="w-full md:w-[45%] p-8 sm:p-12 lg:p-14 xl:p-16 flex flex-col justify-center relative bg-white min-h-screen md:min-h-0">
-          {/* Subtle dot pattern in the top right of the left panel */}
-          <div className="absolute top-0 right-0 w-32 h-32 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
+      <div className="w-full max-w-[1100px] min-h-screen md:min-h-[460px] md:h-[84vh] md:max-h-[680px] bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-2xl flex flex-col md:flex-row overflow-hidden relative z-10 my-auto border-0 md:border md:border-slate-100">
+        {/* Left Side - Login Form (Pixel-perfect match to screenshot) */}
+        <div className="w-full md:w-[48%] lg:w-[45%] p-6 sm:p-10 lg:p-12 flex flex-col justify-between relative bg-white min-h-screen md:min-h-0 overflow-y-auto">
+          {/* Top-Right Decorative Dot Pattern */}
+          <div 
+            className="absolute top-0 right-0 w-36 h-36 opacity-20 pointer-events-none" 
+            style={{ backgroundImage: 'radial-gradient(#64748b 1.5px, transparent 1.5px)', backgroundSize: '16px 16px' }}
+          />
 
-          <div className="w-full max-w-md mx-auto">
+          <div className="w-full max-w-md mx-auto my-auto flex flex-col justify-center">
             {/* Brand Logo */}
-            <div className="flex items-center mb-10 md:mb-12">
+            <div className="flex items-center justify-center md:justify-start -mt-3 sm:-mt-5 md:mt-0 mb-7 md:mb-6">
               <img 
                 src="/174df9_bfc0c62f53bf48b2a6941250cfbf8a02~mv2.avif" 
                 alt="AMC Logo" 
-                className="h-14 md:h-20 w-auto object-contain"
+                className="h-16 sm:h-26 md:h-20 w-auto object-contain"
               />
             </div>
 
             {/* Header */}
-            <div className="mb-8 relative z-10">
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-[#0B1437] tracking-tight mb-2.5">Welcome back</h1>
-              <p className="text-[15px] text-slate-500 font-medium">Sign in to access your institutional portal</p>
+            <div className="mb-7 md:mb-6 relative z-10">
+              <h1 className="text-3xl sm:text-4xl md:text-3xl font-extrabold text-[#0B1437] tracking-tight mb-2">Welcome back</h1>
+              <p className="text-sm text-slate-500 font-medium">Sign in to access your institutional portal</p>
             </div>
 
             {/* Flippable Container */}
@@ -152,272 +152,246 @@ export const Login: React.FC = () => {
                   transformStyle: 'preserve-3d', 
                   transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
                   position: 'relative',
-                  minHeight: '380px' // Keep a consistent height to prevent layout jumps
+                  minHeight: '290px'
                 }}
               >
-                
                 {/* FRONT FACE (Login Form) */}
                 <div 
-                  className={`absolute inset-0 w-full ${isFlipped ? 'pointer-events-none' : ''}`}
+                  className={`w-full ${isFlipped ? 'pointer-events-none opacity-0' : 'opacity-100'} transition-opacity duration-300`}
                   style={{ backfaceVisibility: 'hidden' }}
                 >
                   {error && (
-                    <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium">
+                    <div className="mb-5 p-3.5 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-medium">
                       {error}
                     </div>
                   )}
 
-            <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-                  Username / Enrollment ID / Email
-                </label>
-                <div className="relative">
-                  <User className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. admin, STU2026001, or email"
-                    className="w-full bg-white pl-12 pr-4 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm"
-                  />
-                </div>
-              </div>
+                  <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Username / Enrollment ID / Email
+                      </label>
+                      <div className="relative">
+                        <User className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="e.g. admin, STU2026001, or email"
+                          className="w-full bg-white pl-12 pr-4 py-3.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-xs"
+                        />
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-white pl-12 pr-12 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Password
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-white pl-12 pr-12 py-3.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
 
-              <div className="flex items-center justify-end pt-2 pb-2">
-                <button 
-                  type="button" 
-                  onClick={() => setIsFlipped(true)}
-                  className="text-sm font-bold text-[#0B1437] hover:underline cursor-pointer"
+                    <div className="flex items-center justify-end pt-1 pb-1">
+                      <button 
+                        type="button" 
+                        onClick={() => setIsFlipped(true)}
+                        className="text-sm font-bold text-[#0B1437] hover:underline cursor-pointer"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-4 rounded-2xl bg-[#0B1437] text-white font-bold text-sm hover:bg-[#111f54] transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      <span>{isLoading ? 'Authenticating...' : 'Sign in'}</span>
+                      {!isLoading && <ArrowRight className="w-4 h-4" />}
+                    </button>
+                  </form>
+                </div>
+
+                {/* BACK FACE (Forgot Password Form) */}
+                <div 
+                  className={`absolute inset-0 w-full ${!isFlipped ? 'pointer-events-none opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+                  style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
                 >
-                  Forgot password?
-                </button>
+                  <div className="flex items-center mb-4">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setForgotError('');
+                        setForgotSuccess('');
+                      }}
+                      className="p-1.5 -ml-1 text-slate-400 hover:text-slate-600 transition-colors rounded-full hover:bg-slate-100 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <h2 className="text-lg font-bold text-[#0B1437] ml-2">Reset Password</h2>
+                  </div>
+
+                  {forgotError && (
+                    <div className="mb-3 p-3 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-medium">
+                      {forgotError}
+                    </div>
+                  )}
+
+                  {forgotSuccess && (
+                    <div className="mb-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-medium">
+                      {forgotSuccess}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    {forgotStep === 'email' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                          Registered Email / Enrollment ID
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                          placeholder="student@amc.edu or USN"
+                          className="w-full bg-white px-4 py-3.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                        />
+                      </div>
+                    )}
+
+                    {forgotStep === 'otp' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                          6-Digit OTP Code
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          placeholder="123456"
+                          className="w-full bg-white px-4 py-3.5 rounded-2xl text-sm font-mono tracking-widest text-center border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                        />
+                      </div>
+                    )}
+
+                    {forgotStep === 'new-password' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                          New Password
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Minimum 6 characters"
+                          className="w-full bg-white px-4 py-3.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isProcessing}
+                      className="w-full py-4 rounded-2xl bg-[#0B1437] text-white font-bold text-sm hover:bg-[#111f54] cursor-pointer disabled:opacity-70"
+                    >
+                      {isProcessing ? 'Processing...' : forgotStep === 'email' ? 'Send Reset OTP' : forgotStep === 'otp' ? 'Verify OTP' : 'Update Password'}
+                    </button>
+                  </form>
+                </div>
               </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-4 rounded-xl bg-[#0B1437] text-white font-semibold text-sm hover:bg-[#111f54] transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <span>{isLoading ? 'Authenticating...' : 'Sign in'}</span>
-                {!isLoading && <ArrowRight className="w-4 h-4" />}
-              </button>
-            </form>
-          </div>
-
-          {/* BACK FACE (Forgot Password Form) */}
-          <div 
-            className={`absolute inset-0 w-full ${!isFlipped ? 'pointer-events-none' : ''}`}
-            style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-          >
-            <div className="flex items-center mb-6">
-              <button 
-                onClick={() => {
-                  setIsFlipped(false);
-                  setForgotError('');
-                  setForgotSuccess('');
-                }}
-                className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors rounded-full hover:bg-slate-100 cursor-pointer"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h2 className="text-xl font-bold text-[#0B1437] ml-2">Reset Password</h2>
             </div>
 
-            {forgotError && (
-              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium">
-                {forgotError}
+            {/* Bottom Footer Divider & Secure Access Note */}
+            <div className="mt-10 md:mt-8 pt-4">
+              <div className="relative flex items-center py-3 mb-4">
+                <div className="flex-grow border-t border-slate-200/80"></div>
+                <span className="flex-shrink-0 mx-4 text-xs font-semibold text-slate-400 tracking-wider">Secure Access</span>
+                <div className="flex-grow border-t border-slate-200/80"></div>
               </div>
-            )}
-            
-            {forgotSuccess && (
-              <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-100 text-green-600 text-sm font-medium">
-                {forgotSuccess}
+              
+              <div className="flex items-center justify-center gap-2 text-slate-400">
+                <ShieldCheck className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <p className="text-xs font-medium text-slate-500 text-center">
+                  Protected by institutional authentication & secure access control.
+                </p>
               </div>
-            )}
-
-            <form onSubmit={handleForgotPassword} className="space-y-5">
-              {forgotStep === 'email' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-                    Registered Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="email"
-                      required
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="e.g. name@university.edu"
-                      className="w-full bg-white pl-12 pr-4 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {forgotStep === 'otp' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-                    Enter OTP
-                  </label>
-                  <div className="relative">
-                    <Key className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      placeholder="Enter 6-digit OTP"
-                      className="w-full bg-white pl-12 pr-4 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm font-mono tracking-widest"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {forgotStep === 'new-password' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-white pl-12 pr-12 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isProcessing}
-                className="w-full py-4 mt-4 rounded-xl bg-[#0B1437] text-white font-semibold text-sm hover:bg-[#111f54] transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <span>
-                  {isProcessing 
-                    ? 'Processing...' 
-                    : forgotStep === 'email' 
-                      ? 'Send Reset OTP' 
-                      : forgotStep === 'otp' 
-                        ? 'Verify OTP' 
-                        : 'Update Password'}
-                </span>
-                {!isProcessing && <ArrowRight className="w-4 h-4" />}
-              </button>
-            </form>
-          </div>
-
-          </div> {/* End inner flip container */}
-        </div> {/* End outer perspective container */}
-
-            <div className="mt-10 md:mt-12">
-               <div className="relative flex items-center py-4 mb-4">
-                 <div className="flex-grow border-t border-slate-200"></div>
-                 <span className="flex-shrink-0 mx-4 text-xs font-semibold text-slate-400 tracking-wider">Secure Access</span>
-                 <div className="flex-grow border-t border-slate-200"></div>
-               </div>
-               
-               <div className="flex items-center justify-center gap-2 text-slate-500">
-                 <ShieldCheck className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                 <p className="text-[12px] font-medium whitespace-normal md:whitespace-nowrap text-center">
-                   Protected by institutional authentication & secure access control.
-                 </p>
-               </div>
             </div>
           </div>
         </div>
 
-        {/* Right Side - Image & Copy */}
-        <div className="hidden md:flex md:w-[55%] relative overflow-hidden bg-slate-900 flex-col justify-center p-12 lg:p-16">
+        {/* Right Side - Image & Copy (Desktop only) */}
+        <div className="hidden md:flex md:w-[52%] lg:w-[55%] relative overflow-hidden bg-slate-900 flex-col justify-end p-6 lg:p-8 min-h-0">
           <img 
             src="/9383bd80-46cc-46e9-b1b5-f95b936549aa.png" 
             alt="Campus Building" 
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 hover:scale-105"
           />
-          {/* Gentle Gradient Overlay for text readability, no mix-blend-multiply so image stays bright */}
+          {/* Gentle Gradient Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#061e47]/95 via-[#061e47]/30 to-transparent"></div>
           
           {/* Content Wrapper */}
-          <div className="relative z-10 w-full max-w-lg mt-auto mb-6">
-            <h2 className="text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-5 text-white drop-shadow-md">
+          <div className="relative z-10 w-full max-w-lg mb-1">
+            <h2 className="text-xl lg:text-3xl font-bold tracking-tight leading-tight mb-2 text-white drop-shadow-md">
               Streamline your<br />hostel experience.
             </h2>
-            <p className="text-[17px] text-blue-50 font-medium leading-relaxed mb-10 drop-shadow">
+            <p className="text-[11px] lg:text-xs text-blue-50 font-medium leading-relaxed mb-4 drop-shadow">
               Manage gate passes, room allocations, and maintenance requests seamlessly in one unified portal.
             </p>
 
             {/* Glassmorphism Feature Cards */}
-            <div className="grid grid-cols-3 gap-4">
-              
+            <div className="grid grid-cols-3 gap-2 lg:gap-2.5">
               {/* Card 1 */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-xl transition-all hover:bg-white/15">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mb-3">
-                  <Ticket className="w-5 h-5 text-white" />
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 shadow-lg transition-all hover:bg-white/15">
+                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center mb-2">
+                  <Ticket className="w-3.5 h-3.5 text-white" />
                 </div>
-                <h3 className="text-white font-bold text-sm mb-1.5">Gate Pass</h3>
-                <p className="text-blue-100 text-xs font-medium leading-snug opacity-90">Instant outing approvals</p>
+                <h3 className="text-white font-bold text-xs mb-0.5">Gate Pass</h3>
+                <p className="text-blue-100 text-[9px] lg:text-[10px] font-medium leading-tight opacity-90">Instant outing approvals</p>
               </div>
 
               {/* Card 2 */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-xl transition-all hover:bg-white/15">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mb-3">
-                  <Utensils className="w-5 h-5 text-white" />
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 shadow-lg transition-all hover:bg-white/15">
+                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center mb-2">
+                  <Utensils className="w-3.5 h-3.5 text-white" />
                 </div>
-                <h3 className="text-white font-bold text-sm mb-1.5">Meals</h3>
-                <p className="text-blue-100 text-xs font-medium leading-snug opacity-90">Daily menus & updates</p>
+                <h3 className="text-white font-bold text-xs mb-0.5">Meals</h3>
+                <p className="text-blue-100 text-[9px] lg:text-[10px] font-medium leading-tight opacity-90">Daily menus & updates</p>
               </div>
 
               {/* Card 3 */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-xl transition-all hover:bg-white/15">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mb-3">
-                  <Wrench className="w-5 h-5 text-white" />
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 shadow-lg transition-all hover:bg-white/15">
+                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center mb-2">
+                  <Wrench className="w-3.5 h-3.5 text-white" />
                 </div>
-                <h3 className="text-white font-bold text-sm mb-1.5">Issues</h3>
-                <p className="text-blue-100 text-xs font-medium leading-snug opacity-90">Quick maintenance requests</p>
+                <h3 className="text-white font-bold text-xs mb-0.5">Issues</h3>
+                <p className="text-blue-100 text-[9px] lg:text-[10px] font-medium leading-tight opacity-90">Quick maintenance requests</p>
               </div>
-
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
