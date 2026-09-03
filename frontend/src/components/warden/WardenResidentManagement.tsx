@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   Search,
   Eye,
-  X
+  X,
+  Building2
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
-import type { HostelStudent } from '../../types';
+import type { Hostel, HostelStudent } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
 import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
@@ -16,22 +19,49 @@ import {
 } from '../ui/select';
 
 export const WardenResidentManagement: React.FC = () => {
+  const { user } = useAuth();
+  const [hostels, setHostels] = useState<Hostel[]>([]);
+  const [selectedHostelId, setSelectedHostelId] = useState<string>('ALL');
   const [residents, setResidents] = useState<HostelStudent[]>([]);
   const [search, setSearch] = useState('');
   const [floorFilter, setFloorFilter] = useState('all');
   const [selectedStudent, setSelectedStudent] = useState<HostelStudent | null>(null);
 
   useEffect(() => {
+    loadAssignedHostels();
+  }, [user]);
+
+  const loadAssignedHostels = async () => {
+    try {
+      const assigned = await wardenService.getAssignedHostels(user?.id);
+      setHostels(assigned);
+      if (assigned.length === 1) {
+        setSelectedHostelId(String(assigned[0].id));
+      } else if (assigned.length > 1) {
+        setSelectedHostelId('ALL');
+      }
+    } catch (e) {
+      console.error('Failed to load assigned hostels', e);
+    }
+  };
+
+  useEffect(() => {
     fetchResidents();
-  }, [floorFilter]);
+  }, [floorFilter, selectedHostelId]);
 
   const fetchResidents = async () => {
     try {
-      const url = floorFilter === 'all'
-        ? '/warden/students/'
-        : `/warden/students/?floor=${floorFilter}`;
+      const params = new URLSearchParams();
+      if (floorFilter && floorFilter !== 'all') {
+        params.set('floor', floorFilter);
+      }
+      if (selectedHostelId && selectedHostelId !== 'ALL') {
+        params.set('hostel_id', selectedHostelId);
+      }
+      const qs = params.toString();
+      const url = qs ? `/warden/students/?${qs}` : '/warden/students/';
       const res = await apiClient.get<HostelStudent[]>(url);
-      setResidents(res.data);
+      setResidents(res.data || []);
     } catch (err) {
       console.error('Failed to load residents', err);
     }
@@ -39,14 +69,27 @@ export const WardenResidentManagement: React.FC = () => {
 
   const debouncedSearch = useDebounce(search, 300);
 
+  const currentHostel = hostels.find((h) => String(h.id) === selectedHostelId);
+  const assignedIds = hostels.map((h) => String(h.id));
+
   const filteredResidents = residents.filter((st) => {
+    if (selectedHostelId !== 'ALL') {
+      const stHostelId = String(st.hostel || (st.room_detail as any)?.hostel_id || '');
+      if (stHostelId !== selectedHostelId) return false;
+    } else if (hostels.length > 0) {
+      const stHostelId = String(st.hostel || (st.room_detail as any)?.hostel_id || '');
+      if (!assignedIds.includes(stHostelId)) return false;
+    }
+
     if (!debouncedSearch) return true;
     const q = debouncedSearch.toLowerCase();
     const roomNo = (st.room_detail?.no || st.room_no || st.room_number || '').toLowerCase();
+    const hostelName = (st.hostel_name || '').toLowerCase();
     return (
       st.student_name.toLowerCase().includes(q) ||
       st.enrollment_no.toLowerCase().includes(q) ||
       roomNo.includes(q) ||
+      hostelName.includes(q) ||
       (st.guardian_phone && st.guardian_phone.includes(q))
     );
   });
@@ -59,8 +102,41 @@ export const WardenResidentManagement: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Residents Directory</h1>
           <p className="text-xs text-slate-500 mt-0.5">View and manage resident students allotted in your block</p>
         </div>
-        <div className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 self-start sm:self-auto">
-          {filteredResidents.length} Active Residents
+
+        <div className="flex flex-wrap items-center gap-3">
+          {hostels.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Hostel:</span>
+              </span>
+              <div className="w-56">
+                <Select
+                  value={selectedHostelId}
+                  onValueChange={(val) => {
+                    setSelectedHostelId(val);
+                    setFloorFilter('all');
+                  }}
+                >
+                  <SelectTrigger className="h-9 rounded-full bg-white text-xs font-semibold shadow-xs border-slate-200">
+                    <SelectValue placeholder="Select Hostel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All My Assigned Hostels</SelectItem>
+                    {hostels.map((h) => (
+                      <SelectItem key={h.id} value={String(h.id)}>
+                        {h.name} ({h.gender})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          <div className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+            {filteredResidents.length} Active Residents
+          </div>
         </div>
       </div>
 
@@ -83,11 +159,17 @@ export const WardenResidentManagement: React.FC = () => {
               <SelectValue placeholder="Select Floor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Floors</SelectItem>
-              <SelectItem value="1">Floor 1</SelectItem>
-              <SelectItem value="2">Floor 2</SelectItem>
-              <SelectItem value="3">Floor 3</SelectItem>
-              <SelectItem value="4">Floor 4</SelectItem>
+              <SelectItem value="all">
+                All Floors {currentHostel ? `(${currentHostel.floor_count || (currentHostel as any).floors || 4} Floors)` : ''}
+              </SelectItem>
+              {Array.from(
+                { length: currentHostel ? (currentHostel.floor_count || (currentHostel as any).floors || 4) : 4 },
+                (_, i) => i + 1
+              ).map((fl) => (
+                <SelectItem key={fl} value={String(fl)}>
+                  Floor {fl}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -118,9 +200,16 @@ export const WardenResidentManagement: React.FC = () => {
                         <p className="text-[11px] text-slate-400 font-medium">{st.enrollment_no}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Room {roomNo}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Room {roomNo}
+                      </span>
+                      {st.hostel_name && (
+                        <span className="text-[9px] font-semibold text-slate-500 truncate max-w-[120px]">
+                          {st.hostel_name}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-1.5 text-xs text-slate-600 mb-4">

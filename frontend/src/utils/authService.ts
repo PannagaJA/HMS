@@ -51,7 +51,8 @@ export const apiClient = {
     if (endpoint.includes('/warden/students/')) {
       const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
       const floorFilter = urlParams.get('floor') || 'all';
-      const residents = await wardenService.getResidents(floorFilter);
+      const hostelId = urlParams.get('hostel_id') || urlParams.get('hostel') || undefined;
+      const residents = await wardenService.getResidents(floorFilter, hostelId);
       return { data: residents as T };
     }
     if (endpoint.includes('/hms/students/')) {

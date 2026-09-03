@@ -142,11 +142,14 @@ export const wardenService = {
   },
 
   /**
-   * Fetch warden's residents with floor filtering
+   * Fetch warden's residents with floor and hostel filtering
    */
-  async getResidents(floorFilter = 'all'): Promise<HostelStudent[]> {
+  async getResidents(floorFilter = 'all', hostelId?: string | number): Promise<HostelStudent[]> {
     const students = await adminService.getStudents();
     let allotted = students.filter((s) => s.room_allotted);
+    if (hostelId && hostelId !== 'all' && hostelId !== 'ALL') {
+      allotted = allotted.filter((s) => String(s.hostel) === String(hostelId) || String((s.room_detail as any)?.hostel_id) === String(hostelId));
+    }
     if (floorFilter && floorFilter !== 'all') {
       allotted = allotted.filter((s) => String(s.room_detail?.floor) === String(floorFilter));
     }
