@@ -165,12 +165,12 @@ export const securityService = {
         const deadline = new Date(`${activePass.expected_return_date}T${activePass.expected_return_time}`);
         if (!isNaN(deadline.getTime()) && new Date() > deadline) {
           mapped.status = 'expired';
-          supabase
-            .from('gate_passes')
-            .update({ status: 'expired', updated_at: new Date().toISOString() })
-            .eq('id', activePass.id)
-            .then(() => {})
-            .catch(() => {});
+          Promise.resolve(
+            supabase
+              .from('gate_passes')
+              .update({ status: 'expired', updated_at: new Date().toISOString() })
+              .eq('id', activePass.id)
+          ).catch(() => {});
         }
       } catch (e) {
         // ignore date parsing error

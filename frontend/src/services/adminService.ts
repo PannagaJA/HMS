@@ -113,32 +113,6 @@ export const adminService = {
     });
   },
 
-  async createHostel(payload: any) {
-    const { data, error } = await supabase.from('hostels').insert({
-      name: payload.name,
-      gender: payload.gender,
-      floor_count: payload.floor_count,
-      address: payload.address,
-      warden_id: payload.warden ? String(payload.warden) : null,
-      caretaker_id: payload.caretaker ? String(payload.caretaker) : null
-    }).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  async updateHostel(id: string | number, payload: any) {
-    const { data, error } = await supabase.from('hostels').update({
-      name: payload.name,
-      gender: payload.gender,
-      floor_count: payload.floor_count,
-      address: payload.address,
-      warden_id: payload.warden ? String(payload.warden) : null,
-      caretaker_id: payload.caretaker ? String(payload.caretaker) : null
-    }).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-
   async createHostel(payload: { name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }) {
     let createdHostel: any = null;
     try {
