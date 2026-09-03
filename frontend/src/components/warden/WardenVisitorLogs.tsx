@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { VisitorLog, HostelStudent } from '../../types';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
 } from '../ui/select';
 
 export const WardenVisitorLogs: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [logs, setLogs] = useState<VisitorLog[]>([]);
   const [students, setStudents] = useState<HostelStudent[]>([]);
   const [search, setSearch] = useState('');
@@ -44,33 +46,42 @@ export const WardenVisitorLogs: React.FC = () => {
       const res = await apiClient.get<HostelStudent[]>('/warden/students/');
       setStudents(res.data);
     } catch (err) {
-      console.error('Failed to load students for visitor register', err);
+      console.error('Failed to load students', err);
     }
   };
 
   const handleCreateLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const st = students.find((s) => s.id === Number(formData.student));
+      const st = students.find((s) => String(s.id) === String(formData.student));
       await apiClient.post('/warden/visitor-logs/', {
         ...formData,
         student: Number(formData.student),
         hostel: st?.hostel || st?.room_detail?.id || 1,
       });
+      showSuccess(`Visitor ${formData.visitor_name} check-in registered.`);
       setShowAddModal(false);
       setFormData({ student: '', visitor_name: '', mobile_number: '', purpose: '' });
       fetchVisitorLogs();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to register visitor');
+      showError(err.response?.data?.error || 'Failed to register visitor');
     }
   };
 
   const handleCheckout = async (id: number) => {
+    const isConfirmed = await confirm({
+      title: 'Checkout Visitor',
+      message: 'Mark this visitor as checked out of the hostel premises?',
+      confirmText: 'Check Out'
+    });
+    if (!isConfirmed) return;
+
     try {
       await apiClient.post(`/warden/visitor-logs/${id}/checkout/`);
+      showSuccess('Visitor checked out successfully.');
       fetchVisitorLogs();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to checkout visitor');
+      showError(err.response?.data?.error || 'Failed to checkout visitor');
     }
   };
 

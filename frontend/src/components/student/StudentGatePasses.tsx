@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import type { GatePassRequest } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
 import { formatTime12 } from '../../lib/utils';
 
 export const StudentGatePasses: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedQRPass, setSelectedQRPass] = useState<GatePassRequest | null>(null);
@@ -52,11 +54,12 @@ export const StudentGatePasses: React.FC = () => {
         expected_return_date: returnDate,
         expected_return_time: returnTime,
       });
+      showSuccess('Gate pass application submitted for warden review.');
       setShowApplyModal(false);
       setReason('');
       fetchPasses();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to submit gate pass');
+      showError(err.response?.data?.error || 'Failed to submit gate pass');
     } finally {
       setIsSubmitting(false);
     }

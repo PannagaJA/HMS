@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BedDouble, Plus, X, Layers, Building2, Pencil, Trash2 } from 'lucide-react';
 import type { HostelRoom, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 } from '../ui/select';
 
 export const RoomManagement: React.FC = () => {
+  const { showSuccess, showError, showWarning, confirm } = useNotification();
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
@@ -102,7 +104,7 @@ export const RoomManagement: React.FC = () => {
   const handleCreateSingleRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!singleRoomNo.trim() || !singleHostelId) {
-      alert('Please fill in room number and select a hostel');
+      showWarning('Please fill in room number and select a hostel');
       return;
     }
 
@@ -118,11 +120,12 @@ export const RoomManagement: React.FC = () => {
         vacant: true,
       });
 
+      showSuccess(`Room ${singleRoomNo.trim()} created successfully.`);
       setShowSingleRoomModal(false);
       fetchRooms(singleHostelId);
     } catch (err: any) {
       console.error('Failed to create room:', err);
-      alert('Failed to create room: ' + (err.response?.data?.detail || err.response?.data?.no?.[0] || err.message));
+      showError('Failed to create room: ' + (err.response?.data?.detail || err.response?.data?.no?.[0] || err.message));
     } finally {
       setIsSubmittingSingle(false);
     }
@@ -163,12 +166,13 @@ export const RoomManagement: React.FC = () => {
         room_type: editRoomType,
       });
 
+      showSuccess(`Room ${editingRoom.no} updated successfully.`);
       setShowEditRoomModal(false);
       setEditingRoom(null);
       fetchRooms(selectedHostelId);
     } catch (err: any) {
       console.error('Failed to update room:', err);
-      alert('Failed to update room: ' + (err.response?.data?.detail || err.message));
+      showError('Failed to update room: ' + (err.response?.data?.detail || err.message));
     } finally {
       setIsSubmittingEdit(false);
     }
@@ -176,14 +180,21 @@ export const RoomManagement: React.FC = () => {
 
   const handleDeleteRoom = async (e: React.MouseEvent, roomId: number, roomNo: string) => {
     e.stopPropagation();
-    if (!confirm(`Are you sure you want to delete Room ${roomNo}?`)) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Room',
+      message: `Are you sure you want to delete Room ${roomNo}? This will decommission the room and all its physical bed slots.`,
+      confirmText: 'Delete Room',
+      isDestructive: true
+    });
+    if (!isConfirmed) return;
 
     try {
       await apiClient.delete(`/hms/rooms/${roomId}/`);
+      showSuccess(`Room ${roomNo} deleted successfully.`);
       fetchRooms(selectedHostelId);
     } catch (err: any) {
       console.error('Failed to delete room:', err);
-      alert('Failed to delete room: ' + (err.response?.data?.detail || err.message));
+      showError('Failed to delete room: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -197,10 +208,11 @@ export const RoomManagement: React.FC = () => {
         capacity: bulkCapacity,
         room_type: bulkRoomType,
       });
+      showSuccess(`Successfully generated ${bulkCount} rooms on Floor ${bulkFloor}.`);
       setShowBulkModal(false);
       fetchRooms(selectedHostelId);
-    } catch (err) {
-      alert('Failed to generate rooms');
+    } catch (err: any) {
+      showError(err.response?.data?.detail || 'Failed to generate rooms');
     }
   };
 

@@ -3,6 +3,7 @@ import { Plus, X, History, Clock } from 'lucide-react';
 import type { IssueTicket } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -12,6 +13,7 @@ import {
 } from '../ui/select';
 
 export const StudentIssues: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [issues, setIssues] = useState<IssueTicket[]>([]);
   const [showRaiseModal, setShowRaiseModal] = useState(false);
   const [selectedUpdatesIssue, setSelectedUpdatesIssue] = useState<IssueTicket | null>(null);
@@ -27,7 +29,7 @@ export const StudentIssues: React.FC = () => {
 
   const fetchIssues = async () => {
     try {
-      const res = await apiClient.get<IssueTicket[]>('/hms/issues/');
+      const res = await apiClient.get<IssueTicket[]>('/student/issues/');
       setIssues(res.data);
     } catch (err) {
       console.error('Failed to load issues', err);
@@ -44,6 +46,7 @@ export const StudentIssues: React.FC = () => {
         description: issueDesc,
         priority: issuePriority,
       });
+      showSuccess(`Support ticket "${issueTitle}" logged successfully.`);
       setShowRaiseModal(false);
       setIssueTitle('');
       setIssueDesc('');
@@ -52,7 +55,7 @@ export const StudentIssues: React.FC = () => {
       const errorMsg = err.response?.data?.detail 
         || (typeof err.response?.data === 'object' ? JSON.stringify(err.response?.data) : err.response?.data)
         || 'Failed to report maintenance issue';
-      alert(errorMsg);
+      showError(errorMsg);
     } finally {
       setIsSubmitting(false);
     }

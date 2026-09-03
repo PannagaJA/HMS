@@ -3,8 +3,10 @@ import { Calendar } from 'lucide-react';
 import type { Menu, MealType } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { formatTimeRange12 } from '../../lib/utils';
+import { useNotification } from '../../context/NotificationContext';
 
 export const StudentMeals: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [todayMenu, setTodayMenu] = useState<{ day_name: string; meals: Menu[] } | null>(null);
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
   const [skippedMealId, setSkippedMealId] = useState<number | null>(null);
@@ -27,6 +29,13 @@ export const StudentMeals: React.FC = () => {
   };
 
   const handleSkipMeal = async (mealTypeId: number) => {
+    const isConfirmed = await confirm({
+      title: 'Confirm Meal Opt-Out',
+      message: 'Opt out of this meal? The applicable rebate will be credited to your monthly billing cycle.',
+      confirmText: 'Opt Out'
+    });
+    if (!isConfirmed) return;
+
     try {
       const today = new Date().toISOString().split('T')[0];
       await apiClient.post('/mess/skips/', {
@@ -36,9 +45,10 @@ export const StudentMeals: React.FC = () => {
         reason: 'Student opted out from portal',
       });
       setSkippedMealId(mealTypeId);
-      alert('Meal skip successfully recorded. Rebate will be credited to your monthly billing.');
+      showSuccess('Meal skip recorded. Rebate will be credited to your monthly billing.');
     } catch (err: any) {
       setSkippedMealId(mealTypeId);
+      showError(err.response?.data?.detail || 'Failed to record meal skip');
     }
   };
 

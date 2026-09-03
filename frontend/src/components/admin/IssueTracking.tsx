@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Building2, History, X, Clock } from 'lucide-react';
 import type { HostelIssue, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 } from '../ui/select';
 
 export const IssueTracking: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [issues, setIssues] = useState<HostelIssue[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
@@ -49,11 +51,12 @@ export const IssueTracking: React.FC = () => {
         status: updateStatus,
         note: updateNote,
       });
+      showSuccess(`Issue #${selectedIssue.id} status updated to ${updateStatus}.`);
       setSelectedIssue(null);
       setUpdateNote('');
       fetchIssuesAndHostels();
     } catch (err) {
-      alert('Failed to update maintenance issue');
+      showError('Failed to update maintenance issue');
     }
   };
 

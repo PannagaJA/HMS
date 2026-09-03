@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed } from 'lucide-react';
 import type { MealType, MenuItem, Menu } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ const DAYS = [
 ];
 
 export const MenuManagement: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -94,23 +96,32 @@ export const MenuManagement: React.FC = () => {
     try {
       if (editingItem) {
         await apiClient.put(`/hms/menu-items/${editingItem.id}/`, payload);
+        showSuccess(`Food item "${itemName}" updated successfully.`);
       } else {
         await apiClient.post('/hms/menu-items/', payload);
+        showSuccess(`Food item "${itemName}" created successfully.`);
       }
       setShowItemModal(false);
       fetchData();
     } catch (err) {
-      alert('Failed to save food item');
+      showError('Failed to save food item');
     }
   };
 
   const handleDeleteItem = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this food item?')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Food Item',
+      message: 'Are you sure you want to delete this food item? It will be unlinked from current dining schedules.',
+      confirmText: 'Delete Item',
+      isDestructive: true
+    });
+    if (!isConfirmed) return;
     try {
       await apiClient.delete(`/hms/menu-items/${id}/`);
+      showSuccess('Food item removed successfully.');
       fetchData();
     } catch (err) {
-      alert('Failed to delete food item');
+      showError('Failed to delete food item');
     }
   };
 
@@ -124,8 +135,11 @@ export const MenuManagement: React.FC = () => {
     const existing = menus.find(
       (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(mealType.id)
     );
-    const existingIds = (existing?.items || []).map((i: any) => (typeof i === 'number' ? i : i.id));
-    setSelectedItemIds(existingIds);
+    if (existing) {
+      setSelectedItemIds(existing.items || ((existing as any).menu_items || []).map((i: any) => i.id));
+    } else {
+      setSelectedItemIds([]);
+    }
     setShowConfigureModal(true);
   };
 
@@ -133,24 +147,12 @@ export const MenuManagement: React.FC = () => {
     e.preventDefault();
     if (!targetMealType) return;
     setIsSaving(true);
-
     try {
-      // 1. Update meal slot timing (e.g. 07:30 - 09:30)
-      const formattedStart = slotStartTime.length === 5 ? `${slotStartTime}:00` : slotStartTime;
-      const formattedEnd = slotEndTime.length === 5 ? `${slotEndTime}:00` : slotEndTime;
-
-      await apiClient.patch(`/hms/meal-types/${targetMealType.id}/`, {
-        start_time: formattedStart,
-        end_time: formattedEnd,
-      });
-
-      // 2. Update menu items for this day and slot
       const existing = menus.find(
         (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type) === Number(targetMealType.id)
       );
-
       const payload = {
-        day_of_week: activeDay,
+        day_of_week: Number(activeDay),
         meal_type: targetMealType.id,
         items: selectedItemIds,
       };
@@ -160,11 +162,12 @@ export const MenuManagement: React.FC = () => {
       } else {
         await apiClient.post('/hms/menus/', payload);
       }
+      showSuccess(`Dining schedule updated for ${targetMealType.name}.`);
       setShowConfigureModal(false);
       fetchData();
     } catch (err: any) {
       console.error('Failed to update dining slot:', err);
-      alert('Failed to update dining menu slot: ' + (err.response?.data?.detail || err.message));
+      showError('Failed to update dining menu slot: ' + (err.response?.data?.detail || err.message));
     } finally {
       setIsSaving(false);
     }

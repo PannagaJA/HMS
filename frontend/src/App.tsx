@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Login } from './components/auth/Login';
 
@@ -33,59 +34,61 @@ import { StudentMeals } from './components/student/StudentMeals';
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Auth Route */}
-          <Route path="/login" element={<Login />} />
+      <NotificationProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Auth Route */}
+            <Route path="/login" element={<Login />} />
 
-          {/* Root Redirect to Login */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+            {/* Root Redirect to Login */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
 
-          {/* Admin Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/hostels" element={<HostelManagement />} />
-            <Route path="/admin/rooms" element={<RoomManagement />} />
-            <Route path="/admin/students" element={<StudentManagement />} />
-            <Route path="/admin/staff" element={<StaffManagement />} />
-            <Route path="/admin/menu" element={<MenuManagement />} />
-            <Route path="/admin/issues" element={<IssueTracking />} />
-            <Route path="/admin/gatepass" element={<WardenGatePassManagement />} />
-            <Route path="/admin/visitors" element={<VisitorLogsManagement />} />
-            <Route path="/admin/profile" element={<HMSProfile />} />
-          </Route>
+            {/* Admin Protected Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/hostels" element={<HostelManagement />} />
+              <Route path="/admin/rooms" element={<RoomManagement />} />
+              <Route path="/admin/students" element={<StudentManagement />} />
+              <Route path="/admin/staff" element={<StaffManagement />} />
+              <Route path="/admin/menu" element={<MenuManagement />} />
+              <Route path="/admin/issues" element={<IssueTracking />} />
+              <Route path="/admin/gatepass" element={<WardenGatePassManagement />} />
+              <Route path="/admin/visitors" element={<VisitorLogsManagement />} />
+              <Route path="/admin/profile" element={<HMSProfile />} />
+            </Route>
 
-          {/* Warden Protected Routes (Dedicated Modules matching reference architecture) */}
-          <Route element={<ProtectedRoute allowedRoles={['WARDEN']} />}>
-            <Route path="/warden/dashboard" element={<WardenDashboard />} />
-            <Route path="/warden/residents" element={<WardenResidentManagement />} />
-            <Route path="/warden/menu" element={<MenuManagement />} />
-            <Route path="/warden/passes" element={<WardenGatePassManagement />} />
-            <Route path="/warden/issues" element={<WardenIssueManagement />} />
-            <Route path="/warden/visitors" element={<WardenVisitorLogs />} />
-            <Route path="/warden/profile" element={<HMSProfile />} />
-          </Route>
+            {/* Warden Protected Routes (Dedicated Modules matching reference architecture) */}
+            <Route element={<ProtectedRoute allowedRoles={['WARDEN']} />}>
+              <Route path="/warden/dashboard" element={<WardenDashboard />} />
+              <Route path="/warden/residents" element={<WardenResidentManagement />} />
+              <Route path="/warden/menu" element={<MenuManagement />} />
+              <Route path="/warden/passes" element={<WardenGatePassManagement />} />
+              <Route path="/warden/issues" element={<WardenIssueManagement />} />
+              <Route path="/warden/visitors" element={<WardenVisitorLogs />} />
+              <Route path="/warden/profile" element={<HMSProfile />} />
+            </Route>
 
-          {/* Security Guard Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['SECURITY']} />}>
-            <Route path="/security/scanner" element={<GatePassScanner />} />
-            <Route path="/security/visitors" element={<VisitorLogsManagement />} />
-            <Route path="/security/profile" element={<HMSProfile />} />
-          </Route>
+            {/* Security Guard Protected Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['SECURITY']} />}>
+              <Route path="/security/scanner" element={<GatePassScanner />} />
+              <Route path="/security/visitors" element={<VisitorLogsManagement />} />
+              <Route path="/security/profile" element={<HMSProfile />} />
+            </Route>
 
-          {/* Student Resident Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
-            <Route path="/student/dashboard" element={<StudentDashboard />} />
-            <Route path="/student/passes" element={<StudentGatePasses />} />
-            <Route path="/student/issues" element={<StudentIssues />} />
-            <Route path="/student/meals" element={<StudentMeals />} />
-            <Route path="/student/profile" element={<HMSProfile />} />
-          </Route>
+            {/* Student Resident Protected Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
+              <Route path="/student/dashboard" element={<StudentDashboard />} />
+              <Route path="/student/passes" element={<StudentGatePasses />} />
+              <Route path="/student/issues" element={<StudentIssues />} />
+              <Route path="/student/meals" element={<StudentMeals />} />
+              <Route path="/student/profile" element={<HMSProfile />} />
+            </Route>
 
-          {/* Catch-all Wildcard Route */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Catch-all Wildcard Route */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, LogOut, Download, Building2 } from 'lucide-react';
 import type { VisitorLog, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 } from '../ui/select';
 
 export const VisitorLogsManagement: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [logs, setLogs] = useState<VisitorLog[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
@@ -26,6 +28,7 @@ export const VisitorLogsManagement: React.FC = () => {
   const [enrollmentNo, setEnrollmentNo] = useState('');
   const [relation, setRelation] = useState('Parent');
   const [purpose, setPurpose] = useState('');
+  const [modalHostelId, setModalHostelId] = useState('');
 
   useEffect(() => {
     fetchLogsAndHostels();
@@ -37,13 +40,13 @@ export const VisitorLogsManagement: React.FC = () => {
         apiClient.get<VisitorLog[]>('/hms/visitor-logs/'),
         apiClient.get<Hostel[]>('/hms/hostels/'),
       ]);
-      setLogs(logsRes.data);
-      setHostels(hostelsRes.data);
-      if (hostelsRes.data.length > 0 && !selectedHostelId) {
-        setSelectedHostelId(String(hostelsRes.data[0].id));
+      setLogs(logsRes.data || []);
+      setHostels(hostelsRes.data || []);
+      if (hostelsRes.data?.length > 0 && !modalHostelId) {
+        setModalHostelId(String(hostelsRes.data[0].id));
       }
     } catch (err) {
-      console.error('Failed to load visitor logs or hostels', err);
+      console.error('Failed to load visitor logs:', err);
     }
   };
 
@@ -51,9 +54,9 @@ export const VisitorLogsManagement: React.FC = () => {
     e.preventDefault();
     try {
       await apiClient.post('/hms/visitor-logs/', {
+        hostel: Number(modalHostelId),
         visitor_name: visitorName,
         visitor_phone: visitorPhone,
-        mobile_number: visitorPhone,
         student_name: studentName,
         student_room: studentRoom,
         enrollment_no: enrollmentNo,
@@ -61,6 +64,7 @@ export const VisitorLogsManagement: React.FC = () => {
         purpose,
         status: 'CHECKED_IN',
       });
+      showSuccess(`Visitor ${visitorName} checked in successfully.`);
       setShowAddModal(false);
       setVisitorName('');
       setVisitorPhone('');
@@ -70,17 +74,24 @@ export const VisitorLogsManagement: React.FC = () => {
       setPurpose('');
       fetchLogsAndHostels();
     } catch (err) {
-      alert('Failed to register visitor check-in');
+      showError('Failed to register visitor check-in');
     }
   };
 
   const handleCheckOut = async (id: number) => {
-    if (!confirm('Mark visitor as checked out?')) return;
+    const isConfirmed = await confirm({
+      title: 'Checkout Visitor',
+      message: 'Are you sure you want to mark this visitor as checked out?',
+      confirmText: 'Check Out'
+    });
+    if (!isConfirmed) return;
+
     try {
       await apiClient.post(`/hms/visitor-logs/${id}/checkout/`);
+      showSuccess('Visitor checked out successfully.');
       fetchLogsAndHostels();
     } catch (err) {
-      alert('Failed to check out visitor');
+      showError('Failed to check out visitor');
     }
   };
 

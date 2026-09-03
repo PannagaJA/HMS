@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Phone, Mail } from 'lucide-react';
 import type { HostelWarden, HostelCaretaker } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 
 export const StaffManagement: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [wardens, setWardens] = useState<HostelWarden[]>([]);
   const [caretakers, setCaretakers] = useState<HostelCaretaker[]>([]);
   const [activeTab, setActiveTab] = useState<'wardens' | 'caretakers'>('wardens');
@@ -69,9 +71,11 @@ export const StaffManagement: React.FC = () => {
       if (editingStaffId) {
         const endpoint = activeTab === 'wardens' ? `/hms/wardens/${editingStaffId}/` : `/hms/caretakers/${editingStaffId}/`;
         await apiClient.put(endpoint, payload);
+        showSuccess(`${activeTab === 'wardens' ? 'Warden' : 'Caretaker'} updated successfully.`);
       } else {
         const endpoint = activeTab === 'wardens' ? '/hms/wardens/' : '/hms/caretakers/';
         await apiClient.post(endpoint, payload);
+        showSuccess(`New ${activeTab === 'wardens' ? 'warden' : 'caretaker'} profile registered.`);
       }
 
       setShowModal(false);
@@ -89,18 +93,26 @@ export const StaffManagement: React.FC = () => {
         err.response?.data?.email?.[0] ||
         err.response?.data?.phone?.[0] ||
         'Failed to save staff member';
-      alert(errorMsg);
+      showError(errorMsg);
     }
   };
 
   const handleDelete = async (id: number | string) => {
-    if (!confirm('Are you sure you want to remove this staff profile?')) return;
+    const isConfirmed = await confirm({
+      title: 'Remove Staff Member',
+      message: `Are you sure you want to remove this ${activeTab === 'wardens' ? 'warden' : 'caretaker'} profile? This action will unbind their administrative access.`,
+      confirmText: 'Remove Profile',
+      isDestructive: true
+    });
+    if (!isConfirmed) return;
+
     const endpoint = activeTab === 'wardens' ? `/hms/wardens/${id}/` : `/hms/caretakers/${id}/`;
     try {
       await apiClient.delete(endpoint);
+      showSuccess('Staff profile deleted successfully.');
       await fetchStaff();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to delete staff member');
+      showError(err.response?.data?.detail || 'Failed to delete staff member');
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, Download } from 'lucide-react';
 import type { HostelStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 } from '../ui/select';
 
 export const StudentManagement: React.FC = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [students, setStudents] = useState<HostelStudent[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
@@ -26,37 +28,43 @@ export const StudentManagement: React.FC = () => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    if (selectedHostelId) {
-      apiClient.get<HostelRoom[]>(`/hms/rooms/?hostel=${selectedHostelId}`).then((res) => {
-        setRooms(res.data.filter((r: HostelRoom) => r.vacant || (r.occupied_count ?? 0) < r.capacity));
-      });
-    }
-  }, [selectedHostelId]);
-
   const fetchData = async () => {
     try {
-      const [studentsRes, hostelsRes] = await Promise.all([
+      const [sRes, hRes] = await Promise.all([
         apiClient.get<HostelStudent[]>('/hms/students/'),
         apiClient.get<Hostel[]>('/hms/hostels/'),
       ]);
-      setStudents(studentsRes.data);
-      setHostels(hostelsRes.data);
+      setStudents(sRes.data || []);
+      setHostels(hRes.data || []);
     } catch (err) {
-      console.error('Failed to load students data', err);
+      console.error('Failed to fetch data', err);
     }
   };
 
-  const handleOpenAllocate = (student: HostelStudent) => {
+  const handleOpenAllocate = async (student: HostelStudent) => {
     setSelectedStudent(student);
-    const initialHostel = hostels[0]?.id ? String(hostels[0].id) : '';
-    setSelectedHostelId(initialHostel);
+    setSelectedHostelId('');
     setSelectedRoomId('');
-    setBedNo('1');
+    setRooms([]);
     setShowAllocateModal(true);
   };
 
-  const handleAllocateSubmit = async (e: React.FormEvent) => {
+  const handleHostelChange = async (hostelId: string) => {
+    setSelectedHostelId(hostelId);
+    setSelectedRoomId('');
+    if (hostelId) {
+      try {
+        const res = await apiClient.get<HostelRoom[]>(`/hms/hostels/${hostelId}/rooms/`);
+        setRooms(res.data.filter((r) => r.vacant));
+      } catch (err) {
+        console.error('Failed to fetch rooms', err);
+      }
+    } else {
+      setRooms([]);
+    }
+  };
+
+  const handleAllocate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudent || !selectedRoomId) return;
 
@@ -66,20 +74,29 @@ export const StudentManagement: React.FC = () => {
         room_id: Number(selectedRoomId),
         bed_number: bedNo,
       });
+      showSuccess(`Room allocated successfully to ${selectedStudent.student_name}.`);
       setShowAllocateModal(false);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to allocate room');
+      showError(err.response?.data?.error || 'Failed to allocate room');
     }
   };
 
   const handleVacate = async (studentId: number) => {
-    if (!confirm('Are you sure you want to vacate this student from their assigned room?')) return;
+    const isConfirmed = await confirm({
+      title: 'Vacate Resident',
+      message: 'Are you sure you want to vacate this student from their assigned room? This will release their physical bed slot.',
+      confirmText: 'Vacate Room',
+      isDestructive: true
+    });
+    if (!isConfirmed) return;
+
     try {
       await apiClient.post(`/hms/students/${studentId}/vacate_room/`);
+      showSuccess('Student room vacated successfully.');
       fetchData();
     } catch (err) {
-      alert('Failed to vacate student');
+      showError('Failed to vacate student');
     }
   };
 
@@ -323,7 +340,7 @@ export const StudentManagement: React.FC = () => {
               Assigning room for: <strong className="text-slate-800">{selectedStudent.student_name}</strong> ({selectedStudent.enrollment_no})
             </p>
 
-            <form onSubmit={handleAllocateSubmit} className="space-y-4">
+            <form onSubmit={handleAllocate} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Hostel Block</label>
                 <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
