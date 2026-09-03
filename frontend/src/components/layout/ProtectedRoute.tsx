@@ -87,12 +87,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#F0FDF9]">
+    <div className="flex h-screen h-[100dvh] w-screen overflow-hidden bg-[#F0FDF9]">
       {/* Left Sidebar */}
       <Sidebar isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-screen h-[100dvh] overflow-hidden">
         {/* Unified Top App Bar */}
         <div className="h-16 px-4 sm:px-6 lg:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between shrink-0 z-30">
           
@@ -160,7 +160,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         </div>
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-16 sm:pb-8">
           <Outlet />
         </main>
       </div>
