@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { SmtpClient } from "https://deno.land/x/smtp/mod.ts";
+import { Resend } from 'npm:resend'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -71,15 +71,14 @@ serve(async (req: Request) => {
       });
     }
 
-    // 3. Send Email via Gmail SMTP
-    const smtpUsername = Deno.env.get('GMAIL_SMTP_USERNAME');
-    const smtpPassword = Deno.env.get('GMAIL_SMTP_PASSWORD');
+    // 3. Send Email via Resend
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
 
-    if (!smtpUsername || !smtpPassword) {
-      console.warn("SMTP credentials not provided. User created but email not sent.");
+    if (!resendApiKey) {
+      console.warn("RESEND_API_KEY not provided. User created but email not sent.");
       return new Response(JSON.stringify({ 
         success: true, 
-        message: "User created, but email was skipped due to missing SMTP secrets.",
+        message: "User created, but email was skipped due to missing Resend API key.",
         userId 
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -87,16 +86,10 @@ serve(async (req: Request) => {
       });
     }
 
-    const client = new SmtpClient();
-    await client.connectTLS({
-      hostname: "smtp.gmail.com",
-      port: 465,
-      username: smtpUsername,
-      password: smtpPassword,
-    });
+    const resend = new Resend(resendApiKey);
 
     const htmlContent = `
-      <div style="font-family: sans-serif; max-w-lg margin: 0 auto; padding: 20px;">
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2>Welcome to the Hostel Management System, ${name}!</h2>
         <p>You have been enrolled as a <strong>${role}</strong>.</p>
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -113,15 +106,17 @@ serve(async (req: Request) => {
       </div>
     `;
 
-    await client.send({
-      from: `HMS Admin <${smtpUsername}>`,
-      to: email,
+    const { data: emailData, error: emailError } = await resend.emails.send({
+      from: 'Hostel Management System <onboarding@resend.dev>',
+      to: [email],
       subject: "Your HMS Account Credentials & Temporary Password",
-      content: "auto",
       html: htmlContent,
     });
 
-    await client.close();
+    if (emailError) {
+      console.error("Resend error:", emailError);
+      throw new Error("Failed to send email via Resend.");
+    }
 
     return new Response(JSON.stringify({ 
       success: true, 
