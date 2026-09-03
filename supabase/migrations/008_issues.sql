@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.issues (
     category TEXT NOT NULL CHECK (category IN ('PLUMBING', 'ELECTRICAL', 'CARPENTRY', 'WIFI', 'CLEANLINESS', 'OTHER')),
     title TEXT NOT NULL,
     description TEXT NOT NULL,
+    image_url TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'waiting_for_workers', 'completed')),
     resolved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

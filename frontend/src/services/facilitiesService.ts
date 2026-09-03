@@ -144,17 +144,28 @@ export const issueService = {
       return [];
     }
 
-    return (issues || []).map((i: any) => ({
-      ...i,
-      student_name: i.student?.student_name || 'Resident',
-      enrollment_no: i.student?.enrollment_no || 'N/A',
-      hostel_name: i.hostel?.name || 'Block A',
-      room_no: i.room?.no || '101',
-      updates: i.updates || []
-    }));
+    return (issues || []).map((i: any) => {
+      let img = i.image_url;
+      let desc = i.description || '';
+      if (!img && desc.includes('[ATTACHMENT]:')) {
+        const parts = desc.split('[ATTACHMENT]:');
+        desc = parts[0].trim();
+        img = parts[1].trim();
+      }
+      return {
+        ...i,
+        description: desc,
+        image_url: img,
+        student_name: i.student?.student_name || 'Resident',
+        enrollment_no: i.student?.enrollment_no || 'N/A',
+        hostel_name: i.hostel?.name || 'Block A',
+        room_no: i.room?.no || '101',
+        updates: i.updates || []
+      };
+    });
   },
 
-  async createIssue(payload: { title: string; category: string; description: string; priority?: string }) {
+  async createIssue(payload: { title: string; category: string; description: string; priority?: string; image_url?: string }) {
     const { data: user } = await supabase.auth.getUser();
     const userId = user.user?.id;
 
@@ -195,7 +206,7 @@ export const issueService = {
       hostelId = hostelId || defaultRoom?.hostel_id || 1;
     }
 
-    const insertBody = {
+    const insertBody: any = {
       student_id: student.id,
       hostel_id: hostelId,
       room_id: roomId,
@@ -205,19 +216,36 @@ export const issueService = {
       status: 'pending'
     };
 
-    const { data, error } = await supabase
+    if (payload.image_url) {
+      insertBody.image_url = payload.image_url;
+    }
+
+    let insertRes = await supabase
       .from('issues')
       .insert(insertBody)
       .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no), updates:issue_updates(*)')
       .single();
 
-    if (error) {
-      console.error('Supabase issue create error:', error);
-      throw error;
+    // Fallback if image_url column is not yet present on remote DB
+    if (insertRes.error && (insertRes.error.message?.includes('image_url') || insertRes.error.code === '42703')) {
+      delete insertBody.image_url;
+      insertBody.description = `${payload.description}\n\n[ATTACHMENT]: ${payload.image_url}`;
+      insertRes = await supabase
+        .from('issues')
+        .insert(insertBody)
+        .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no), updates:issue_updates(*)')
+        .single();
     }
 
+    if (insertRes.error) {
+      console.error('Supabase issue create error:', insertRes.error);
+      throw insertRes.error;
+    }
+
+    const data = insertRes.data;
     return {
       ...data,
+      image_url: data.image_url || payload.image_url,
       student_name: data.student?.student_name || 'Resident',
       enrollment_no: data.student?.enrollment_no || 'N/A',
       hostel_name: data.hostel?.name || 'Block A',
