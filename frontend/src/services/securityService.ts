@@ -158,6 +158,25 @@ export const securityService = {
       room_no: activePass.room?.no || '101'
     };
 
+    // Check if pass is expired: student never exited and curfew deadline has passed
+    const isExitDone = Boolean(activePass.actual_exit_time);
+    if (!isExitDone && activePass.expected_return_date && activePass.expected_return_time) {
+      try {
+        const deadline = new Date(`${activePass.expected_return_date}T${activePass.expected_return_time}`);
+        if (!isNaN(deadline.getTime()) && new Date() > deadline) {
+          mapped.status = 'expired';
+          supabase
+            .from('gate_passes')
+            .update({ status: 'expired', updated_at: new Date().toISOString() })
+            .eq('id', activePass.id)
+            .then(() => {})
+            .catch(() => {});
+        }
+      } catch (e) {
+        // ignore date parsing error
+      }
+    }
+
     if (activePass.status === 'pending') {
       throw new Error(`Gate pass for student "${studentName}" (${enrollmentNo}) is currently PENDING Warden approval.`);
     }
@@ -180,10 +199,23 @@ export const securityService = {
       .eq('id', passId)
       .maybeSingle();
 
+    const stName = currentPass?.student?.student_name || 'Resident';
+    const enNo = currentPass?.student?.enrollment_no || 'N/A';
+
     if (currentPass && currentPass.status !== 'approved') {
-      const stName = currentPass.student?.student_name || 'Resident';
-      const enNo = currentPass.student?.enrollment_no || 'N/A';
       throw new Error(`Cannot stamp movement: Gate pass for ${stName} (${enNo}) is currently ${currentPass.status.toUpperCase()}. It must be approved by the Warden first.`);
+    }
+
+    // Check if exit is attempted after return deadline has passed
+    if (movementType === 'EXIT' && currentPass && !currentPass.actual_exit_time && currentPass.expected_return_date && currentPass.expected_return_time) {
+      try {
+        const deadline = new Date(`${currentPass.expected_return_date}T${currentPass.expected_return_time}`);
+        if (!isNaN(deadline.getTime()) && new Date() > deadline) {
+          throw new Error(`Cannot mark Gate Exit: Outing deadline for ${stName} (${enNo}) expired on ${currentPass.expected_return_date} at ${currentPass.expected_return_time}. Student must request a new pass.`);
+        }
+      } catch (e) {
+        // fallback
+      }
     }
 
     let resultData: any = null;

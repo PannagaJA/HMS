@@ -164,6 +164,39 @@ export const GatePassScanner: React.FC = () => {
   const isExitDone = Boolean(scannedPass?.actual_exit_time);
   const isEntryDone = Boolean(scannedPass?.actual_entry_time);
 
+  const isPassExpired = (() => {
+    if (!scannedPass) return false;
+    if (scannedPass.status === 'expired') return true;
+    if (!isExitDone && scannedPass.expected_return_date && scannedPass.expected_return_time) {
+      try {
+        const deadlineStr = `${scannedPass.expected_return_date}T${scannedPass.expected_return_time}`;
+        const deadline = new Date(deadlineStr);
+        if (!isNaN(deadline.getTime()) && new Date() > deadline) {
+          return true;
+        }
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  })();
+
+  const isOverdueReturn = (() => {
+    if (!scannedPass || !isExitDone || isEntryDone) return false;
+    if (scannedPass.expected_return_date && scannedPass.expected_return_time) {
+      try {
+        const deadlineStr = `${scannedPass.expected_return_date}T${scannedPass.expected_return_time}`;
+        const deadline = new Date(deadlineStr);
+        if (!isNaN(deadline.getTime()) && new Date() > deadline) {
+          return true;
+        }
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  })();
+
   const displayedList = activeTab === 'outside' 
     ? activeOutsidePasses 
     : recentCompletedPasses;
@@ -324,6 +357,40 @@ export const GatePassScanner: React.FC = () => {
             <strong>Approved Purpose:</strong> "{scannedPass.reason || scannedPass.purpose || 'Personal'}"
           </div>
 
+          {isPassExpired && (
+            <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-3">
+                <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="font-bold text-rose-950 block text-sm">⛔ QR Code Expired (Curfew Passed)</span>
+                  <span className="text-[11px] text-rose-800 font-normal">
+                    This gate pass expired on {scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time) || 'curfew'}. The student never exited during the validity window. Departure is not allowed; the resident must obtain a fresh gate pass.
+                  </span>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-rose-200 text-rose-950 font-bold text-[10px] uppercase tracking-wider shrink-0">
+                Expired Pass
+              </span>
+            </div>
+          )}
+
+          {isOverdueReturn && (
+            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="font-bold text-amber-950 block text-sm">⚠️ Overdue Curfew Return</span>
+                  <span className="text-[11px] text-amber-800 font-normal">
+                    Student was scheduled to return by {scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time)}. Late return flag will be recorded on Check In.
+                  </span>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] uppercase tracking-wider shrink-0">
+                Late Entry
+              </span>
+            </div>
+          )}
+
           {isEntryDone && (
             <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
               <div className="flex items-start sm:items-center gap-3">
@@ -345,23 +412,35 @@ export const GatePassScanner: React.FC = () => {
             <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-600">
               <span>Transit State:</span>
               <span>
-                {isEntryDone ? '🟢 Full Movement Completed' : isExitDone ? '🟡 Student Outside Campus' : '⚪ Inside Hostel (Awaiting Departure)'}
+                {isPassExpired 
+                  ? '🔴 EXPIRED - Outing Window Closed' 
+                  : isEntryDone 
+                  ? '🟢 Full Movement Completed' 
+                  : isOverdueReturn 
+                  ? '⚠️ Student Outside Campus (OVERDUE RETURN)' 
+                  : isExitDone 
+                  ? '🟡 Student Outside Campus' 
+                  : '⚪ Inside Hostel (Awaiting Departure)'}
               </span>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <button
                 onClick={() => setPendingConfirmAction('EXIT')}
-                disabled={isExitDone || actionLoading}
-                className={`w-full sm:flex-1 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                  isExitDone
+                disabled={isExitDone || isPassExpired || actionLoading}
+                className={`w-full sm:flex-1 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                  isPassExpired
+                    ? 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'
+                    : isExitDone
                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                    : 'bg-[#0D3833] text-white hover:bg-[#064E3B] shadow-md hover:shadow-lg'
+                    : 'bg-[#0D3833] text-white hover:bg-[#064E3B] shadow-md hover:shadow-lg cursor-pointer'
                 }`}
               >
                 <ArrowRight className="w-4 h-4" />
                 <span>
-                  {isExitDone 
+                  {isPassExpired
+                    ? '⛔ Departure Expired (Not Permitted)'
+                    : isExitDone 
                     ? `Exit Done (${new Date(scannedPass.actual_exit_time!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` 
                     : '1. Scan & Mark Gate Exit (Check Out)'}
                 </span>
