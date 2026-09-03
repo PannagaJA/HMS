@@ -196,6 +196,18 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Warden Creation
+    if (endpoint.includes('/hms/wardens/')) {
+      const data = await adminService.createWarden({
+        name: body?.name,
+        email: body?.email,
+        phone: body?.phone,
+        designation: body?.designation,
+        experience: body?.experience || 0
+      });
+      return { data: data as T };
+    }
+
     // Caretaker Creation
     if (endpoint.includes('/hms/caretakers/')) {
       const data = await adminService.createCaretaker({
@@ -252,11 +264,40 @@ export const apiClient = {
     return { data: {} as T };
   },
 
-  async put<T = any>(_endpoint: string, body: any) {
+  async put<T = any>(endpoint: string, body: any) {
+    // Update Warden
+    if (endpoint.includes('/hms/wardens/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const wardenId = parts[parts.indexOf('wardens') + 1] || body?.id;
+      const data = await adminService.updateWarden(wardenId, body);
+      return { data: data as T };
+    }
+    // Update Caretaker
+    if (endpoint.includes('/hms/caretakers/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const caretakerId = parts[parts.indexOf('caretakers') + 1] || body?.id;
+      const data = await adminService.updateCaretaker(caretakerId, body);
+      return { data: data as T };
+    }
     return { data: body as T };
   },
 
   async patch<T = any>(endpoint: string, body: any) {
+    // Update Warden
+    if (endpoint.includes('/hms/wardens/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const wardenId = parts[parts.indexOf('wardens') + 1] || body?.id;
+      const data = await adminService.updateWarden(wardenId, body);
+      return { data: data as T };
+    }
+    // Update Caretaker
+    if (endpoint.includes('/hms/caretakers/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const caretakerId = parts[parts.indexOf('caretakers') + 1] || body?.id;
+      const data = await adminService.updateCaretaker(caretakerId, body);
+      return { data: data as T };
+    }
+
     // Room Resizing via RPC
     if (endpoint.includes('/hms/rooms/')) {
       const parts = endpoint.split('/');
@@ -296,10 +337,18 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Warden Delete
+    if (endpoint.includes('/hms/wardens/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const wardenId = parts[parts.indexOf('wardens') + 1];
+      await adminService.deleteWarden(wardenId);
+      return { data: { success: true } as T };
+    }
+
     // Caretaker Delete
     if (endpoint.includes('/hms/caretakers/')) {
-      const parts = endpoint.split('/');
-      const caretakerId = parseInt(parts[parts.indexOf('caretakers') + 1] || '0', 10);
+      const parts = endpoint.split('/').filter(Boolean);
+      const caretakerId = parts[parts.indexOf('caretakers') + 1];
       await adminService.deleteCaretaker(caretakerId);
       return { data: { success: true } as T };
     }

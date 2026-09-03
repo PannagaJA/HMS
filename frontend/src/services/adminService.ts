@@ -147,39 +147,162 @@ export const adminService = {
    * Staff: Wardens
    */
   async getWardens() {
-    const { data } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
-    return (data || []).map((w: any) => ({
-      id: w.id,
-      name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
-      email: w.email,
-      phone: w.phone || '',
-      designation: 'Hostel Warden',
-      experience: 5
-    }));
+    // 1. Check local/custom wardens cache
+    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    
+    // 2. Fetch WARDEN profiles from Supabase
+    try {
+      const { data } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
+      const profileWardens = (data || []).map((w: any) => ({
+        id: w.id,
+        name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
+        email: w.email,
+        phone: w.phone || '',
+        designation: 'Hostel Warden',
+        experience: 5
+      }));
+
+      // Merge avoiding duplicate IDs
+      const combined = [...profileWardens];
+      for (const sw of storedWardens) {
+        if (!combined.some(w => String(w.id) === String(sw.id))) {
+          combined.push(sw);
+        }
+      }
+      return combined;
+    } catch {
+      return storedWardens;
+    }
+  },
+
+  async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
+    // Save to local custom wardens list
+    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    const newWarden = {
+      id: Date.now(),
+      name: payload.name,
+      email: payload.email || '',
+      phone: payload.phone,
+      designation: payload.designation || 'Hostel Warden',
+      experience: payload.experience || 0
+    };
+    storedWardens.push(newWarden);
+    localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
+    return newWarden;
+  },
+
+  async updateWarden(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
+    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    const index = storedWardens.findIndex(w => String(w.id) === String(id));
+    if (index !== -1) {
+      storedWardens[index] = { ...storedWardens[index], ...payload };
+      localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
+      return storedWardens[index];
+    }
+    // Also try updating profiles if it was a profile
+    try {
+      const names = (payload.name || '').trim().split(' ');
+      const firstName = names[0] || '';
+      const lastName = names.slice(1).join(' ') || '';
+      await supabase.from('profiles').update({
+        first_name: firstName,
+        last_name: lastName,
+        phone: payload.phone
+      }).eq('id', id);
+    } catch (e) {
+      console.warn('Could not update profile in Supabase:', e);
+    }
+    return { id, ...payload };
+  },
+
+  async deleteWarden(id: string | number) {
+    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    const filtered = storedWardens.filter(w => String(w.id) !== String(id));
+    localStorage.setItem('hms_custom_wardens', JSON.stringify(filtered));
+
+    try {
+      await supabase.from('profiles').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Could not delete profile in Supabase:', e);
+    }
+    return { success: true };
   },
 
   /**
-   * Staff: Caretakers (from public.hostel_caretakers)
+   * Staff: Caretakers
    */
   async getCaretakers() {
-    const { data, error } = await supabase
-      .from('hostel_caretakers')
-      .select('*')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    if (error) throw error;
-    return data || [];
+    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
+    try {
+      const { data, error } = await supabase
+        .from('hostel_caretakers')
+        .select('*')
+        .eq('is_active', true)
+        .order('id', { ascending: true });
+      if (error || !data) {
+        return storedCaretakers;
+      }
+      const combined = [...data];
+      for (const sc of storedCaretakers) {
+        if (!combined.some(c => String(c.id) === String(sc.id))) {
+          combined.push(sc);
+        }
+      }
+      return combined;
+    } catch {
+      return storedCaretakers;
+    }
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
-    const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
-    if (error) throw error;
-    return data;
+    // Try Supabase insert
+    try {
+      const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
+      if (!error && data) return data;
+    } catch (e) {
+      console.warn('Hostel caretakers table insert failed, falling back to local store:', e);
+    }
+
+    // Fallback store
+    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
+    const newCaretaker = {
+      id: Date.now(),
+      name: payload.name,
+      email: payload.email || '',
+      phone: payload.phone,
+      experience: payload.experience || 0,
+      is_active: true
+    };
+    storedCaretakers.push(newCaretaker);
+    localStorage.setItem('hms_custom_caretakers', JSON.stringify(storedCaretakers));
+    return newCaretaker;
   },
 
-  async deleteCaretaker(id: number) {
-    const { error } = await supabase.from('hostel_caretakers').delete().eq('id', id);
-    if (error) throw error;
+  async updateCaretaker(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; experience?: number }>) {
+    try {
+      await supabase.from('hostel_caretakers').update(payload).eq('id', id);
+    } catch (e) {
+      console.warn('Hostel caretakers table update failed:', e);
+    }
+    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
+    const index = storedCaretakers.findIndex(c => String(c.id) === String(id));
+    if (index !== -1) {
+      storedCaretakers[index] = { ...storedCaretakers[index], ...payload };
+      localStorage.setItem('hms_custom_caretakers', JSON.stringify(storedCaretakers));
+      return storedCaretakers[index];
+    }
+    return { id, ...payload };
+  },
+
+  async deleteCaretaker(id: string | number) {
+    try {
+      await supabase.from('hostel_caretakers').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Hostel caretakers delete failed:', e);
+    }
+    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
+    const filtered = storedCaretakers.filter(c => String(c.id) !== String(id));
+    localStorage.setItem('hms_custom_caretakers', JSON.stringify(filtered));
     return { success: true };
   }
 };

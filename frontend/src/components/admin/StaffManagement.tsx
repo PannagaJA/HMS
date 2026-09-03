@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Phone, Mail } from 'lucide-react';
+import { Plus, Trash2, Edit2, Phone, Mail } from 'lucide-react';
 import type { HostelWarden, HostelCaretaker } from '../../types';
 import { apiClient } from '../../api/apiClient';
 
@@ -8,6 +8,7 @@ export const StaffManagement: React.FC = () => {
   const [caretakers, setCaretakers] = useState<HostelCaretaker[]>([]);
   const [activeTab, setActiveTab] = useState<'wardens' | 'caretakers'>('wardens');
   const [showModal, setShowModal] = useState(false);
+  const [editingStaffId, setEditingStaffId] = useState<number | string | null>(null);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -25,16 +26,35 @@ export const StaffManagement: React.FC = () => {
         apiClient.get<HostelWarden[]>('/hms/wardens/'),
         apiClient.get<HostelCaretaker[]>('/hms/caretakers/'),
       ]);
-      setWardens(wRes.data);
-      setCaretakers(cRes.data);
+      setWardens(wRes.data || []);
+      setCaretakers(cRes.data || []);
     } catch (err) {
       console.error('Failed to load staff list', err);
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const openCreateModal = () => {
+    setEditingStaffId(null);
+    setName('');
+    setEmail('');
+    setPhone('');
+    setDesignation('');
+    setExperience(2);
+    setShowModal(true);
+  };
+
+  const openEditModal = (staff: any) => {
+    setEditingStaffId(staff.id);
+    setName(staff.name || '');
+    setEmail(staff.email || '');
+    setPhone(staff.phone || '');
+    setDesignation(staff.designation || '');
+    setExperience(Number(staff.experience) || 2);
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const endpoint = activeTab === 'wardens' ? '/hms/wardens/' : '/hms/caretakers/';
     try {
       const payload: any = {
         name,
@@ -45,31 +65,40 @@ export const StaffManagement: React.FC = () => {
       if (activeTab === 'wardens') {
         payload.designation = designation || 'Hostel Warden';
       }
-      await apiClient.post(endpoint, payload);
+
+      if (editingStaffId) {
+        const endpoint = activeTab === 'wardens' ? `/hms/wardens/${editingStaffId}/` : `/hms/caretakers/${editingStaffId}/`;
+        await apiClient.put(endpoint, payload);
+      } else {
+        const endpoint = activeTab === 'wardens' ? '/hms/wardens/' : '/hms/caretakers/';
+        await apiClient.post(endpoint, payload);
+      }
+
       setShowModal(false);
+      setEditingStaffId(null);
       setName('');
       setEmail('');
       setPhone('');
       setDesignation('');
       setExperience(2);
-      fetchStaff();
+      await fetchStaff();
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.detail ||
         err.response?.data?.name?.[0] ||
         err.response?.data?.email?.[0] ||
         err.response?.data?.phone?.[0] ||
-        'Failed to add staff member';
+        'Failed to save staff member';
       alert(errorMsg);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
     if (!confirm('Are you sure you want to remove this staff profile?')) return;
     const endpoint = activeTab === 'wardens' ? `/hms/wardens/${id}/` : `/hms/caretakers/${id}/`;
     try {
       await apiClient.delete(endpoint);
-      fetchStaff();
+      await fetchStaff();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to delete staff member');
     }
@@ -84,7 +113,7 @@ export const StaffManagement: React.FC = () => {
           <p className="text-sm text-slate-500 mt-0.5">Manage residential wardens, block caretakers, and supervision staff</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openCreateModal}
           className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -117,7 +146,7 @@ export const StaffManagement: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {(activeTab === 'wardens' ? wardens : caretakers).map((staff) => (
+        {(activeTab === 'wardens' ? wardens : caretakers).map((staff: any) => (
           <div
             key={staff.id}
             className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
@@ -125,16 +154,16 @@ export const StaffManagement: React.FC = () => {
             <div>
               <div className="flex items-start justify-between mb-4">
                 <div className="w-12 h-12 rounded-full bg-[#E0E7FF] text-indigo-950 flex items-center justify-center font-bold text-base">
-                  {staff.name[0]}
+                  {staff.name ? staff.name[0] : 'S'}
                 </div>
                 <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-                  {staff.experience || (staff as any).experience_years || 0} YRS EXP
+                  {staff.experience || staff.experience_years || 0} YRS EXP
                 </span>
               </div>
 
               <h3 className="text-base font-bold text-slate-900">{staff.name}</h3>
               <p className="text-xs text-slate-400 mb-4">
-                {(staff as HostelWarden).designation || (activeTab === 'wardens' ? 'Hostel Warden' : 'Residential Caretaker')}
+                {staff.designation || (activeTab === 'wardens' ? 'Hostel Warden' : 'Residential Caretaker')}
               </p>
 
               <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3 mb-4">
@@ -149,7 +178,14 @@ export const StaffManagement: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => openEditModal(staff)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                title="Edit staff details"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
               <button
                 onClick={() => handleDelete(staff.id)}
                 className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
@@ -166,11 +202,11 @@ export const StaffManagement: React.FC = () => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">
-              Add New {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}
+              {editingStaffId ? 'Edit' : 'Add New'} {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}
             </h3>
             <p className="text-xs text-slate-500 mb-5">Enter staff contact information and experience credentials.</p>
 
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
                 <input
@@ -179,7 +215,7 @@ export const StaffManagement: React.FC = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Dr. Rajesh Sharma"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
                 />
               </div>
 
@@ -191,7 +227,7 @@ export const StaffManagement: React.FC = () => {
                     value={designation}
                     onChange={(e) => setDesignation(e.target.value)}
                     placeholder="e.g. Senior Warden - Block A"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
                   />
                 </div>
               )}
@@ -207,7 +243,7 @@ export const StaffManagement: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="9876543210"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
                   />
                 </div>
                 <div>
@@ -217,7 +253,7 @@ export const StaffManagement: React.FC = () => {
                     min={0}
                     value={experience}
                     onChange={(e) => setExperience(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
                   />
                 </div>
               </div>
@@ -229,7 +265,7 @@ export const StaffManagement: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@university.edu"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
                 />
               </div>
 
@@ -245,7 +281,7 @@ export const StaffManagement: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
                 >
-                  Save Staff Member
+                  {editingStaffId ? 'Update Staff Member' : 'Save Staff Member'}
                 </button>
               </div>
             </form>
