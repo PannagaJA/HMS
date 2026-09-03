@@ -35,6 +35,58 @@ export const wardenService = {
   },
 
   /**
+   * Fetch scoped hostels assigned to the warden
+   */
+  async getAssignedHostels(userId?: string) {
+    let resolvedUserId = userId;
+    if (!resolvedUserId) {
+      const { data: authData } = await supabase.auth.getUser();
+      resolvedUserId = authData?.user?.id;
+    }
+    if (!resolvedUserId) return [];
+
+    // 1. Primary: Check authoritative assignments table
+    const { data: assignments } = await supabase
+      .from('warden_hostel_assignments')
+      .select('hostel_id, hostel:hostels(*)')
+      .eq('warden_profile_id', resolvedUserId);
+
+    let managedHostels = (assignments || []).map((a: any) => a.hostel).filter(Boolean);
+
+    // 2. Secondary: Check direct warden_id on hostels table in Supabase
+    const { data: directHostels } = await supabase
+      .from('hostels')
+      .select('*')
+      .eq('is_active', true)
+      .eq('warden_id', resolvedUserId);
+
+    if (directHostels && directHostels.length > 0) {
+      for (const dh of directHostels) {
+        if (!managedHostels.some(h => String(h.id) === String(dh.id))) {
+          managedHostels.push(dh);
+        }
+      }
+    }
+
+    // 3. Only if completely empty in DB (e.g. offline mock testing): check localStorage with exact ID match
+    if (managedHostels.length === 0) {
+      try {
+        const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
+        const matched = localHostels.filter((lh: any) => {
+          return lh.is_active !== false && String(lh.warden || lh.warden_id || '') === String(resolvedUserId);
+        });
+        if (matched.length > 0) {
+          managedHostels = matched;
+        }
+      } catch (e) {
+        console.warn('Error reading local hostels:', e);
+      }
+    }
+
+    return managedHostels;
+  },
+
+  /**
    * Fetch warden's residents with floor filtering
    */
   async getResidents(floorFilter = 'all'): Promise<HostelStudent[]> {

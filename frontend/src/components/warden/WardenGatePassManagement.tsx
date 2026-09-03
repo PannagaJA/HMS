@@ -13,7 +13,12 @@ import {
   SelectValue,
 } from '../ui/select';
 
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
+import { adminService } from '../../services/adminService';
+
 export const WardenGatePassManagement: React.FC = () => {
+  const { user } = useAuth();
   const { showSuccess, showError } = useNotification();
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
@@ -22,24 +27,53 @@ export const WardenGatePassManagement: React.FC = () => {
   const [actionModalPass, setActionModalPass] = useState<GatePassRequest | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
   const [actionNote, setActionNote] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchGatePassesAndHostels();
-  }, []);
+  }, [user]);
 
   const fetchGatePassesAndHostels = async () => {
+    setLoading(true);
     try {
-      const [passesRes, hostelsRes] = await Promise.all([
-        apiClient.get<GatePassRequest[]>('/security/gate-passes/'),
-        apiClient.get<Hostel[]>('/hms/hostels/'),
-      ]);
-      setPasses(passesRes.data);
-      setHostels(hostelsRes.data);
-      if (hostelsRes.data.length > 0 && !selectedHostelId) {
-        setSelectedHostelId(String(hostelsRes.data[0].id));
+      let hostList: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        hostList = await wardenService.getAssignedHostels(user.id);
+      } else {
+        hostList = await adminService.getHostels();
+      }
+
+      const passesRes = await apiClient.get<GatePassRequest[]>('/security/gate-passes/');
+      let allPasses = passesRes.data || [];
+
+      // If user is a warden, strictly scope gate passes to their assigned hostels only
+      if (user?.role === 'WARDEN') {
+        const assignedIds = hostList.map((h) => String(h.id));
+        const assignedNames = hostList.map((h) => h.name.toLowerCase());
+        allPasses = allPasses.filter((p) => {
+          const passHostelId = String(p.hostel || (p as any).hostel_id || '');
+          const passHostelName = (p.hostel_name || '').toLowerCase();
+          return assignedIds.includes(passHostelId) || assignedNames.some(name => passHostelName.includes(name));
+        });
+      }
+
+      setPasses(allPasses);
+      setHostels(hostList);
+
+      if (hostList.length > 0) {
+        setSelectedHostelId((prev) => {
+          if (prev && (prev === 'ALL' || hostList.some((h) => String(h.id) === prev))) {
+            return prev;
+          }
+          return String(hostList[0].id);
+        });
+      } else {
+        setSelectedHostelId('');
       }
     } catch (err) {
       console.error('Failed to load gate passes or hostels', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,23 +82,28 @@ export const WardenGatePassManagement: React.FC = () => {
     if (!actionModalPass) return;
 
     try {
-      await apiClient.post(`/security/gate-passes/${actionModalPass.id}/warden_action/`, {
-        action: actionType,
-        note: actionNote,
-      });
+      await wardenService.actionGatePass(actionModalPass.id, actionType, actionNote);
       showSuccess(`Gate pass for ${actionModalPass.student_name} ${actionType === 'approve' ? 'approved' : 'rejected'}.`);
       setActionModalPass(null);
       setActionNote('');
       fetchGatePassesAndHostels();
     } catch (err: any) {
-      showError(err.response?.data?.error || 'Action failed');
+      showError(err.message || err.response?.data?.error || 'Action failed');
     }
   };
 
   // 1. Filter by Selected Hostel first
   const hostelFilteredPasses = passes.filter((p) => {
     if (!selectedHostelId) return false;
-    if (selectedHostelId === 'ALL') return true;
+    if (selectedHostelId === 'ALL') {
+      if (user?.role === 'WARDEN') {
+        const assignedIds = hostels.map((h) => String(h.id));
+        const assignedNames = hostels.map((h) => h.name.toLowerCase());
+        return assignedIds.includes(String(p.hostel || (p as any).hostel_id || '')) ||
+               assignedNames.some((name) => (p.hostel_name || '').toLowerCase().includes(name));
+      }
+      return true;
+    }
 
     const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
     return (
@@ -105,7 +144,12 @@ export const WardenGatePassManagement: React.FC = () => {
                 <SelectValue placeholder="Choose hostel block" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All Hostel Blocks</SelectItem>
+                {user?.role === 'ADMIN' && (
+                  <SelectItem value="ALL">All Hostel Blocks</SelectItem>
+                )}
+                {user?.role === 'WARDEN' && hostels.length > 1 && (
+                  <SelectItem value="ALL">All My Assigned Hostels</SelectItem>
+                )}
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
                     {h.name}
@@ -157,14 +201,26 @@ export const WardenGatePassManagement: React.FC = () => {
         </div>
       </div>
 
-      {!selectedHostelId ? (
+      {hostels.length === 0 ? (
+        <div className="bg-amber-50 p-12 rounded-3xl border border-amber-200 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto border border-amber-300">
+            <Building2 className="w-6 h-6 text-amber-700" />
+          </div>
+          <h3 className="text-base font-bold text-amber-950">No Hostels Assigned</h3>
+          <p className="text-xs text-amber-800 max-w-sm mx-auto">
+            {user?.role === 'WARDEN' 
+              ? 'You are not assigned to any hostel block yet. Please contact the administrator to assign your block.'
+              : 'No hostel blocks found. Please create a hostel block first.'}
+          </p>
+        </div>
+      ) : !selectedHostelId ? (
         <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-900 flex items-center justify-center mx-auto border border-teal-200">
             <Building2 className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">Select a Hostel Block</h3>
+          <h3 className="text-base font-bold text-slate-800">Select an Assigned Hostel Block</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Choose a hostel block from the dropdown above to review and process student gate pass approvals.
+            Choose one of your assigned hostel blocks from the dropdown above to review student gate pass approvals.
           </p>
         </div>
       ) : (
