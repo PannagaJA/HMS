@@ -88,6 +88,7 @@ export const StaffManagement: React.FC = () => {
       await fetchStaff();
     } catch (err: any) {
       const errorMsg =
+        err.message ||
         err.response?.data?.detail ||
         err.response?.data?.name?.[0] ||
         err.response?.data?.email?.[0] ||

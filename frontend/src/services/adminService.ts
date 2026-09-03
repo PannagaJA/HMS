@@ -519,18 +519,24 @@ export const adminService = {
       localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
       return storedWardens[index];
     }
-    // Also try updating profiles if it was a profile
-    try {
-      const names = (payload.name || '').trim().split(' ');
-      const firstName = names[0] || '';
-      const lastName = names.slice(1).join(' ') || '';
-      await supabase.from('profiles').update({
-        first_name: firstName,
-        last_name: lastName,
-        phone: payload.phone
-      }).eq('id', id);
-    } catch (e) {
-      console.warn('Could not update profile in Supabase:', e);
+    // Only query Supabase profiles table if ID is a valid UUID
+    const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isUuid) {
+      try {
+        const names = (payload.name || '').trim().split(' ');
+        const firstName = names[0] || '';
+        const lastName = names.slice(1).join(' ') || '';
+        const { error } = await supabase.from('profiles').update({
+          first_name: firstName,
+          last_name: lastName,
+          phone: payload.phone
+        }).eq('id', id);
+        if (error) {
+          console.warn('Could not update profile in Supabase:', error);
+        }
+      } catch (e) {
+        console.warn('Could not update profile in Supabase:', e);
+      }
     }
     return { id, ...payload };
   },
@@ -540,89 +546,81 @@ export const adminService = {
     const filtered = storedWardens.filter(w => String(w.id) !== String(id));
     localStorage.setItem('hms_custom_wardens', JSON.stringify(filtered));
 
-    try {
-      await supabase.from('profiles').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Could not delete profile in Supabase:', e);
+    // Only query Supabase profiles table if ID is a valid UUID
+    const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isUuid) {
+      try {
+        // Clear warden assignments first
+        await supabase.from('warden_hostel_assignments').delete().eq('warden_profile_id', id);
+        await supabase.from('profiles').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Could not delete profile in Supabase:', e);
+      }
     }
     return { success: true };
   },
 
   /**
-   * Staff: Caretakers
+   * Staff: Caretakers - Directly backed by Supabase hostel_caretakers table
    */
   async getCaretakers() {
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    try {
-      const { data, error } = await supabase
-        .from('hostel_caretakers')
-        .select('*')
-        .eq('is_active', true)
-        .order('id', { ascending: true });
-      if (error || !data) {
-        return storedCaretakers;
-      }
-      const combined = [...data];
-      for (const sc of storedCaretakers) {
-        if (!combined.some(c => String(c.id) === String(sc.id))) {
-          combined.push(sc);
-        }
-      }
-      return combined;
-    } catch {
-      return storedCaretakers;
+    const { data, error } = await supabase
+      .from('hostel_caretakers')
+      .select('*')
+      .eq('is_active', true)
+      .order('id', { ascending: true });
+    if (error) {
+      console.error('Failed to fetch caretakers from Supabase:', error);
+      throw new Error(error.message || 'Failed to fetch caretakers from Supabase');
     }
+    return data || [];
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
-    // Try Supabase insert
-    try {
-      const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
-      if (!error && data) return data;
-    } catch (e) {
-      console.warn('Hostel caretakers table insert failed, falling back to local store:', e);
-    }
+    const { data, error } = await supabase
+      .from('hostel_caretakers')
+      .insert({
+        name: payload.name,
+        email: payload.email || null,
+        phone: payload.phone,
+        experience: payload.experience || 0,
+        is_active: true
+      })
+      .select()
+      .single();
 
-    // Fallback store
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    const newCaretaker = {
-      id: Date.now(),
-      name: payload.name,
-      email: payload.email || '',
-      phone: payload.phone,
-      experience: payload.experience || 0,
-      is_active: true
-    };
-    storedCaretakers.push(newCaretaker);
-    localStorage.setItem('hms_custom_caretakers', JSON.stringify(storedCaretakers));
-    return newCaretaker;
+    if (error) {
+      console.error('Supabase caretaker insert failed:', error);
+      throw new Error(error.message || 'Failed to save caretaker to Supabase');
+    }
+    return data;
   },
 
   async updateCaretaker(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; experience?: number }>) {
-    try {
-      await supabase.from('hostel_caretakers').update(payload).eq('id', id);
-    } catch (e) {
-      console.warn('Hostel caretakers table update failed:', e);
+    const { data, error } = await supabase
+      .from('hostel_caretakers')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase caretaker update failed:', error);
+      throw new Error(error.message || 'Failed to update caretaker in Supabase');
     }
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    const index = storedCaretakers.findIndex(c => String(c.id) === String(id));
-    if (index !== -1) {
-      storedCaretakers[index] = { ...storedCaretakers[index], ...payload };
-      localStorage.setItem('hms_custom_caretakers', JSON.stringify(storedCaretakers));
-      return storedCaretakers[index];
-    }
-    return { id, ...payload };
+    return data;
   },
 
   async deleteCaretaker(id: string | number) {
-    try {
-      await supabase.from('hostel_caretakers').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Hostel caretakers delete failed:', e);
+    const { error } = await supabase
+      .from('hostel_caretakers')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase caretaker delete failed:', error);
+      throw new Error(error.message || 'Failed to remove caretaker from Supabase');
     }
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    const filtered = storedCaretakers.filter(c => String(c.id) !== String(id));
-    localStorage.setItem('hms_custom_caretakers', JSON.stringify(filtered));
     return { success: true };
   }
 };
