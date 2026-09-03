@@ -259,6 +259,7 @@ export const adminService = {
       const occCount = activeOccupants.length;
       return {
         ...r,
+        name: r.name || `Room ${r.no}`,
         hostel: r.hostel_id,
         hostel_name: r.hostel?.name || '',
         room_no: r.no,
@@ -275,28 +276,191 @@ export const adminService = {
    * Fetch resident students directory
    */
   async getStudents(): Promise<HostelStudent[]> {
-    const { data: students, error } = await supabase
-      .from('students')
-      .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
-      .order('student_name', { ascending: true });
-    if (error) throw error;
+    let students: any[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .order('student_name', { ascending: true });
+      if (!error && data) {
+        students = data;
+      }
+    } catch (e) {
+      console.warn('Failed to load students from supabase:', e);
+    }
 
-    return (students || []).map((s: any) => {
+    // Merge fallback / locally created students
+    const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+    const combinedStudents = [...students];
+    for (const ls of localStudents) {
+      if (!combinedStudents.some(s => String(s.id) === String(ls.id) || (ls.enrollment_no && s.enrollment_no === ls.enrollment_no))) {
+        combinedStudents.push(ls);
+      }
+    }
+
+    return combinedStudents.map((s: any) => {
       const activeAlloc = (s.allocations || []).find((a: any) => a.is_active);
       const bed = activeAlloc?.bed;
       const room = bed?.room;
       const hostel = room?.hostel;
       return {
         ...s,
-        room_allotted: !!activeAlloc,
-        hostel_name: hostel?.name || '',
-        room_no: room?.no || '',
-        room_number: room?.no || '',
-        bed_number: bed?.bed_number || null,
-        hostel: hostel ? hostel.id : null,
-        room_detail: room || null
+        room_allotted: !!activeAlloc || !!s.room_allotted,
+        hostel_name: hostel?.name || s.hostel_name || '',
+        room_no: room?.no || s.room_no || s.room_number || '',
+        room_number: room?.no || s.room_number || s.room_no || '',
+        bed_number: bed?.bed_number || s.bed_number || null,
+        hostel: hostel ? hostel.id : s.hostel || null,
+        room_detail: room || s.room_detail || null
       };
     });
+  },
+
+  /**
+   * Create single student record
+   */
+  async createStudent(payload: {
+    student_name: string;
+    enrollment_no: string;
+    gender: 'M' | 'F';
+    phone?: string;
+    father_name?: string;
+    guardian_phone?: string;
+    emergency_contact?: string;
+    room_id?: number | string;
+    bed_number?: number | string;
+  }) {
+    let createdStudent: any = null;
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .insert({
+          student_name: payload.student_name,
+          enrollment_no: payload.enrollment_no,
+          gender: payload.gender,
+          phone: payload.phone || '',
+          father_name: payload.father_name || '',
+          guardian_phone: payload.guardian_phone || '',
+          emergency_contact: payload.emergency_contact || '',
+          no_dues: true,
+          status: 'ACTIVE'
+        })
+        .select()
+        .single();
+      
+      if (!error && data) {
+        createdStudent = data;
+
+        // Immediate room allocation if specified
+        if (payload.room_id) {
+          try {
+            let bedId: any = null;
+            const bedNum = payload.bed_number ? Number(payload.bed_number) : 1;
+            const { data: bedRecord } = await supabase
+              .from('beds')
+              .select('id')
+              .eq('room_id', payload.room_id)
+              .eq('bed_number', bedNum)
+              .single();
+            bedId = bedRecord?.id;
+
+            await supabase.rpc('allocate_student_room', {
+              p_student_id: data.id,
+              p_bed_id: bedId
+            });
+          } catch (ae) {
+            console.warn('Initial room allocation failed:', ae);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Student table insert failed, saving locally:', e);
+    }
+
+    if (!createdStudent) {
+      const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+      createdStudent = {
+        id: Date.now(),
+        student_name: payload.student_name,
+        enrollment_no: payload.enrollment_no,
+        gender: payload.gender,
+        phone: payload.phone || '',
+        father_name: payload.father_name || '',
+        guardian_phone: payload.guardian_phone || '',
+        emergency_contact: payload.emergency_contact || '',
+        no_dues: true,
+        status: 'ACTIVE',
+        room_allotted: !!payload.room_id,
+        created_at: new Date().toISOString()
+      };
+      localStudents.unshift(createdStudent);
+      localStorage.setItem('hms_custom_students', JSON.stringify(localStudents));
+    }
+
+    return createdStudent;
+  },
+
+  /**
+   * Bulk create student records
+   */
+  async bulkCreateStudents(students: Array<{
+    student_name: string;
+    enrollment_no: string;
+    gender: 'M' | 'F';
+    phone?: string;
+    father_name?: string;
+    guardian_phone?: string;
+    emergency_contact?: string;
+  }>) {
+    const results: any[] = [];
+    const dbPayload = students.map(s => ({
+      student_name: s.student_name,
+      enrollment_no: s.enrollment_no,
+      gender: s.gender || 'M',
+      phone: s.phone || '',
+      father_name: s.father_name || '',
+      guardian_phone: s.guardian_phone || '',
+      emergency_contact: s.emergency_contact || '',
+      no_dues: true,
+      status: 'ACTIVE'
+    }));
+
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .insert(dbPayload)
+        .select();
+      
+      if (!error && data) {
+        return data;
+      }
+    } catch (e) {
+      console.warn('Bulk student insert failed, saving locally:', e);
+    }
+
+    // Local storage fallback for bulk items
+    const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+    let baseId = Date.now();
+    for (const s of students) {
+      const newStudent = {
+        id: baseId++,
+        student_name: s.student_name,
+        enrollment_no: s.enrollment_no,
+        gender: s.gender || 'M',
+        phone: s.phone || '',
+        father_name: s.father_name || '',
+        guardian_phone: s.guardian_phone || '',
+        emergency_contact: s.emergency_contact || '',
+        no_dues: true,
+        status: 'ACTIVE',
+        room_allotted: false,
+        created_at: new Date().toISOString()
+      };
+      localStudents.unshift(newStudent);
+      results.push(newStudent);
+    }
+    localStorage.setItem('hms_custom_students', JSON.stringify(localStudents));
+    return results;
   },
 
   /**

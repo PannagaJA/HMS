@@ -56,6 +56,12 @@ export const apiClient = {
     }
 
     // 4. Hostels Management (/hms/hostels/)
+    if (endpoint.includes('/hms/hostels/') && endpoint.includes('/rooms/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1];
+      const rooms = await adminService.getRooms(hostelId);
+      return { data: rooms as T };
+    }
     if (endpoint.includes('/hms/hostels/')) {
       const hostels = await adminService.getHostels();
       return { data: hostels as T };
@@ -219,6 +225,18 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Single Student Creation
+    if (endpoint.includes('/hms/students/create/') || (endpoint.endsWith('/hms/students/') && !endpoint.includes('allocate') && !endpoint.includes('vacate'))) {
+      const data = await adminService.createStudent(body);
+      return { data: data as T };
+    }
+
+    // Bulk Student Import
+    if (endpoint.includes('/hms/students/bulk/')) {
+      const data = await adminService.bulkCreateStudents(body?.students || body || []);
+      return { data: data as T };
+    }
+
     // Hostel Creation
     if (endpoint.includes('/hms/hostels/')) {
       const data = await adminService.createHostel({
@@ -255,6 +273,27 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Food Item Creation
+    if (endpoint.includes('/hms/menu-items/')) {
+      const data = await diningService.createMenuItem({
+        name: body?.name,
+        category: body?.category,
+        description: body?.description,
+        is_veg: body?.is_veg
+      });
+      return { data: data as T };
+    }
+
+    // Menu Slot Configuration (Post/Put)
+    if (endpoint.includes('/hms/menus/')) {
+      const data = await diningService.saveMenuSlot(
+        Number(body?.day_of_week ?? 0),
+        Number(body?.meal_type ?? 1),
+        body?.items || []
+      );
+      return { data: data as T };
+    }
+
     // Visitor Check-In
     if (endpoint.includes('/visitor-logs/')) {
       const data = await securityService.checkInVisitor({
@@ -278,6 +317,22 @@ export const apiClient = {
   },
 
   async put<T = any>(endpoint: string, body: any) {
+    // Menu Slot Configuration (Put)
+    if (endpoint.includes('/hms/menus/')) {
+      const data = await diningService.saveMenuSlot(
+        Number(body?.day_of_week ?? 0),
+        Number(body?.meal_type ?? 1),
+        body?.items || []
+      );
+      return { data: data as T };
+    }
+    // Update Food Item
+    if (endpoint.includes('/hms/menu-items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') + 1] || body?.id;
+      const data = await diningService.updateMenuItem(itemId, body);
+      return { data: data as T };
+    }
     // Update Hostel
     if (endpoint.includes('/hms/hostels/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -303,6 +358,13 @@ export const apiClient = {
   },
 
   async patch<T = any>(endpoint: string, body: any) {
+    // Update Food Item
+    if (endpoint.includes('/hms/menu-items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') + 1] || body?.id;
+      const data = await diningService.updateMenuItem(itemId, body);
+      return { data: data as T };
+    }
     // Update Hostel
     if (endpoint.includes('/hms/hostels/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -353,6 +415,14 @@ export const apiClient = {
   },
 
   async delete<T = any>(endpoint: string) {
+    // Delete Food Item
+    if (endpoint.includes('/hms/menu-items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') + 1];
+      await diningService.deleteMenuItem(itemId);
+      return { data: { success: true } as T };
+    }
+
     // Delete Hostel
     if (endpoint.includes('/hms/hostels/')) {
       const parts = endpoint.split('/').filter(Boolean);

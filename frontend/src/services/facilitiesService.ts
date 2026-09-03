@@ -18,6 +18,29 @@ export const diningService = {
     return data || [];
   },
 
+  async createMenuItem(payload: { name: string; category?: string; description?: string; is_veg?: boolean }) {
+    const { data, error } = await supabase.from('menu_items').insert({
+      name: payload.name,
+      category: payload.category || 'Main Course',
+      description: payload.description || '',
+      is_veg: payload.is_veg ?? true
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateMenuItem(id: number | string, payload: Partial<{ name: string; category: string; description: string; is_veg: boolean }>) {
+    const { data, error } = await supabase.from('menu_items').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteMenuItem(id: number | string) {
+    const { error } = await supabase.from('menu_items').delete().eq('id', id);
+    if (error) throw error;
+    return { success: true };
+  },
+
   async getWeeklyMenus(): Promise<Menu[]> {
     const { data, error } = await supabase
       .from('menus')
@@ -27,6 +50,46 @@ export const diningService = {
       ...m,
       items: (m.links || []).map((l: any) => l.item).filter(Boolean)
     }));
+  },
+
+  async saveMenuSlot(dayOfWeek: number, mealTypeId: number, itemIds: number[]) {
+    // 1. Find or create menu entry for day_of_week and meal_type
+    let menuId: number | null = null;
+    const { data: existing } = await supabase
+      .from('menus')
+      .select('id')
+      .eq('day_of_week', dayOfWeek)
+      .eq('meal_type_id', mealTypeId)
+      .maybeSingle();
+
+    if (existing) {
+      menuId = existing.id;
+    } else {
+      const { data: inserted, error } = await supabase
+        .from('menus')
+        .insert({
+          day_of_week: dayOfWeek,
+          meal_type_id: mealTypeId,
+          is_active: true
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      menuId = inserted.id;
+    }
+
+    if (menuId) {
+      // 2. Clear old item links and insert new links
+      await supabase.from('menu_item_links').delete().eq('menu_id', menuId);
+      if (itemIds.length > 0) {
+        const linkInserts = itemIds.map(itemId => ({
+          menu_id: menuId,
+          menu_item_id: itemId
+        }));
+        await supabase.from('menu_item_links').insert(linkInserts);
+      }
+    }
+    return { success: true, menu_id: menuId };
   }
 };
 
