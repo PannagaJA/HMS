@@ -242,37 +242,30 @@ export const MenuManagement: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Dining & Menu Planner</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Configure 7-day recurring meal timetables, food catalog, and nutritional slots</p>
+          <p className="text-xs text-slate-500 mt-0.5">Configure 7-day recurring meal timetables, food catalog, and nutritional slots</p>
         </div>
-        <div className="flex items-center gap-2">
-          {activeTab === 'catalog' && (
+        {activeTab === 'catalog' && (
+          <div className="shrink-0 self-start sm:self-auto">
             <button
               onClick={handleOpenAddItem}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Food Item</span>
             </button>
-          )}
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-slate-400" />
-            <span>Print Timetable</span>
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Primary Navigation & Hostel Selector Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 shadow-xs">
+      {/* Primary Navigation & Filter Toolbar Bar */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
         {/* Primary Tab Navigation */}
         <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-full w-fit">
           <button
             onClick={() => setActiveTab('timetable')}
             className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'timetable'
-                ? 'bg-[#0D3833] text-white shadow-sm'
+                ? 'bg-[#0D3833] text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -282,7 +275,7 @@ export const MenuManagement: React.FC = () => {
             onClick={() => setActiveTab('catalog')}
             className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'catalog'
-                ? 'bg-[#0D3833] text-white shadow-sm'
+                ? 'bg-[#0D3833] text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -290,29 +283,55 @@ export const MenuManagement: React.FC = () => {
           </button>
         </div>
 
-        {/* Hostel Selection Dropdown */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 shrink-0">
-            <Building2 className="w-4 h-4 text-teal-700" />
-            <span>Select Hostel:</span>
+        {/* Hostel Selection & Day of Week Selectors */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          {/* Hostel Selection Dropdown */}
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-teal-700" />
+              <span>Select Hostel:</span>
+            </span>
+            <div className="flex-1 min-w-0 sm:w-60">
+              <Select
+                value={selectedHostelId}
+                onValueChange={(val) => setSelectedHostelId(val)}
+              >
+                <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold rounded-full h-9 px-3.5">
+                  <SelectValue placeholder="Choose Hostel Block" />
+                </SelectTrigger>
+                <SelectContent>
+                  {hostels.map((hostel) => (
+                    <SelectItem key={hostel.id} value={String(hostel.id)}>
+                      {hostel.name} ({hostel.gender === 'M' ? 'Boys' : hostel.gender === 'F' ? 'Girls' : 'Co-ed'})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="w-full sm:w-64">
-            <Select
-              value={selectedHostelId}
-              onValueChange={(val) => setSelectedHostelId(val)}
-            >
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold rounded-2xl h-10">
-                <SelectValue placeholder="Choose Hostel Block" />
-              </SelectTrigger>
-              <SelectContent>
-                {hostels.map((hostel) => (
-                  <SelectItem key={hostel.id} value={String(hostel.id)}>
-                    {hostel.name} ({hostel.gender === 'M' ? 'Boys' : hostel.gender === 'F' ? 'Girls' : 'Co-ed'})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+
+          {/* Select Day of Week Dropdown (Mobile view inline) */}
+          {activeTab === 'timetable' && (
+            <div className="flex items-center gap-2.5 w-full sm:w-auto block md:hidden">
+              <label className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0">
+                Select Day of Week:
+              </label>
+              <div className="flex-1 min-w-0 sm:w-48">
+                <Select value={activeDay} onValueChange={(val) => setActiveDay(val)}>
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-bold text-slate-800 rounded-full h-9 px-3.5">
+                    <SelectValue placeholder="Select day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS.map((day) => (
+                      <SelectItem key={day.id} value={day.id}>
+                        {day.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -338,25 +357,6 @@ export const MenuManagement: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Mobile View: Clean Select Dropdown (< 768px) */}
-              <div className="block md:hidden bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-                <label className="text-xs font-semibold text-slate-500 block mb-1.5">
-                  Select Day of Week:
-                </label>
-                <Select value={activeDay} onValueChange={(val) => setActiveDay(val)}>
-                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-bold text-slate-800">
-                    <SelectValue placeholder="Select day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAYS.map((day) => (
-                      <SelectItem key={day.id} value={day.id}>
-                        {day.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Desktop View: Horizontal Day Pills (>= 768px) */}
               <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-2">
                 {DAYS.map((day) => (

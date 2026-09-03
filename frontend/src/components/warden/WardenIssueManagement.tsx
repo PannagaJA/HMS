@@ -408,7 +408,7 @@ export const WardenIssueManagement: React.FC = () => {
 
       {/* Lightbox Preview Modal */}
       {selectedImageModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white max-w-2xl w-full rounded-3xl p-6 border border-slate-200 shadow-2xl relative">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-slate-900">Issue Photo Evidence</h3>
