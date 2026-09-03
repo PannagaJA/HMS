@@ -97,14 +97,14 @@ export const WardenDashboard: React.FC = () => {
 
         {/* Hostel Selector */}
         {stats && stats.managed_hostels.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-500">Hostel Block:</label>
-            <div className="w-56">
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <label className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0">Hostel Block:</label>
+            <div className="flex-1 min-w-0 sm:w-64">
               <Select
                 value={selectedHostelId ? String(selectedHostelId) : ''}
                 onValueChange={(val) => handleHostelChange(Number(val))}
               >
-                <SelectTrigger className="h-9 rounded-full bg-white text-xs font-semibold shadow-xs">
+                <SelectTrigger className="h-9 w-full rounded-full bg-white text-xs font-semibold border border-slate-200/80 shadow-xs px-3.5">
                   <SelectValue placeholder="Select Hostel Block" />
                 </SelectTrigger>
                 <SelectContent>
@@ -176,14 +176,15 @@ export const WardenDashboard: React.FC = () => {
           </div>
 
           {/* Dynamic Floor Selector based on selected Hostel Block */}
-          <div className="flex items-center gap-2">
-            <div className="w-[170px]">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <label className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0">Select Floor:</label>
+            <div className="flex-1 min-w-0 sm:w-[180px]">
               <Select
                 value={selectedFloor}
                 onValueChange={setSelectedFloor}
                 disabled={!selectedHostelId}
               >
-                <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold text-slate-800 disabled:opacity-50">
+                <SelectTrigger className="h-9 w-full bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 rounded-full px-3.5 disabled:opacity-50">
                   <SelectValue placeholder="Select Floor" />
                 </SelectTrigger>
                 <SelectContent>
