@@ -306,7 +306,7 @@ export const issueService = {
 
     let query = supabase
       .from('issues')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*, updater:profiles!updated_by(id, first_name, last_name, email, role))')
       .order('created_at', { ascending: false });
 
     if (resolvedStudentId) {
@@ -335,6 +335,17 @@ export const issueService = {
         desc = parts[0].trim();
         img = parts[1].trim();
       }
+
+      const formattedUpdates = (i.updates || []).map((u: any) => {
+        const uName = u.updater 
+          ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
+          : (u.updated_by_name || 'Hostel Administrator');
+        return {
+          ...u,
+          updated_by_name: uName
+        };
+      });
+
       return {
         ...i,
         description: desc,
@@ -343,7 +354,7 @@ export const issueService = {
         enrollment_no: i.student?.enrollment_no || 'N/A',
         hostel_name: i.hostel?.name || 'Block A',
         room_no: i.room?.no || '101',
-        updates: i.updates || []
+        updates: formattedUpdates
       };
     });
   },

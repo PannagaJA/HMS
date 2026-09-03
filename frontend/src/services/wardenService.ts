@@ -220,7 +220,7 @@ export const wardenService = {
   async getIssues(hostelId?: string | number, statusFilter?: string): Promise<HostelIssue[]> {
     let query = supabase
       .from('issues')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*, updater:profiles!updated_by(id, first_name, last_name, email, role))')
       .order('created_at', { ascending: false });
 
     if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
@@ -247,6 +247,17 @@ export const wardenService = {
         desc = parts[0].trim();
         img = parts[1].trim();
       }
+
+      const formattedUpdates = (i.updates || []).map((u: any) => {
+        const uName = u.updater 
+          ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
+          : (u.updated_by_name || 'Hostel Administrator');
+        return {
+          ...u,
+          updated_by_name: uName
+        };
+      });
+
       return {
         ...i,
         description: desc,
@@ -257,27 +268,27 @@ export const wardenService = {
         hostel_id: i.hostel_id || i.hostel?.id,
         hostel_name: i.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
         room_no: i.room?.no || i.room_no || '101',
-        updates: i.updates || []
+        updates: formattedUpdates
       };
     });
   },
 
   /**
-   * Update issue status directly in Supabase
+   * Update issue status and insert audit log into issue_updates
    */
   async updateIssueStatus(issueId: number, status: string, note = '') {
-    try {
-      const { data, error } = await supabase.rpc('update_issue_status', {
-        p_issue_id: issueId,
-        p_new_status: status,
-        p_note: note,
-      });
-      if (!error && data) return data;
-    } catch (rpcErr) {
-      console.warn('RPC update_issue_status error, falling back to direct table update:', rpcErr);
-    }
-
     const { data: user } = await supabase.auth.getUser();
+
+    // 1. Fetch current issue status
+    const { data: currentIssue } = await supabase
+      .from('issues')
+      .select('status')
+      .eq('id', issueId)
+      .maybeSingle();
+
+    const oldStatus = currentIssue?.status || 'pending';
+
+    // 2. Update issue status in database
     const updatePayload: any = {
       status,
       updated_at: new Date().toISOString(),
@@ -295,12 +306,13 @@ export const wardenService = {
 
     if (updateErr) throw updateErr;
 
-    // Record audit update in issue_updates table
+    // 3. Insert audit log record in issue_updates
     try {
       await supabase.from('issue_updates').insert({
         issue_id: issueId,
+        old_status: oldStatus,
         new_status: status,
-        note: note || '',
+        note: note || 'Status update saved.',
         updated_by: user.user?.id || null,
       });
     } catch (auditErr) {
