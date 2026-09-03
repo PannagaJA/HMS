@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ArrowRight, User, Lock, Eye, EyeOff, ShieldCheck, Ticket, Utensils, Wrench } from 'lucide-react';
+import { ArrowRight, User, Lock, Eye, EyeOff, ShieldCheck, Ticket, Utensils, Wrench, ArrowLeft, Mail, Key } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export const Login: React.FC = () => {
   const { login, isLoading } = useAuth();
@@ -10,6 +11,16 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+
+  // Forgot Password States
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'email' | 'otp' | 'new-password'>('email');
+  const [resetEmail, setResetEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +58,62 @@ export const Login: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotSuccess('');
+    setIsProcessing(true);
+
+    try {
+      if (forgotStep === 'email') {
+        if (!resetEmail.trim()) throw new Error('Please enter your email.');
+        const { data, error } = await supabase.functions.invoke('reset-password', {
+          body: { action: 'request_otp', email: resetEmail.trim() }
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        
+        setForgotSuccess('OTP sent to your email.');
+        setForgotStep('otp');
+      } 
+      else if (forgotStep === 'otp') {
+        if (!otp.trim()) throw new Error('Please enter the OTP.');
+        setForgotSuccess(''); // clear previous success message when moving to next step
+        setForgotStep('new-password');
+      } 
+      else if (forgotStep === 'new-password') {
+        if (!newPassword.trim()) throw new Error('Please enter a new password.');
+        if (newPassword.length < 6) throw new Error('Password must be at least 6 characters long.');
+        
+        const { data, error } = await supabase.functions.invoke('reset-password', {
+          body: { 
+            action: 'verify_and_update', 
+            email: resetEmail.trim(), 
+            otp: otp.trim(), 
+            newPassword: newPassword 
+          }
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        setForgotSuccess('Password updated successfully! You can now log in.');
+        setTimeout(() => {
+          setIsFlipped(false);
+          setForgotStep('email');
+          setResetEmail('');
+          setOtp('');
+          setNewPassword('');
+          setForgotSuccess('');
+        }, 2000);
+      }
+    } catch (err: any) {
+      console.error('Forgot password error:', err);
+      setForgotError(err.message || 'An error occurred during password reset.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f3f4f6] flex items-center justify-center p-0 md:p-6 font-sans relative overflow-hidden">
       
@@ -77,11 +144,28 @@ export const Login: React.FC = () => {
               <p className="text-[15px] text-slate-500 font-medium">Sign in to access your institutional portal</p>
             </div>
 
-            {error && (
-              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium">
-                {error}
-              </div>
-            )}
+            {/* Flippable Container */}
+            <div className="relative w-full" style={{ perspective: '1000px' }}>
+              <div 
+                className="w-full transition-transform duration-700" 
+                style={{ 
+                  transformStyle: 'preserve-3d', 
+                  transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  position: 'relative',
+                  minHeight: '380px' // Keep a consistent height to prevent layout jumps
+                }}
+              >
+                
+                {/* FRONT FACE (Login Form) */}
+                <div 
+                  className={`absolute inset-0 w-full ${isFlipped ? 'pointer-events-none' : ''}`}
+                  style={{ backfaceVisibility: 'hidden' }}
+                >
+                  {error && (
+                    <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium">
+                      {error}
+                    </div>
+                  )}
 
             <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
               <div>
@@ -126,9 +210,13 @@ export const Login: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-end pt-2 pb-2">
-                <a href="#" className="text-sm font-bold text-[#0B1437] hover:underline">
+                <button 
+                  type="button" 
+                  onClick={() => setIsFlipped(true)}
+                  className="text-sm font-bold text-[#0B1437] hover:underline cursor-pointer"
+                >
                   Forgot password?
-                </a>
+                </button>
               </div>
 
               <button
@@ -140,6 +228,125 @@ export const Login: React.FC = () => {
                 {!isLoading && <ArrowRight className="w-4 h-4" />}
               </button>
             </form>
+          </div>
+
+          {/* BACK FACE (Forgot Password Form) */}
+          <div 
+            className={`absolute inset-0 w-full ${!isFlipped ? 'pointer-events-none' : ''}`}
+            style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+          >
+            <div className="flex items-center mb-6">
+              <button 
+                onClick={() => {
+                  setIsFlipped(false);
+                  setForgotError('');
+                  setForgotSuccess('');
+                }}
+                className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-xl font-bold text-[#0B1437] ml-2">Reset Password</h2>
+            </div>
+
+            {forgotError && (
+              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium">
+                {forgotError}
+              </div>
+            )}
+            
+            {forgotSuccess && (
+              <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-100 text-green-600 text-sm font-medium">
+                {forgotSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPassword} className="space-y-5">
+              {forgotStep === 'email' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    Registered Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="e.g. name@university.edu"
+                      className="w-full bg-white pl-12 pr-4 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {forgotStep === 'otp' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    Enter OTP
+                  </label>
+                  <div className="relative">
+                    <Key className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      placeholder="Enter 6-digit OTP"
+                      className="w-full bg-white pl-12 pr-4 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm font-mono tracking-widest"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {forgotStep === 'new-password' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-white pl-12 pr-12 py-3.5 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all placeholder:text-slate-400 shadow-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="w-full py-4 mt-4 rounded-xl bg-[#0B1437] text-white font-semibold text-sm hover:bg-[#111f54] transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <span>
+                  {isProcessing 
+                    ? 'Processing...' 
+                    : forgotStep === 'email' 
+                      ? 'Send Reset OTP' 
+                      : forgotStep === 'otp' 
+                        ? 'Verify OTP' 
+                        : 'Update Password'}
+                </span>
+                {!isProcessing && <ArrowRight className="w-4 h-4" />}
+              </button>
+            </form>
+          </div>
+
+          </div> {/* End inner flip container */}
+        </div> {/* End outer perspective container */}
 
             <div className="mt-10 md:mt-12">
                <div className="relative flex items-center py-4 mb-4">
