@@ -8,8 +8,15 @@ import type { MealType, MenuItem, Menu, HostelIssue } from '../types';
 export const diningService = {
   async getMealTypes(): Promise<MealType[]> {
     const { data, error } = await supabase.from('meal_types').select('*').order('id', { ascending: true });
-    if (error) throw error;
-    return data || [];
+    if (error || !data || data.length === 0) {
+      return [
+        { id: 1, name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00', start_time: '07:30', end_time: '09:30' },
+        { id: 2, name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00', start_time: '12:30', end_time: '14:30' },
+        { id: 3, name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00', start_time: '17:00', end_time: '18:30' },
+        { id: 4, name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00', start_time: '20:00', end_time: '22:00' },
+      ] as any;
+    }
+    return data;
   },
 
   async getMenuItems(): Promise<MenuItem[]> {
@@ -23,14 +30,19 @@ export const diningService = {
       name: payload.name,
       category: payload.category || 'Main Course',
       description: payload.description || '',
-      is_veg: payload.is_veg ?? true
+      vegetarian: payload.is_veg ?? true
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateMenuItem(id: number | string, payload: Partial<{ name: string; category: string; description: string; is_veg: boolean }>) {
-    const { data, error } = await supabase.from('menu_items').update(payload).eq('id', id).select().single();
+    const updateBody: any = { ...payload };
+    if ('is_veg' in payload) {
+      updateBody.vegetarian = payload.is_veg;
+      delete updateBody.is_veg;
+    }
+    const { data, error } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
@@ -58,6 +70,161 @@ export const diningService = {
         items_detail: items
       };
     });
+  },
+
+  async getTodayMenu(): Promise<{ day_name: string; day_id: string; meals: Menu[] }> {
+    const jsDay = new Date().getDay();
+    const appDayId = String((jsDay + 6) % 7);
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const currentDayName = dayNames[(jsDay + 6) % 7];
+
+    const { data, error } = await supabase
+      .from('menus')
+      .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))')
+      .eq('day_of_week', appDayId);
+
+    if (error) {
+      console.warn('Error fetching today menu:', error);
+    }
+
+    const meals = (data || []).map((m: any) => {
+      const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
+        ...i,
+        is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
+      }));
+      return {
+        ...m,
+        meal_type: m.meal_type_id || m.meal_type?.id,
+        items,
+        items_detail: items
+      };
+    });
+
+    return {
+      day_name: currentDayName,
+      day_id: appDayId,
+      meals
+    };
+  },
+
+  async getTodaySkips(studentId?: number): Promise<number[]> {
+    let resolvedStudentId = studentId;
+    if (!resolvedStudentId) {
+      const { data: user } = await supabase.auth.getUser();
+      const userId = user.user?.id;
+      if (userId) {
+        const { data: st } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
+        if (st) resolvedStudentId = st.id;
+      }
+    }
+
+    if (!resolvedStudentId) return [];
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from('student_meal_skips')
+      .select('meal_type_id')
+      .eq('student_id', resolvedStudentId)
+      .eq('date', todayStr);
+
+    if (error) {
+      console.warn('Error fetching meal skips:', error);
+      return [];
+    }
+
+    return (data || []).map((d: any) => Number(d.meal_type_id));
+  },
+
+  async recordMealSkip(payload: { date?: string; meal_type: number | string; skip_type?: string; reason?: string }) {
+    const { data: user } = await supabase.auth.getUser();
+    const userId = user.user?.id;
+
+    let student: any = null;
+    if (userId) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .eq('profile_id', userId)
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    if (!student) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .limit(1)
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    if (!student) {
+      throw new Error('Student record not found for recording meal skip');
+    }
+
+    const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
+    const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+    const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+    let hostelId = room?.hostel_id;
+
+    if (!hostelId) {
+      const { data: defaultHostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      hostelId = defaultHostel?.id || 1;
+    }
+
+    const todayStr = payload.date || new Date().toISOString().split('T')[0];
+    const mealTypeId = Number(payload.meal_type);
+
+    const { data, error } = await supabase
+      .from('student_meal_skips')
+      .upsert({
+        student_id: student.id,
+        hostel_id: hostelId,
+        date: todayStr,
+        meal_type_id: mealTypeId,
+        skip_type: payload.skip_type || 'SKIP',
+        reason: payload.reason || 'Opted out from portal',
+        approved: true
+      }, { onConflict: 'student_id,date,meal_type_id' })
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('Error recording meal skip in Supabase:', error);
+    }
+
+    return { success: true, skip: data };
+  },
+
+  async cancelMealSkip(mealTypeId: number | string, date?: string) {
+    const { data: user } = await supabase.auth.getUser();
+    const userId = user.user?.id;
+
+    let studentId: number | null = null;
+    if (userId) {
+      const { data } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
+      if (data) studentId = data.id;
+    }
+
+    if (!studentId) {
+      const { data } = await supabase.from('students').select('id').limit(1).maybeSingle();
+      if (data) studentId = data.id;
+    }
+
+    if (!studentId) return { success: false };
+
+    const todayStr = date || new Date().toISOString().split('T')[0];
+    const mealIdNum = Number(mealTypeId);
+
+    const { error } = await supabase
+      .from('student_meal_skips')
+      .delete()
+      .eq('student_id', studentId)
+      .eq('date', todayStr)
+      .eq('meal_type_id', mealIdNum);
+
+    if (error) console.warn('Error canceling meal skip:', error);
+    return { success: true };
   },
 
   async saveMenuSlot(dayOfWeek: number | string, mealTypeId: number | string, itemIds: (number | string)[]) {

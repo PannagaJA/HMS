@@ -3,6 +3,7 @@
  * Self-service actions: personal profile, room assignment, gate pass applications, and dining schedules.
  */
 import { supabase } from '../lib/supabase';
+import { diningService } from './facilitiesService';
 import type { GatePassRequest, HostelStudent } from '../types';
 
 export const studentService = {
@@ -191,29 +192,6 @@ export const studentService = {
    * Fetch today's meal schedule
    */
   async getTodayMenu() {
-    const todayDayOfWeek = String(new Date().getDay());
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const { data: menus } = await supabase
-      .from('menus')
-      .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))')
-      .eq('day_of_week', todayDayOfWeek);
-
-    const mappedMeals = (menus || []).map((m: any) => {
-      const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
-        ...i,
-        is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
-      }));
-      return {
-        ...m,
-        meal_type: m.meal_type_id || m.meal_type?.id,
-        items,
-        items_detail: items
-      };
-    });
-
-    return {
-      day_name: dayNames[new Date().getDay()],
-      meals: mappedMeals
-    };
+    return diningService.getTodayMenu();
   }
 };

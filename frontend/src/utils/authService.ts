@@ -122,26 +122,30 @@ export const apiClient = {
     }
 
     // 11. Courses & Dining
-    if (endpoint.includes('/hms/courses/')) {
+    if (endpoint.includes('/courses/')) {
       const { data, error } = await supabase.from('hostel_courses').select('*');
       if (error) throw error;
       return { data: data as T };
     }
-    if (endpoint.includes('/hms/meal-types/')) {
+    if (endpoint.includes('/today_menu/')) {
+      const today = await diningService.getTodayMenu();
+      return { data: today as T };
+    }
+    if (endpoint.includes('/meal-types/') || endpoint.includes('/meal_types/')) {
       const mealTypes = await diningService.getMealTypes();
       return { data: mealTypes as T };
     }
-    if (endpoint.includes('/hms/menu-items/')) {
+    if (endpoint.includes('/menu-items/') || endpoint.includes('/menu_items/')) {
       const menuItems = await diningService.getMenuItems();
       return { data: menuItems as T };
     }
-    if (endpoint.includes('/today_menu/')) {
-      const today = await studentService.getTodayMenu();
-      return { data: today as T };
-    }
-    if (endpoint.includes('/hms/menus/') || endpoint.includes('/mess/menu/')) {
+    if (endpoint.includes('/menus/') || endpoint.includes('/menu/')) {
       const menus = await diningService.getWeeklyMenus();
       return { data: menus as T };
+    }
+    if (endpoint.includes('/skips/')) {
+      const skips = await diningService.getTodaySkips();
+      return { data: skips as T };
     }
 
     // 12. Student Dedicated
@@ -340,23 +344,29 @@ export const apiClient = {
     }
 
     // Food Item Creation
-    if (endpoint.includes('/hms/menu-items/')) {
+    if (endpoint.includes('/menu-items/') || endpoint.includes('/menu_items/')) {
       const data = await diningService.createMenuItem({
         name: body?.name,
         category: body?.category,
         description: body?.description,
-        is_veg: body?.is_veg
+        is_veg: body?.is_veg ?? body?.vegetarian
       });
       return { data: data as T };
     }
 
     // Menu Slot Configuration (Post/Put)
-    if (endpoint.includes('/hms/menus/')) {
+    if (endpoint.includes('/save_slot/') || endpoint.includes('/menus/')) {
       const data = await diningService.saveMenuSlot(
-        Number(body?.day_of_week ?? 0),
-        Number(body?.meal_type ?? 1),
-        body?.items || []
+        body?.day_of_week ?? 0,
+        body?.meal_type ?? 1,
+        body?.items || body?.item_ids || []
       );
+      return { data: data as T };
+    }
+
+    // Meal Skip Recording
+    if (endpoint.includes('/skips/')) {
+      const data = await diningService.recordMealSkip(body || {});
       return { data: data as T };
     }
 
@@ -491,10 +501,19 @@ export const apiClient = {
   },
 
   async delete<T = any>(endpoint: string) {
-    // Delete Food Item
-    if (endpoint.includes('/hms/menu-items/')) {
+    // Cancel Meal Skip
+    if (endpoint.includes('/skips/')) {
       const parts = endpoint.split('/').filter(Boolean);
-      const itemId = parts[parts.indexOf('menu-items') + 1];
+      const skipIdx = parts.indexOf('skips');
+      const mealTypeId = skipIdx !== -1 && parts[skipIdx + 1] ? parts[skipIdx + 1] : parts[parts.length - 1];
+      await diningService.cancelMealSkip(mealTypeId);
+      return { data: { success: true } as T };
+    }
+
+    // Delete Food Item
+    if (endpoint.includes('/menu-items/') || endpoint.includes('/menu_items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') !== -1 ? parts.indexOf('menu-items') + 1 : parts.indexOf('menu_items') + 1];
       await diningService.deleteMenuItem(itemId);
       return { data: { success: true } as T };
     }
