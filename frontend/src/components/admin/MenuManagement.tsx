@@ -3,6 +3,9 @@ import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Mo
 import type { MealType, MenuItem, Menu, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
+import { adminService } from '../../services/adminService';
 import {
   Select,
   SelectContent,
@@ -23,6 +26,7 @@ const DAYS = [
 ];
 
 export const MenuManagement: React.FC = () => {
+  const { user } = useAuth();
   const { showSuccess, showError, confirm } = useNotification();
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
@@ -50,7 +54,7 @@ export const MenuManagement: React.FC = () => {
 
   useEffect(() => {
     fetchHostelsAndData();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (selectedHostelId) {
@@ -60,12 +64,19 @@ export const MenuManagement: React.FC = () => {
 
   const fetchHostelsAndData = async () => {
     try {
-      const [hostelsRes, mealTypesRes, menuItemsRes] = await Promise.all([
-        apiClient.get<Hostel[]>('/hms/hostels/'),
+      let loadedHostels: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        loadedHostels = await wardenService.getAssignedHostels(user.id);
+      } else {
+        const hostelsRes = await apiClient.get<Hostel[]>('/hms/hostels/');
+        loadedHostels = hostelsRes.data || [];
+      }
+
+      const [mealTypesRes, menuItemsRes] = await Promise.all([
         apiClient.get<MealType[]>('/hms/meal-types/'),
         apiClient.get<MenuItem[]>('/hms/menu-items/'),
       ]);
-      const loadedHostels = hostelsRes.data || [];
+
       setHostels(loadedHostels);
       setMealTypes(mealTypesRes.data || []);
       setMenuItems(menuItemsRes.data || []);
@@ -310,8 +321,14 @@ export const MenuManagement: React.FC = () => {
           {hostels.length === 0 ? (
             <div className="bg-amber-50 p-10 rounded-3xl border border-amber-200 text-center space-y-2">
               <Building2 className="w-8 h-8 text-amber-600 mx-auto" />
-              <h3 className="font-bold text-amber-900 text-sm">No Hostels Found</h3>
-              <p className="text-xs text-amber-700">Please add hostel blocks first in Hostel Management.</p>
+              <h3 className="font-bold text-amber-900 text-sm">
+                {user?.role === 'WARDEN' ? 'No Hostels Assigned' : 'No Hostels Found'}
+              </h3>
+              <p className="text-xs text-amber-700">
+                {user?.role === 'WARDEN'
+                  ? 'You are not currently assigned to any hostel block. Please contact the administrator to assign your block.'
+                  : 'Please add hostel blocks first in Hostel Management.'}
+              </p>
             </div>
           ) : !selectedHostelId ? (
             <div className="bg-white p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2">
