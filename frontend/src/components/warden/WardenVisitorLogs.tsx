@@ -186,7 +186,7 @@ export const WardenVisitorLogs: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors flex items-center gap-2 shadow-xs self-start sm:self-auto cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Register New Visitor
         </button>
@@ -234,8 +234,74 @@ export const WardenVisitorLogs: React.FC = () => {
         </div>
       </div>
 
-      {/* Visitors Table */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs">
+      {/* Mobile View: Cards Grid (< md) */}
+      <div className="block md:hidden space-y-3">
+        {filteredLogs.length === 0 ? (
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center text-slate-400 text-xs">
+            No visitor logs recorded yet.
+          </div>
+        ) : (
+          filteredLogs.map((log: any) => {
+            const checkInTime = log.check_in_time || log.entry_time || '';
+            const checkOutTime = log.check_out_time || log.exit_time || null;
+            const isInside = !checkOutTime;
+
+            return (
+              <div key={log.id} className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">{log.visitor_name}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">{log.mobile_number || log.visitor_phone || 'N/A'}</p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold text-[10px] shrink-0 ${
+                      isInside
+                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${isInside ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+                    {isInside ? 'INSIDE' : 'CHECKED OUT'}
+                  </span>
+                </div>
+
+                <div className="text-xs space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-slate-400 font-medium">Resident:</span>
+                    <span className="font-bold text-slate-800">{log.student_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-slate-400 font-medium">Purpose:</span>
+                    <span className="italic text-slate-700">"{log.purpose}"</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-slate-400 font-medium">Check-In:</span>
+                    <span>{checkInTime ? new Date(checkInTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-end">
+                  {isInside ? (
+                    <button
+                      onClick={() => handleCheckout(log.id)}
+                      className="w-full py-2 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer"
+                    >
+                      Mark Exit
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      Left at {checkOutTime ? new Date(checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop View: Visitors Table (>= md) */}
+      <div className="hidden md:block bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
