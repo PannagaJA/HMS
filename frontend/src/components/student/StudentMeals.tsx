@@ -71,7 +71,7 @@ export const StudentMeals: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {mealTypes.map((mealType) => {
             const menuForMeal = todayMenu?.meals?.find(
-              (m) => Number(m.meal_type) === Number(mealType.id)
+              (m) => Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
             );
             const itemsList = menuForMeal?.items_detail || menuForMeal?.items || [];
             const isSkipped = skippedMealId === mealType.id;

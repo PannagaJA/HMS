@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X, History, Clock } from 'lucide-react';
+import { Plus, X, History, Clock, Image, Paperclip, Eye } from 'lucide-react';
 import type { IssueTicket } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
@@ -17,10 +17,13 @@ export const StudentIssues: React.FC = () => {
   const [issues, setIssues] = useState<IssueTicket[]>([]);
   const [showRaiseModal, setShowRaiseModal] = useState(false);
   const [selectedUpdatesIssue, setSelectedUpdatesIssue] = useState<IssueTicket | null>(null);
+  const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
   const [issueCategory, setIssueCategory] = useState<string>('ELECTRICAL');
   const [issueTitle, setIssueTitle] = useState('');
   const [issueDesc, setIssueDesc] = useState('');
   const [issuePriority, setIssuePriority] = useState<string>('MEDIUM');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -36,6 +39,22 @@ export const StudentIssues: React.FC = () => {
     }
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showError('Image size must be under 5MB');
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleRaiseIssue = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -45,11 +64,14 @@ export const StudentIssues: React.FC = () => {
         category: issueCategory,
         description: issueDesc,
         priority: issuePriority,
+        image_url: imagePreview || undefined,
       });
       showSuccess(`Support ticket "${issueTitle}" logged successfully.`);
       setShowRaiseModal(false);
       setIssueTitle('');
       setIssueDesc('');
+      setImageFile(null);
+      setImagePreview('');
       fetchIssues();
     } catch (err: any) {
       const errorMsg = err.response?.data?.detail 
@@ -113,6 +135,20 @@ export const StudentIssues: React.FC = () => {
                 </div>
               )}
 
+              {/* Photo Preview in Mobile Card if attached */}
+              {issue.image_url && (
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImageModal(issue.image_url || null)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer border border-slate-200/80 transition-all"
+                  >
+                    <Image className="w-3.5 h-3.5 text-teal-700" />
+                    <span>View Attached Photo</span>
+                  </button>
+                </div>
+              )}
+
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Priority: <strong className="text-slate-700">{issue.priority || 'Normal'}</strong></span>
                 <div className="flex items-center gap-2">
@@ -141,6 +177,7 @@ export const StudentIssues: React.FC = () => {
                 <th className="py-3.5 px-4">Priority</th>
                 <th className="py-3.5 px-4">Reported On</th>
                 <th className="py-3.5 px-4">Status</th>
+                <th className="py-3.5 px-4">Attachment</th>
                 <th className="py-3.5 px-4">Latest Staff Remark</th>
                 <th className="py-3.5 pr-6 text-right">Action</th>
               </tr>
@@ -148,7 +185,7 @@ export const StudentIssues: React.FC = () => {
             <tbody className="divide-y divide-slate-100 text-sm">
               {issues.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400 italic">
+                  <td colSpan={7} className="py-12 text-center text-slate-400 italic">
                     No issues recorded for your room. Everything is operating normally.
                   </td>
                 </tr>
@@ -178,6 +215,20 @@ export const StudentIssues: React.FC = () => {
                       </td>
                       <td className="py-4 px-4">
                         <StatusBadge status={issue.status} />
+                      </td>
+                      <td className="py-4 px-4">
+                        {issue.image_url ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedImageModal(issue.image_url || null)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-xs font-semibold transition-all cursor-pointer"
+                          >
+                            <Image className="w-3.5 h-3.5 text-teal-700" />
+                            <span>Photo</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 text-xs italic">—</span>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-xs max-w-xs">
                         {latestUpdate ? (
@@ -210,6 +261,38 @@ export const StudentIssues: React.FC = () => {
         </div>
       </div>
 
+      {/* LIGHTBOX PREVIEW MODAL */}
+      {selectedImageModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white max-w-2xl w-full rounded-3xl p-6 border border-slate-200 shadow-2xl relative">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-slate-900">Issue Photo Evidence</h3>
+              <button
+                onClick={() => setSelectedImageModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-slate-200 flex items-center justify-center bg-slate-950">
+              <img
+                src={selectedImageModal}
+                alt="Issue Attachment"
+                className="max-h-[68vh] w-auto max-w-full object-contain"
+              />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setSelectedImageModal(null)}
+                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B]"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* STUDENT: VIEW ALL UPDATES / REMARKS MODAL */}
       {selectedUpdatesIssue && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -229,9 +312,28 @@ export const StudentIssues: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-1">
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-2">
               <div><span className="text-slate-400">Category:</span> <strong>{selectedUpdatesIssue.category}</strong></div>
               <div><span className="text-slate-400">Description:</span> <span className="italic">"{selectedUpdatesIssue.description}"</span></div>
+              {selectedUpdatesIssue.image_url && (
+                <div className="pt-2 border-t border-slate-200/60">
+                  <span className="text-slate-400 block mb-1">Attached Photo:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImageModal(selectedUpdatesIssue.image_url || null)}
+                    className="relative group rounded-xl overflow-hidden border border-slate-200 inline-block"
+                  >
+                    <img
+                      src={selectedUpdatesIssue.image_url}
+                      alt="Thumbnail"
+                      className="w-24 h-24 object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="w-5 h-5 text-white" />
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
@@ -277,7 +379,7 @@ export const StudentIssues: React.FC = () => {
       {/* REPORT ISSUE MODAL */}
       {showRaiseModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-7 border border-slate-200 shadow-xl">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-7 border border-slate-200 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Report Maintenance Issue</h3>
@@ -331,6 +433,43 @@ export const StudentIssues: React.FC = () => {
                   placeholder="Describe the exact problem and location..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
                 />
+              </div>
+
+              {/* Photo Upload Attachment */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Attach Photo / Evidence (Optional)</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer text-xs font-semibold transition-all">
+                    <Paperclip className="w-4 h-4 text-slate-500" />
+                    <span>{imageFile ? 'Change Photo' : 'Upload Photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageSelect}
+                    />
+                  </label>
+                  {imagePreview && (
+                    <div className="relative inline-block">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-12 h-12 object-cover rounded-2xl border border-slate-200 shadow-2xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreview('');
+                        }}
+                        className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-sm hover:bg-rose-600 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Upload JPEG, PNG or WebP image up to 5MB.</p>
               </div>
 
               <div>

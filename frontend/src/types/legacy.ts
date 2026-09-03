@@ -84,6 +84,7 @@ export interface IssueTicket {
   category: string;
   title: string;
   description: string;
+  image_url?: string;
   status: string;
   hostel?: any;
   hostel_id?: number;

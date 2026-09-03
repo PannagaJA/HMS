@@ -151,12 +151,23 @@ WITH CHECK (auth.is_admin() OR auth.is_security());
 -- 10. Dining
 DROP POLICY IF EXISTS policy_meal_types_select ON public.meal_types;
 CREATE POLICY policy_meal_types_select ON public.meal_types FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS policy_meal_types_admin ON public.meal_types;
+CREATE POLICY policy_meal_types_admin ON public.meal_types FOR ALL TO authenticated USING (auth.is_admin() OR auth.is_warden()) WITH CHECK (auth.is_admin() OR auth.is_warden());
+
 DROP POLICY IF EXISTS policy_menu_items_select ON public.menu_items;
 CREATE POLICY policy_menu_items_select ON public.menu_items FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS policy_menu_items_admin ON public.menu_items;
+CREATE POLICY policy_menu_items_admin ON public.menu_items FOR ALL TO authenticated USING (auth.is_admin() OR auth.is_warden()) WITH CHECK (auth.is_admin() OR auth.is_warden());
+
 DROP POLICY IF EXISTS policy_menus_select ON public.menus;
 CREATE POLICY policy_menus_select ON public.menus FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS policy_menus_admin ON public.menus;
+CREATE POLICY policy_menus_admin ON public.menus FOR ALL TO authenticated USING (auth.is_admin() OR auth.is_warden()) WITH CHECK (auth.is_admin() OR auth.is_warden());
+
 DROP POLICY IF EXISTS policy_menu_item_links_select ON public.menu_item_links;
 CREATE POLICY policy_menu_item_links_select ON public.menu_item_links FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS policy_menu_item_links_admin ON public.menu_item_links;
+CREATE POLICY policy_menu_item_links_admin ON public.menu_item_links FOR ALL TO authenticated USING (auth.is_admin() OR auth.is_warden()) WITH CHECK (auth.is_admin() OR auth.is_warden());
 
 DROP POLICY IF EXISTS policy_meal_skips_select ON public.student_meal_skips;
 CREATE POLICY policy_meal_skips_select ON public.student_meal_skips FOR SELECT TO authenticated

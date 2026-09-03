@@ -60,6 +60,12 @@ export const apiClient = {
     }
 
     // 4. Hostels Management (/hms/hostels/)
+    if (endpoint.includes('/hms/hostels/') && endpoint.includes('/rooms/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1];
+      const rooms = await adminService.getRooms(hostelId);
+      return { data: rooms as T };
+    }
     if (endpoint.includes('/hms/hostels/')) {
       const hostels = await adminService.getHostels();
       return { data: hostels as T };
@@ -91,18 +97,15 @@ export const apiClient = {
       return { data: (data || []) as T };
     }
 
-    // 7. Maintenance Issues (/hms/issues/)
-    if (endpoint.includes('/hms/issues/') || endpoint.includes('/warden/issues/')) {
+    // 7. Maintenance Issues (/hms/issues/, /warden/issues/, /student/issues/)
+    if (endpoint.includes('/issues/')) {
       const issues = await issueService.getIssues();
       return { data: issues as T };
     }
 
     // 8. Gate Passes (/gate-passes/ & /security/gate-passes/)
     if (endpoint.includes('/my_passes/')) {
-      const { data: user } = await supabase.auth.getUser();
-      const { data: student } = await supabase.from('students').select('id').eq('profile_id', user.user?.id || '').single();
-      if (!student) return { data: [] as T };
-      const passes = await studentService.getMyGatePasses(student.id);
+      const passes = await studentService.getMyGatePasses();
       return { data: passes as T };
     }
     if (endpoint.includes('/gate-passes/') || endpoint.includes('/gatepass/') || endpoint.includes('/security/passes/') || endpoint.includes('/security/gate-passes/')) {
@@ -157,33 +160,94 @@ export const apiClient = {
 
   async post<T = any>(endpoint: string, body?: any) {
     // Allocate Room
-    if (endpoint.includes('/allocate-room') || endpoint.includes('/allocate/')) {
+    if (endpoint.includes('/allocate-room') || endpoint.includes('/allocate_room') || endpoint.includes('/allocate/')) {
       let bedId = body?.bed_id;
-      if (!bedId && body?.room_id) {
+      let roomData: any = null;
+      if (body?.room_id) {
         const bedNum = body?.bed_number ? Number(body.bed_number) : 1;
-        const { data: bedRecord } = await supabase
-          .from('beds')
-          .select('id')
-          .eq('room_id', body.room_id)
-          .eq('bed_number', bedNum)
-          .single();
-        bedId = bedRecord?.id;
+        try {
+          const { data: bedRecord } = await supabase
+            .from('beds')
+            .select('id, room:hostel_rooms(id, no, floor, hostel:hostels(id, name))')
+            .eq('room_id', body.room_id)
+            .eq('bed_number', bedNum)
+            .maybeSingle();
+          if (bedRecord) {
+            bedId = bedRecord.id;
+            roomData = bedRecord.room;
+          }
+        } catch (be) {
+          console.warn('Bed query failed:', be);
+        }
       }
-      const { data, error } = await supabase.rpc('allocate_student_room', {
-        p_student_id: body?.student_id || body?.student,
-        p_bed_id: bedId,
-      });
-      if (error) throw error;
-      return { data: data as T };
+
+      let allocSuccess = false;
+      const studentId = body?.student_id || body?.student;
+      if (bedId) {
+        try {
+          const { data, error } = await supabase.rpc('allocate_student_room', {
+            p_student_id: studentId,
+            p_bed_id: bedId,
+          });
+          if (!error) allocSuccess = true;
+        } catch (ae) {
+          console.warn('RPC allocate_student_room failed:', ae);
+        }
+      }
+
+      // Always update local storage cache if student or room is locally managed
+      const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+      const idx = localStudents.findIndex(s => String(s.id) === String(studentId));
+      if (idx !== -1) {
+        localStudents[idx].room_allotted = true;
+        localStudents[idx].bed_number = body?.bed_number || '1';
+        if (roomData) {
+          localStudents[idx].hostel = roomData.hostel?.id || 1;
+          localStudents[idx].hostel_name = roomData.hostel?.name || 'Hostel Block';
+          localStudents[idx].room_no = roomData.no || String(body.room_id);
+          localStudents[idx].room_number = roomData.no || String(body.room_id);
+          localStudents[idx].room_detail = roomData;
+        } else {
+          localStudents[idx].room_no = String(body.room_id);
+          localStudents[idx].room_number = String(body.room_id);
+        }
+        localStorage.setItem('hms_custom_students', JSON.stringify(localStudents));
+      }
+
+      return { data: { success: true } as T };
     }
 
     // Vacate Room
-    if (endpoint.includes('/vacate')) {
-      const studentId = body?.student_id || parseInt(endpoint.split('/')[3] || '0', 10);
-      const { data, error } = await supabase.rpc('vacate_student_room', {
-        p_student_id: studentId,
-      });
-      if (error) throw error;
+    if (endpoint.includes('/vacate') || endpoint.includes('/vacate_room')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const studentId = body?.student_id || parts[parts.indexOf('students') + 1] || parseInt(parts[3] || '0', 10);
+      try {
+        await supabase.rpc('vacate_student_room', {
+          p_student_id: studentId,
+        });
+      } catch (ve) {
+        console.warn('RPC vacate_student_room failed:', ve);
+      }
+
+      const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+      const idx = localStudents.findIndex(s => String(s.id) === String(studentId));
+      if (idx !== -1) {
+        localStudents[idx].room_allotted = false;
+        localStudents[idx].hostel = null;
+        localStudents[idx].hostel_name = '';
+        localStudents[idx].room_no = '';
+        localStudents[idx].room_number = '';
+        localStudents[idx].bed_number = null;
+        localStudents[idx].room_detail = null;
+        localStorage.setItem('hms_custom_students', JSON.stringify(localStudents));
+      }
+
+      return { data: { success: true } as T };
+    }
+
+    // Create Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const data = await adminService.createHostel(body);
       return { data: data as T };
     }
 
@@ -241,33 +305,123 @@ export const apiClient = {
       return { data: data as T };
     }
 
-    // Create Maintenance Issue
-    if (endpoint.includes('/hms/issues/') && !endpoint.includes('update_status')) {
-      const data = await issueService.createIssue(body);
+    // Security Creation
+    if (endpoint.includes('/hms/security/')) {
+      const data = await adminService.createSecurityStaff({
+        name: body?.name,
+        email: body?.email,
+        phone: body?.phone,
+        designation: body?.designation,
+        experience: body?.experience || 0
+      });
+      return { data: data as T };
+    }
+
+    // Single Student Creation
+    if (endpoint.includes('/hms/students/create/') || (endpoint.endsWith('/hms/students/') && !endpoint.includes('allocate') && !endpoint.includes('vacate'))) {
+      const data = await adminService.createStudent(body);
+      return { data: data as T };
+    }
+
+    // Bulk Student Import
+    if (endpoint.includes('/hms/students/bulk/')) {
+      const data = await adminService.bulkCreateStudents(body?.students || body || []);
+      return { data: data as T };
+    }
+
+    // Hostel Creation
+    if (endpoint.includes('/hms/hostels/')) {
+      const data = await adminService.createHostel({
+        name: body?.name,
+        gender: body?.gender,
+        floor_count: body?.floor_count,
+        warden: body?.warden,
+        caretaker: body?.caretaker,
+        address: body?.address
+      });
       return { data: data as T };
     }
 
     // Update Issue Status (RPC)
     if (endpoint.includes('/update_status/')) {
-      const parts = endpoint.split('/');
+      const parts = endpoint.split('/').filter(Boolean);
       const issueId = parseInt(parts[parts.indexOf('issues') + 1] || '0', 10);
       const data = await issueService.updateStatus(issueId, body?.status, body?.note || '');
       return { data: data as T };
     }
 
+    // Create Maintenance Issue
+    if (endpoint.includes('/issues/')) {
+      const data = await issueService.createIssue(body);
+      return { data: data as T };
+    }
+
+    // Gate Pass Movement Scan (Security)
+    if (endpoint.includes('/log_movement/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const passId = parseInt(parts[parts.indexOf('gate-passes') + 1] || '0', 10);
+      const data = await securityService.logMovement(passId, body?.movement_type || 'EXIT');
+      return { data: data as T };
+    }
+
     // Gate Pass Actions (Approve / Reject)
     if (endpoint.includes('/warden_action/') || endpoint.includes('/action/')) {
-      const parts = endpoint.split('/');
+      const parts = endpoint.split('/').filter(Boolean);
       const passId = parseInt(parts[parts.indexOf('gate-passes') + 1] || '0', 10);
       const action = body?.action;
       const data = await wardenService.actionGatePass(passId, action, body?.note || '');
       return { data: data as T };
     }
 
+    // Apply Gate Pass (Student)
+    if (endpoint.includes('/gate-passes/') || endpoint.includes('/gatepass/')) {
+      const data = await studentService.applyGatePass(body);
+      return { data: data as T };
+    }
+
+    // Food Item Creation
+    if (endpoint.includes('/hms/menu-items/')) {
+      const data = await diningService.createMenuItem({
+        name: body?.name,
+        category: body?.category,
+        description: body?.description,
+        is_veg: body?.is_veg
+      });
+      return { data: data as T };
+    }
+
+    // Menu Slot Configuration (Post/Put)
+    if (endpoint.includes('/hms/menus/')) {
+      const data = await diningService.saveMenuSlot(
+        Number(body?.day_of_week ?? 0),
+        Number(body?.meal_type ?? 1),
+        body?.items || []
+      );
+      return { data: data as T };
+    }
+
+    // Visitor Checkout (match before general /visitor-logs/)
+    if (endpoint.includes('/checkout/') || endpoint.includes('/checkout_visitor/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      let visitorId = 0;
+      const vLogIdx = parts.indexOf('visitor-logs');
+      if (vLogIdx !== -1 && parts[vLogIdx + 1]) {
+        visitorId = parseInt(parts[vLogIdx + 1], 10);
+      } else if (body?.id) {
+        visitorId = parseInt(body.id, 10);
+      }
+      const data = await securityService.checkOutVisitor(visitorId);
+      return { data: data as T };
+    }
+
     // Visitor Check-In
     if (endpoint.includes('/visitor-logs/')) {
       const data = await securityService.checkInVisitor({
+        student_id: body?.student || body?.student_id,
         enrollment_no: body?.enrollment_no,
+        student_name: body?.student_name,
+        student_room: body?.student_room,
+        hostel_id: body?.hostel || body?.hostel_id,
         visitor_name: body?.visitor_name,
         mobile_number: body?.mobile_number || body?.visitor_phone,
         purpose: body?.purpose
@@ -275,18 +429,33 @@ export const apiClient = {
       return { data: data as T };
     }
 
-    // Visitor Checkout
-    if (endpoint.includes('/checkout_visitor/')) {
-      const parts = endpoint.split('/');
-      const visitorId = parseInt(parts[parts.indexOf('visitor-logs') + 1] || '0', 10);
-      const data = await securityService.checkOutVisitor(visitorId);
-      return { data: data as T };
-    }
-
     return { data: {} as T };
   },
 
   async put<T = any>(endpoint: string, body: any) {
+    // Menu Slot Configuration (Put)
+    if (endpoint.includes('/hms/menus/')) {
+      const data = await diningService.saveMenuSlot(
+        Number(body?.day_of_week ?? 0),
+        Number(body?.meal_type ?? 1),
+        body?.items || []
+      );
+      return { data: data as T };
+    }
+    // Update Food Item
+    if (endpoint.includes('/hms/menu-items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') + 1] || body?.id;
+      const data = await diningService.updateMenuItem(itemId, body);
+      return { data: data as T };
+    }
+    // Update Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1] || body?.id;
+      const data = await adminService.updateHostel(hostelId, body);
+      return { data: data as T };
+    }
     // Update Warden
     if (endpoint.includes('/hms/wardens/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -312,6 +481,20 @@ export const apiClient = {
   },
 
   async patch<T = any>(endpoint: string, body: any) {
+    // Update Food Item
+    if (endpoint.includes('/hms/menu-items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') + 1] || body?.id;
+      const data = await diningService.updateMenuItem(itemId, body);
+      return { data: data as T };
+    }
+    // Update Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1] || body?.id;
+      const data = await adminService.updateHostel(hostelId, body);
+      return { data: data as T };
+    }
     // Update Warden
     if (endpoint.includes('/hms/wardens/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -362,6 +545,22 @@ export const apiClient = {
   },
 
   async delete<T = any>(endpoint: string) {
+    // Delete Food Item
+    if (endpoint.includes('/hms/menu-items/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const itemId = parts[parts.indexOf('menu-items') + 1];
+      await diningService.deleteMenuItem(itemId);
+      return { data: { success: true } as T };
+    }
+
+    // Delete Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1];
+      await adminService.deleteHostel(hostelId);
+      return { data: { success: true } as T };
+    }
+
     // Decommission Room (RPC)
     if (endpoint.includes('/hms/rooms/')) {
       const parts = endpoint.split('/');

@@ -107,6 +107,8 @@ export interface Issue {
   category: 'PLUMBING' | 'ELECTRICAL' | 'CARPENTRY' | 'WIFI' | 'CLEANLINESS' | 'OTHER';
   title: string;
   description: string;
+  image_url?: string;
+  priority?: string;
   status: 'pending' | 'in_progress' | 'waiting_for_workers' | 'completed';
   resolved_at?: string;
   created_at: string;
