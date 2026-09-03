@@ -101,10 +101,7 @@ export const apiClient = {
 
     // 8. Gate Passes (/gate-passes/ & /security/gate-passes/)
     if (endpoint.includes('/my_passes/')) {
-      const { data: user } = await supabase.auth.getUser();
-      const { data: student } = await supabase.from('students').select('id').eq('profile_id', user.user?.id || '').single();
-      if (!student) return { data: [] as T };
-      const passes = await studentService.getMyGatePasses(student.id);
+      const passes = await studentService.getMyGatePasses();
       return { data: passes as T };
     }
     if (endpoint.includes('/gate-passes/') || endpoint.includes('/gatepass/') || endpoint.includes('/security/passes/') || endpoint.includes('/security/gate-passes/')) {
@@ -319,12 +316,26 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Gate Pass Movement Scan (Security)
+    if (endpoint.includes('/log_movement/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const passId = parseInt(parts[parts.indexOf('gate-passes') + 1] || '0', 10);
+      const data = await securityService.logMovement(passId, body?.movement_type || 'EXIT');
+      return { data: data as T };
+    }
+
     // Gate Pass Actions (Approve / Reject)
     if (endpoint.includes('/warden_action/') || endpoint.includes('/action/')) {
-      const parts = endpoint.split('/');
+      const parts = endpoint.split('/').filter(Boolean);
       const passId = parseInt(parts[parts.indexOf('gate-passes') + 1] || '0', 10);
       const action = body?.action;
       const data = await wardenService.actionGatePass(passId, action, body?.note || '');
+      return { data: data as T };
+    }
+
+    // Apply Gate Pass (Student)
+    if (endpoint.includes('/gate-passes/') || endpoint.includes('/gatepass/')) {
+      const data = await studentService.applyGatePass(body);
       return { data: data as T };
     }
 
