@@ -349,22 +349,32 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Visitor Checkout (match before general /visitor-logs/)
+    if (endpoint.includes('/checkout/') || endpoint.includes('/checkout_visitor/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      let visitorId = 0;
+      const vLogIdx = parts.indexOf('visitor-logs');
+      if (vLogIdx !== -1 && parts[vLogIdx + 1]) {
+        visitorId = parseInt(parts[vLogIdx + 1], 10);
+      } else if (body?.id) {
+        visitorId = parseInt(body.id, 10);
+      }
+      const data = await securityService.checkOutVisitor(visitorId);
+      return { data: data as T };
+    }
+
     // Visitor Check-In
     if (endpoint.includes('/visitor-logs/')) {
       const data = await securityService.checkInVisitor({
+        student_id: body?.student || body?.student_id,
         enrollment_no: body?.enrollment_no,
+        student_name: body?.student_name,
+        student_room: body?.student_room,
+        hostel_id: body?.hostel || body?.hostel_id,
         visitor_name: body?.visitor_name,
         mobile_number: body?.mobile_number || body?.visitor_phone,
         purpose: body?.purpose
       });
-      return { data: data as T };
-    }
-
-    // Visitor Checkout
-    if (endpoint.includes('/checkout_visitor/')) {
-      const parts = endpoint.split('/');
-      const visitorId = parseInt(parts[parts.indexOf('visitor-logs') + 1] || '0', 10);
-      const data = await securityService.checkOutVisitor(visitorId);
       return { data: data as T };
     }
 

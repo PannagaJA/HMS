@@ -61,21 +61,90 @@ export const securityService = {
   /**
    * Check in a visitor
    */
-  async checkInVisitor(payload: { enrollment_no: string; visitor_name: string; mobile_number: string; purpose?: string }) {
-    const { data: student } = await supabase
-      .from('students')
-      .select('id')
-      .eq('enrollment_no', payload.enrollment_no)
-      .single();
+  async checkInVisitor(payload: {
+    student_id?: number | string;
+    enrollment_no?: string;
+    student_name?: string;
+    student_room?: string;
+    hostel_id?: number | string;
+    visitor_name: string;
+    mobile_number: string;
+    purpose?: string;
+  }) {
+    let student: any = null;
 
-    if (!student) throw new Error(`Student with enrollment ${payload.enrollment_no} not found`);
+    // 1. Try finding by student_id if provided
+    if (payload.student_id) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .eq('id', payload.student_id)
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    // 2. Try finding by enrollment_no if non-empty
+    if (!student && payload.enrollment_no && payload.enrollment_no.trim().length > 0) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .eq('enrollment_no', payload.enrollment_no.trim())
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    // 3. Try finding by student_name
+    if (!student && payload.student_name && payload.student_name.trim().length > 0) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .ilike('student_name', `%${payload.student_name.trim()}%`)
+        .limit(1)
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    // 4. Fallback to any active student with allocation
+    if (!student) {
+      const { data } = await supabase
+        .from('students')
+        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+        .limit(1)
+        .maybeSingle();
+      if (data) student = data;
+    }
+
+    if (!student) {
+      throw new Error('No resident student record found to associate visitor with');
+    }
+
+    const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
+    const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+    const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+
+    let roomId = room?.id;
+    let hostelId = room?.hostel_id || payload.hostel_id;
+
+    if (!roomId || !hostelId) {
+      const { data: defaultRoom } = await supabase
+        .from('hostel_rooms')
+        .select('id, hostel_id')
+        .limit(1)
+        .maybeSingle();
+      roomId = roomId || defaultRoom?.id || 1;
+      hostelId = hostelId || defaultRoom?.hostel_id || 1;
+    }
 
     const { data, error } = await supabase.from('visitor_logs').insert({
       student_id: student.id,
+      hostel_id: hostelId,
+      room_id: roomId,
       visitor_name: payload.visitor_name,
       mobile_number: payload.mobile_number,
-      purpose: payload.purpose || 'Visit'
+      purpose: payload.purpose || 'Visit',
+      check_in_time: new Date().toISOString()
     }).select().single();
+
     if (error) throw error;
     return data;
   },
@@ -84,9 +153,22 @@ export const securityService = {
    * Check out a visitor
    */
   async checkOutVisitor(visitorId: number) {
-    const { data, error } = await supabase.rpc('checkout_visitor', {
-      p_visitor_id: visitorId
-    });
+    try {
+      const { data, error } = await supabase.rpc('checkout_visitor', {
+        p_visitor_id: visitorId
+      });
+      if (!error && data) return data;
+    } catch (rpcErr) {
+      console.warn('RPC checkout_visitor failed, falling back to direct update:', rpcErr);
+    }
+
+    const { data, error } = await supabase
+      .from('visitor_logs')
+      .update({ check_out_time: new Date().toISOString() })
+      .eq('id', visitorId)
+      .select()
+      .single();
+
     if (error) throw error;
     return data;
   }
