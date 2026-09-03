@@ -464,43 +464,101 @@ export const adminService = {
   },
 
   /**
-   * Staff: Wardens
+   * Staff: Wardens - Backed by Supabase hostel_wardens & profiles tables
    */
   async getWardens() {
-    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    let wardensList: any[] = [];
     try {
-      const { data, error } = await supabase
+      // 1. Check dedicated hostel_wardens table in Supabase
+      const { data: hwData, error: hwError } = await supabase
+        .from('hostel_wardens')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (!hwError && hwData && hwData.length > 0) {
+        wardensList = hwData.map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          email: w.email || '',
+          phone: w.phone || '',
+          designation: w.designation || 'Hostel Warden',
+          experience: w.experience || 5
+        }));
+      }
+    } catch (e) {
+      console.warn('Query to hostel_wardens failed, checking profiles:', e);
+    }
+
+    // 2. Also fetch WARDEN profiles from Supabase to merge
+    try {
+      const { data: pData, error: pError } = await supabase
         .from('profiles')
         .select('*')
         .eq('role', 'WARDEN')
         .order('created_at', { ascending: true });
 
-      if (!error && data) {
-        const profileWardens = data.map((w: any) => ({
-          id: w.id,
-          name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email || 'Warden',
-          email: w.email || '',
-          phone: w.phone || '',
-          designation: 'Hostel Warden',
-          experience: 5
-        }));
-
-        const combined = [...profileWardens];
-        for (const sw of storedWardens) {
-          if (!combined.some(w => String(w.id) === String(sw.id))) {
-            combined.push(sw);
+      if (!pError && pData) {
+        for (const p of pData) {
+          const profileName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email;
+          if (!wardensList.some(w => String(w.id) === String(p.id) || (p.email && w.email === p.email))) {
+            wardensList.push({
+              id: p.id,
+              name: profileName,
+              email: p.email || '',
+              phone: p.phone || '',
+              designation: 'Hostel Warden',
+              experience: 5
+            });
           }
         }
-        return combined;
       }
     } catch (e) {
-      console.warn('Could not load wardens from Supabase:', e);
+      console.warn('Query to profiles for wardens failed:', e);
     }
-    return storedWardens;
+
+    // 3. Merge custom local wardens if any
+    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    const combined = [...wardensList];
+    for (const sw of storedWardens) {
+      if (!combined.some(w => String(w.id) === String(sw.id) || (sw.email && w.email === sw.email))) {
+        combined.push(sw);
+      }
+    }
+    return combined;
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
     const email = payload.email?.trim() || `warden.${Date.now()}@amc.edu`;
+
+    // Try inserting into Supabase hostel_wardens table directly
+    try {
+      const { data, error } = await supabase
+        .from('hostel_wardens')
+        .insert({
+          name: payload.name,
+          email: email,
+          phone: payload.phone || '',
+          designation: payload.designation || 'Hostel Warden',
+          experience: payload.experience || 5
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        return {
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          designation: data.designation,
+          experience: data.experience
+        };
+      }
+    } catch (e) {
+      console.warn('Insert into hostel_wardens table in Supabase failed, storing locally:', e);
+    }
+
+    // Fallback store
     const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
     const newWarden = {
       id: `w-${Date.now()}`,
@@ -518,6 +576,21 @@ export const adminService = {
   async updateWarden(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
     const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+    if (!isUuid && typeof id === 'number') {
+      try {
+        const { data, error } = await supabase
+          .from('hostel_wardens')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Update to hostel_wardens failed:', e);
+      }
+    }
+
     if (isUuid) {
       const updates: any = {};
       if (payload.name) {
@@ -528,26 +601,30 @@ export const adminService = {
       if (payload.phone !== undefined) updates.phone = payload.phone;
       if (payload.email) updates.email = payload.email;
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
 
-      if (!error && data) {
-        return {
-          id: data.id,
-          name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email,
-          email: data.email,
-          phone: data.phone,
-          designation: payload.designation || 'Hostel Warden',
-          experience: payload.experience || 5
-        };
+        if (!error && data) {
+          return {
+            id: data.id,
+            name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email,
+            email: data.email,
+            phone: data.phone,
+            designation: payload.designation || 'Hostel Warden',
+            experience: payload.experience || 5
+          };
+        }
+      } catch (e) {
+        console.warn('Update to profiles failed:', e);
       }
     }
 
-    // Update in local cache if not UUID or Supabase update failed
+    // Local fallback update
     const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
     const index = storedWardens.findIndex(w => String(w.id) === String(id));
     if (index !== -1) {
@@ -561,6 +638,14 @@ export const adminService = {
 
   async deleteWarden(id: string | number) {
     const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    if (!isUuid && typeof id === 'number') {
+      try {
+        await supabase.from('hostel_wardens').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Delete from hostel_wardens failed:', e);
+      }
+    }
 
     if (isUuid) {
       try {
