@@ -44,7 +44,7 @@ export const adminService = {
   async getHostels(): Promise<Hostel[]> {
     const { data: hostels, error } = await supabase
       .from('hostels')
-      .select('*, rooms:hostel_rooms(id, capacity, is_active), wardens:warden_hostel_assignments(warden_profile_id)')
+      .select('*, rooms:hostel_rooms(id, capacity, is_active)')
       .eq('is_active', true);
     if (error) throw error;
 
@@ -53,20 +53,55 @@ export const adminService = {
       .select('id, bed:beds(room:hostel_rooms(hostel_id))')
       .eq('is_active', true);
 
+    // Fetch staff for mapping names
+    const wardensList = await adminService.getWardens();
+    const caretakersList = await adminService.getCaretakers();
+
     return (hostels || []).map((h: any) => {
       const totalRooms = (h.rooms || []).filter((r: any) => r.is_active).length;
       const totalCap = (h.rooms || []).filter((r: any) => r.is_active).reduce((sum: number, r: any) => sum + (r.capacity || 0), 0);
       const occ = (activeAllocs || []).filter((a: any) => a.bed?.room?.hostel_id === h.id).length;
+      
+      const wDetail = h.warden_id ? wardensList.find(w => String(w.id) === String(h.warden_id)) : null;
+      const cDetail = h.caretaker_id ? caretakersList.find(c => String(c.id) === String(h.caretaker_id)) : null;
+
       return {
         ...h,
         total_rooms: totalRooms,
         total_capacity: totalCap,
         occupied_beds: occ,
-        warden: h.wardens?.[0]?.warden_profile_id || null,
-        warden_detail: null,
-        caretaker: null
+        warden: h.warden_id || null,
+        warden_detail: wDetail || null,
+        caretaker: h.caretaker_id || null,
+        caretaker_detail: cDetail || null
       };
     });
+  },
+
+  async createHostel(payload: any) {
+    const { data, error } = await supabase.from('hostels').insert({
+      name: payload.name,
+      gender: payload.gender,
+      floor_count: payload.floor_count,
+      address: payload.address,
+      warden_id: payload.warden ? String(payload.warden) : null,
+      caretaker_id: payload.caretaker ? String(payload.caretaker) : null
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateHostel(id: string | number, payload: any) {
+    const { data, error } = await supabase.from('hostels').update({
+      name: payload.name,
+      gender: payload.gender,
+      floor_count: payload.floor_count,
+      address: payload.address,
+      warden_id: payload.warden ? String(payload.warden) : null,
+      caretaker_id: payload.caretaker ? String(payload.caretaker) : null
+    }).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   /**
@@ -147,84 +182,57 @@ export const adminService = {
    * Staff: Wardens
    */
   async getWardens() {
-    // 1. Check local/custom wardens cache
-    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
+    // Fetch manually added wardens
+    const { data: customWardens, error } = await supabase
+      .from('hostel_wardens')
+      .select('*')
+      .eq('is_active', true)
+      .order('id', { ascending: true });
     
-    // 2. Fetch WARDEN profiles from Supabase
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
-      const profileWardens = (data || []).map((w: any) => ({
-        id: w.id,
-        name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
-        email: w.email,
-        phone: w.phone || '',
-        designation: 'Hostel Warden',
-        experience: 5
-      }));
+    let combined = customWardens || [];
 
-      // Merge avoiding duplicate IDs
-      const combined = [...profileWardens];
-      for (const sw of storedWardens) {
-        if (!combined.some(w => String(w.id) === String(sw.id))) {
-          combined.push(sw);
-        }
+    // Fetch registered warden profiles
+    try {
+      const { data: profileWardens } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
+      if (profileWardens) {
+        const mapped = profileWardens.map((w: any) => ({
+          id: w.id,
+          name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
+          email: w.email,
+          phone: w.phone || '',
+          designation: 'Hostel Warden',
+          experience: 5
+        }));
+        combined = [...mapped, ...combined];
       }
-      return combined;
-    } catch {
-      return storedWardens;
+    } catch (err) {
+      console.warn('Could not fetch WARDEN profiles:', err);
     }
+    
+    return combined;
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
-    // Save to local custom wardens list
-    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
-    const newWarden = {
-      id: Date.now(),
-      name: payload.name,
-      email: payload.email || '',
-      phone: payload.phone,
-      designation: payload.designation || 'Hostel Warden',
-      experience: payload.experience || 0
-    };
-    storedWardens.push(newWarden);
-    localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
-    return newWarden;
+    const { data, error } = await supabase.from('hostel_wardens').insert(payload).select().single();
+    if (error) throw error;
+    return data;
   },
 
   async updateWarden(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
-    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
-    const index = storedWardens.findIndex(w => String(w.id) === String(id));
-    if (index !== -1) {
-      storedWardens[index] = { ...storedWardens[index], ...payload };
-      localStorage.setItem('hms_custom_wardens', JSON.stringify(storedWardens));
-      return storedWardens[index];
+    if (typeof id === 'string' && id.includes('-')) {
+      throw new Error("Cannot edit a registered system user from this dashboard.");
     }
-    // Also try updating profiles if it was a profile
-    try {
-      const names = (payload.name || '').trim().split(' ');
-      const firstName = names[0] || '';
-      const lastName = names.slice(1).join(' ') || '';
-      await supabase.from('profiles').update({
-        first_name: firstName,
-        last_name: lastName,
-        phone: payload.phone
-      }).eq('id', id);
-    } catch (e) {
-      console.warn('Could not update profile in Supabase:', e);
-    }
-    return { id, ...payload };
+    const { data, error } = await supabase.from('hostel_wardens').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   async deleteWarden(id: string | number) {
-    const storedWardens: any[] = JSON.parse(localStorage.getItem('hms_custom_wardens') || '[]');
-    const filtered = storedWardens.filter(w => String(w.id) !== String(id));
-    localStorage.setItem('hms_custom_wardens', JSON.stringify(filtered));
-
-    try {
-      await supabase.from('profiles').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Could not delete profile in Supabase:', e);
+    if (typeof id === 'string' && id.includes('-')) {
+      throw new Error("Cannot delete a registered system user from this dashboard.");
     }
+    const { error } = await supabase.from('hostel_wardens').delete().eq('id', id);
+    if (error) throw error;
     return { success: true };
   },
 
@@ -232,77 +240,88 @@ export const adminService = {
    * Staff: Caretakers
    */
   async getCaretakers() {
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    try {
-      const { data, error } = await supabase
-        .from('hostel_caretakers')
-        .select('*')
-        .eq('is_active', true)
-        .order('id', { ascending: true });
-      if (error || !data) {
-        return storedCaretakers;
-      }
-      const combined = [...data];
-      for (const sc of storedCaretakers) {
-        if (!combined.some(c => String(c.id) === String(sc.id))) {
-          combined.push(sc);
-        }
-      }
-      return combined;
-    } catch {
-      return storedCaretakers;
-    }
+    const { data, error } = await supabase
+      .from('hostel_caretakers')
+      .select('*')
+      .eq('is_active', true)
+      .order('id', { ascending: true });
+    if (error) throw error;
+    return data || [];
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
-    // Try Supabase insert
-    try {
-      const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
-      if (!error && data) return data;
-    } catch (e) {
-      console.warn('Hostel caretakers table insert failed, falling back to local store:', e);
-    }
-
-    // Fallback store
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    const newCaretaker = {
-      id: Date.now(),
-      name: payload.name,
-      email: payload.email || '',
-      phone: payload.phone,
-      experience: payload.experience || 0,
-      is_active: true
-    };
-    storedCaretakers.push(newCaretaker);
-    localStorage.setItem('hms_custom_caretakers', JSON.stringify(storedCaretakers));
-    return newCaretaker;
+    const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
+    if (error) throw error;
+    return data;
   },
 
   async updateCaretaker(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; experience?: number }>) {
-    try {
-      await supabase.from('hostel_caretakers').update(payload).eq('id', id);
-    } catch (e) {
-      console.warn('Hostel caretakers table update failed:', e);
-    }
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    const index = storedCaretakers.findIndex(c => String(c.id) === String(id));
-    if (index !== -1) {
-      storedCaretakers[index] = { ...storedCaretakers[index], ...payload };
-      localStorage.setItem('hms_custom_caretakers', JSON.stringify(storedCaretakers));
-      return storedCaretakers[index];
-    }
-    return { id, ...payload };
+    const { data, error } = await supabase.from('hostel_caretakers').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   async deleteCaretaker(id: string | number) {
+    const { error } = await supabase.from('hostel_caretakers').delete().eq('id', id);
+    if (error) throw error;
+    return { success: true };
+  },
+
+  /**
+   * Staff: Security
+   */
+  async getSecurityStaff() {
+    // Fetch manually added security staff
+    const { data: customSecurity, error } = await supabase
+      .from('security_staff')
+      .select('*')
+      .eq('is_active', true)
+      .order('id', { ascending: true });
+    
+    let combined = customSecurity || [];
+
+    // Fetch registered security profiles
     try {
-      await supabase.from('hostel_caretakers').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Hostel caretakers delete failed:', e);
+      const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
+      if (profileSecurity) {
+        const mapped = profileSecurity.map((w: any) => ({
+          id: w.id,
+          name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
+          email: w.email,
+          phone: w.phone || '',
+          designation: 'Security Guard',
+          experience: 5
+        }));
+        combined = [...mapped, ...combined];
+      }
+    } catch (err) {
+      console.warn('Could not fetch SECURITY profiles:', err);
     }
-    const storedCaretakers: any[] = JSON.parse(localStorage.getItem('hms_custom_caretakers') || '[]');
-    const filtered = storedCaretakers.filter(c => String(c.id) !== String(id));
-    localStorage.setItem('hms_custom_caretakers', JSON.stringify(filtered));
+
+    return combined;
+  },
+
+  async createSecurityStaff(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
+    const { data, error } = await supabase.from('security_staff').insert(payload).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateSecurityStaff(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
+    if (typeof id === 'string' && id.includes('-')) {
+      throw new Error("Cannot edit a registered system user from this dashboard.");
+    }
+    const { data, error } = await supabase.from('security_staff').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteSecurityStaff(id: string | number) {
+    if (typeof id === 'string' && id.includes('-')) {
+      throw new Error("Cannot delete a registered system user from this dashboard.");
+    }
+    const { error } = await supabase.from('security_staff').delete().eq('id', id);
+    if (error) throw error;
     return { success: true };
   }
 };

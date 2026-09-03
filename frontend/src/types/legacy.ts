@@ -20,7 +20,16 @@ export interface HostelCaretaker {
   name: string;
   phone?: string;
   email?: string;
-  experience?: string;
+  experience?: string | number;
+}
+
+export interface SecurityStaff {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  designation?: string;
+  experience?: string | number;
 }
 
 export interface HostelStudent {

@@ -13,7 +13,8 @@ import {
   QrCode,
   User,
   LogOut,
-  X
+  X,
+  Bell
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { path: '/admin/issues', name: 'Issue Board', icon: Wrench },
     { path: '/admin/gatepass', name: 'Gate Passes', icon: Ticket },
     { path: '/admin/visitors', name: 'Visitor Logs', icon: ClipboardList },
+    { path: '/admin/announcements', name: 'Announcements', icon: Bell },
     { path: '/admin/profile', name: 'Account & Security', icon: User },
   ];
 
@@ -47,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { path: '/warden/passes', name: 'Gate Pass Review', icon: Ticket },
     { path: '/warden/issues', name: 'Hostel Issues', icon: Wrench },
     { path: '/warden/visitors', name: 'Visitor Register', icon: ClipboardList },
+    { path: '/warden/announcements', name: 'Announcements', icon: Bell },
     { path: '/warden/profile', name: 'My Profile', icon: User },
   ];
 
@@ -54,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
   const securityNavItems = [
     { path: '/security/scanner', name: 'Student Gate Movement & QR', icon: QrCode },
     { path: '/security/visitors', name: 'Visitor Register', icon: ClipboardList },
+    { path: '/security/announcements', name: 'Announcements', icon: Bell },
     { path: '/security/profile', name: 'My Profile', icon: User },
   ];
 
@@ -63,6 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { path: '/student/passes', name: 'My Gate Passes', icon: Ticket },
     { path: '/student/issues', name: 'Maintenance Issues', icon: Wrench },
     { path: '/student/meals', name: 'Mess & Dining', icon: UtensilsCrossed },
+    { path: '/student/announcements', name: 'Announcements', icon: Bell },
     { path: '/student/profile', name: 'My Profile', icon: User },
   ];
 
@@ -106,14 +111,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       >
         {/* Pinned Header */}
         <div className="h-16 px-6 border-b border-slate-200/80 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#0D3833] text-white flex items-center justify-center font-bold text-base shadow-sm">
-              H
-            </div>
-            <div>
-              <span className="font-bold text-slate-800 tracking-tight text-sm block leading-none">HostelDesk</span>
-              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block mt-1">Enterprise HMS</span>
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img 
+              src="/174df9_bfc0c62f53bf48b2a6941250cfbf8a02~mv2.avif" 
+              alt="AMC Logo" 
+              className="h-9 w-auto object-contain"
+            />
+            <div className="w-px h-6 bg-slate-300 hidden sm:block"></div>
+            <span className="font-semibold text-slate-700 text-[15px] tracking-tight hidden sm:block mt-0.5">HMS System</span>
           </div>
           {/* Mobile Close Button */}
           <button

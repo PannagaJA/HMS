@@ -3,6 +3,7 @@ import { Search, LogOut, Download, Building2 } from 'lucide-react';
 import type { VisitorLog, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
   SelectContent,
@@ -113,12 +114,14 @@ export const VisitorLogsManagement: React.FC = () => {
   });
 
   // 2. Filter by Search & Status
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
   const filteredLogs = hostelFilteredLogs.filter((l) => {
     const matchesSearch =
-      l.visitor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (l.enrollment_no ? l.enrollment_no.toLowerCase().includes(searchTerm.toLowerCase()) : false) ||
-      (l.purpose ? l.purpose.toLowerCase().includes(searchTerm.toLowerCase()) : false);
+      l.visitor_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      l.student_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (l.enrollment_no ? l.enrollment_no.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) : false) ||
+      (l.purpose ? l.purpose.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) : false);
 
     if (filterStatus === 'ALL') return matchesSearch;
     return matchesSearch && l.status === filterStatus;

@@ -3,6 +3,7 @@ import { Search, Download } from 'lucide-react';
 import type { HostelStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
   SelectContent,
@@ -104,9 +105,11 @@ export const StudentManagement: React.FC = () => {
     window.print();
   };
 
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
   const filteredStudents = students.filter((s) => {
-    const matchesSearch = s.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          s.enrollment_no.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = s.student_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                          s.enrollment_no.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     if (filterAllotted === 'ALLOTTED') return matchesSearch && s.room_allotted;
     if (filterAllotted === 'UNALLOTTED') return matchesSearch && !s.room_allotted;
     return matchesSearch;

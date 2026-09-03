@@ -42,6 +42,10 @@ export const apiClient = {
       const caretakers = await adminService.getCaretakers();
       return { data: caretakers as T };
     }
+    if (endpoint.includes('/hms/security/')) {
+      const security = await adminService.getSecurityStaff();
+      return { data: security as T };
+    }
 
     // 3. Students / Resident Directory (/hms/students/ & /warden/students/)
     if (endpoint.includes('/warden/students/')) {
@@ -183,6 +187,12 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Create Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const data = await adminService.createHostel(body);
+      return { data: data as T };
+    }
+
     // Create Room with physical beds
     if (endpoint.includes('/hms/rooms/')) {
       const { data, error } = await supabase.rpc('create_room_with_beds', {
@@ -214,6 +224,18 @@ export const apiClient = {
         name: body?.name,
         email: body?.email,
         phone: body?.phone,
+        experience: body?.experience || 0
+      });
+      return { data: data as T };
+    }
+
+    // Security Creation
+    if (endpoint.includes('/hms/security/')) {
+      const data = await adminService.createSecurityStaff({
+        name: body?.name,
+        email: body?.email,
+        phone: body?.phone,
+        designation: body?.designation,
         experience: body?.experience || 0
       });
       return { data: data as T };
@@ -279,6 +301,13 @@ export const apiClient = {
       const data = await adminService.updateCaretaker(caretakerId, body);
       return { data: data as T };
     }
+    // Update Hostel
+    if (endpoint.includes('/hms/hostels/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const hostelId = parts[parts.indexOf('hostels') + 1] || body?.id;
+      const data = await adminService.updateHostel(hostelId, body);
+      return { data: data as T };
+    }
     return { data: body as T };
   },
 
@@ -295,6 +324,13 @@ export const apiClient = {
       const parts = endpoint.split('/').filter(Boolean);
       const caretakerId = parts[parts.indexOf('caretakers') + 1] || body?.id;
       const data = await adminService.updateCaretaker(caretakerId, body);
+      return { data: data as T };
+    }
+    // Update Security
+    if (endpoint.includes('/hms/security/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const securityId = parts[parts.indexOf('security') + 1] || body?.id;
+      const data = await adminService.updateSecurityStaff(securityId, body);
       return { data: data as T };
     }
 
@@ -350,6 +386,14 @@ export const apiClient = {
       const parts = endpoint.split('/').filter(Boolean);
       const caretakerId = parts[parts.indexOf('caretakers') + 1];
       await adminService.deleteCaretaker(caretakerId);
+      return { data: { success: true } as T };
+    }
+
+    // Security Delete
+    if (endpoint.includes('/hms/security/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const securityId = parts[parts.indexOf('security') + 1];
+      await adminService.deleteSecurityStaff(securityId);
       return { data: { success: true } as T };
     }
 

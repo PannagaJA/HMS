@@ -6,6 +6,7 @@ import {
 import { apiClient } from '../../api/apiClient';
 import type { VisitorLog, HostelStudent } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
   SelectContent,
@@ -85,9 +86,11 @@ export const WardenVisitorLogs: React.FC = () => {
     }
   };
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const filteredLogs = logs.filter((log) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
+    if (!debouncedSearch) return true;
+    const q = debouncedSearch.toLowerCase();
     const mob = log.mobile_number || log.visitor_phone || '';
     return (
       log.visitor_name.toLowerCase().includes(q) ||

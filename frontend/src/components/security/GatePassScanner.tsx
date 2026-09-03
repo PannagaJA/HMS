@@ -15,6 +15,8 @@ import { Html5Qrcode } from 'html5-qrcode';
 import type { GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { formatTime12 } from '../../lib/utils';
+import { useNotification } from '../../context/NotificationContext';
+import { useDebounce } from '../../hooks/useDebounce';
 
 export const GatePassScanner: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
@@ -162,8 +164,11 @@ export const GatePassScanner: React.FC = () => {
     ? activeOutsidePasses 
     : recentCompletedPasses;
 
+  const debouncedFilterQuery = useDebounce(filterQuery, 300);
+
   const filteredRecords = displayedList.filter((p) => {
-    const q = filterQuery.toLowerCase();
+    if (!debouncedFilterQuery) return true;
+    const q = debouncedFilterQuery.toLowerCase();
     return (
       p.student_name.toLowerCase().includes(q) ||
       p.enrollment_no.toLowerCase().includes(q) ||

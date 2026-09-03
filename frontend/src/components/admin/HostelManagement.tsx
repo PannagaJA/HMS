@@ -111,6 +111,17 @@ export const HostelManagement: React.FC = () => {
     }
   };
 
+  const assignedWardenIds = hostels.map(h => h.warden).filter(Boolean);
+  const assignedCaretakerIds = hostels.map(h => h.caretaker).filter(Boolean);
+
+  const availableWardens = wardens.filter(w => 
+    !assignedWardenIds.includes(String(w.id)) || String(w.id) === wardenId
+  );
+
+  const availableCaretakers = caretakers.filter(c => 
+    !assignedCaretakerIds.includes(String(c.id)) || String(c.id) === caretakerId
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -253,7 +264,7 @@ export const HostelManagement: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">-- None --</SelectItem>
-                      {wardens.map((w) => (
+                      {availableWardens.map((w) => (
                         <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -267,7 +278,7 @@ export const HostelManagement: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">-- None --</SelectItem>
-                      {caretakers.map((c) => (
+                      {availableCaretakers.map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
