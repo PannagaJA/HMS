@@ -34,21 +34,24 @@ export const WardenIssueManagement: React.FC = () => {
   const fetchIssuesAndHostels = async () => {
     setLoading(true);
     try {
-      // Fetch hostels and issues directly from Supabase
-      const [allHostels, allIssues] = await Promise.all([
-        adminService.getHostels(),
-        wardenService.getIssues()
-      ]);
+      let hostList: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        hostList = await wardenService.getAssignedHostels(user.id);
+      } else {
+        hostList = await adminService.getHostels();
+      }
+
+      const allIssues = await wardenService.getIssues();
 
       setIssues(allIssues);
-      setHostels(allHostels);
+      setHostels(hostList);
 
-      if (allHostels.length > 0) {
+      if (hostList.length > 0) {
         setSelectedHostelId((prev) => {
-          if (prev && (prev === 'ALL' || allHostels.some((h) => String(h.id) === prev))) {
+          if (prev && (prev === 'ALL' || hostList.some((h) => String(h.id) === prev))) {
             return prev;
           }
-          return String(allHostels[0].id);
+          return String(hostList[0].id);
         });
       } else {
         setSelectedHostelId('ALL');
@@ -89,13 +92,14 @@ export const WardenIssueManagement: React.FC = () => {
       const issHostelId = String(i.hostel_id || i.hostel || (i.hostel && typeof i.hostel === 'object' ? i.hostel.id : '') || '');
 
       matchesHostel =
+        hostels.length <= 1 ||
         issHostelId === selectedHostelId ||
         String(i.hostel) === selectedHostelId ||
         String(i.hostel_id) === selectedHostelId ||
         (Boolean(selectedName) && Boolean(issHostelName) && (
           issHostelName.includes(selectedName) || 
           selectedName.includes(issHostelName) ||
-          (selectedName.includes('boys') && issHostelName.includes('boys')) ||
+          (selectedName.includes('boys') && (issHostelName.includes('boys') || issHostelName.includes('aryabhata'))) ||
           (selectedName.includes('girls') && issHostelName.includes('girls'))
         ));
     }
@@ -126,7 +130,12 @@ export const WardenIssueManagement: React.FC = () => {
                 <SelectValue placeholder="Choose hostel block" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All Hostel Blocks</SelectItem>
+                {user?.role === 'ADMIN' && (
+                  <SelectItem value="ALL">All Hostel Blocks</SelectItem>
+                )}
+                {user?.role === 'WARDEN' && hostels.length > 1 && (
+                  <SelectItem value="ALL">All My Assigned Hostels</SelectItem>
+                )}
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
                     {h.name}

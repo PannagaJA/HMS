@@ -100,25 +100,6 @@ export const wardenService = {
     }
     if (!resolvedUserId) return [];
 
-    // Auto-sync warden profile ID into warden_hostel_assignments for RLS policy check
-    try {
-      const { data: existing } = await supabase
-        .from('warden_hostel_assignments')
-        .select('hostel_id')
-        .eq('warden_profile_id', resolvedUserId);
-
-      if (!existing || existing.length === 0) {
-        const { data: activeHostels } = await supabase.from('hostels').select('id').eq('is_active', true);
-        if (activeHostels && activeHostels.length > 0) {
-          await supabase.from('warden_hostel_assignments').insert(
-            activeHostels.map((h) => ({ warden_profile_id: resolvedUserId, hostel_id: h.id }))
-          );
-        }
-      }
-    } catch (e) {
-      console.warn('Warden assignment auto-sync note:', e);
-    }
-
     // 1. Primary: Check authoritative assignments table
     const { data: assignments } = await supabase
       .from('warden_hostel_assignments')
@@ -142,11 +123,12 @@ export const wardenService = {
       }
     }
 
-    // 3. Fallback: If no explicit assignment for this warden in DB, fetch active hostels from Supabase
+    // 3. Fallback: If no explicit assignment in DB for this warden, default to Boys Hostel or first active hostel
     if (managedHostels.length === 0) {
       const { data: allHostels } = await supabase.from('hostels').select('*').eq('is_active', true);
       if (allHostels && allHostels.length > 0) {
-        managedHostels = allHostels;
+        const boysHostel = allHostels.find((h) => h.name.toLowerCase().includes('boys'));
+        managedHostels = [boysHostel || allHostels[0]];
       }
     }
 
