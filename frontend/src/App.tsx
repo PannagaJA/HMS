@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Login } from './components/auth/Login';
+import { Announcements } from './components/shared/Announcements';
 
 // Admin Pages
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -55,6 +56,7 @@ function App() {
               <Route path="/admin/gatepass" element={<WardenGatePassManagement />} />
               <Route path="/admin/visitors" element={<VisitorLogsManagement />} />
               <Route path="/admin/profile" element={<HMSProfile />} />
+              <Route path="/admin/announcements" element={<Announcements />} />
             </Route>
 
             {/* Warden Protected Routes (Dedicated Modules matching reference architecture) */}
@@ -66,6 +68,7 @@ function App() {
               <Route path="/warden/issues" element={<WardenIssueManagement />} />
               <Route path="/warden/visitors" element={<WardenVisitorLogs />} />
               <Route path="/warden/profile" element={<HMSProfile />} />
+              <Route path="/warden/announcements" element={<Announcements />} />
             </Route>
 
             {/* Security Guard Protected Routes */}
@@ -73,6 +76,7 @@ function App() {
               <Route path="/security/scanner" element={<GatePassScanner />} />
               <Route path="/security/visitors" element={<VisitorLogsManagement />} />
               <Route path="/security/profile" element={<HMSProfile />} />
+              <Route path="/security/announcements" element={<Announcements />} />
             </Route>
 
             {/* Student Resident Protected Routes */}
@@ -82,6 +86,7 @@ function App() {
               <Route path="/student/issues" element={<StudentIssues />} />
               <Route path="/student/meals" element={<StudentMeals />} />
               <Route path="/student/profile" element={<HMSProfile />} />
+              <Route path="/student/announcements" element={<Announcements />} />
             </Route>
 
             {/* Catch-all Wildcard Route */}

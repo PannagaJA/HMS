@@ -8,7 +8,8 @@ export const StaffManagement: React.FC = () => {
   const { showSuccess, showError, confirm } = useNotification();
   const [wardens, setWardens] = useState<HostelWarden[]>([]);
   const [caretakers, setCaretakers] = useState<HostelCaretaker[]>([]);
-  const [activeTab, setActiveTab] = useState<'wardens' | 'caretakers'>('wardens');
+  const [securityStaff, setSecurityStaff] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'wardens' | 'caretakers' | 'security'>('wardens');
   const [showModal, setShowModal] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<number | string | null>(null);
 
@@ -24,12 +25,14 @@ export const StaffManagement: React.FC = () => {
 
   const fetchStaff = async () => {
     try {
-      const [wRes, cRes] = await Promise.all([
+      const [wRes, cRes, sRes] = await Promise.all([
         apiClient.get<HostelWarden[]>('/hms/wardens/'),
         apiClient.get<HostelCaretaker[]>('/hms/caretakers/'),
+        apiClient.get<any[]>('/hms/security/'),
       ]);
       setWardens(wRes.data || []);
       setCaretakers(cRes.data || []);
+      setSecurityStaff(sRes.data || []);
     } catch (err) {
       console.error('Failed to load staff list', err);
     }
@@ -66,16 +69,26 @@ export const StaffManagement: React.FC = () => {
       };
       if (activeTab === 'wardens') {
         payload.designation = designation || 'Hostel Warden';
+      } else if (activeTab === 'security') {
+        payload.designation = designation || 'Security Guard';
       }
 
+      const endpointMap = {
+        'wardens': '/hms/wardens/',
+        'caretakers': '/hms/caretakers/',
+        'security': '/hms/security/'
+      };
+      
+      const roleName = activeTab === 'wardens' ? 'Warden' : activeTab === 'caretakers' ? 'Caretaker' : 'Security Staff';
+
       if (editingStaffId) {
-        const endpoint = activeTab === 'wardens' ? `/hms/wardens/${editingStaffId}/` : `/hms/caretakers/${editingStaffId}/`;
+        const endpoint = `${endpointMap[activeTab]}${editingStaffId}/`;
         await apiClient.put(endpoint, payload);
-        showSuccess(`${activeTab === 'wardens' ? 'Warden' : 'Caretaker'} updated successfully.`);
+        showSuccess(`${roleName} updated successfully.`);
       } else {
-        const endpoint = activeTab === 'wardens' ? '/hms/wardens/' : '/hms/caretakers/';
+        const endpoint = endpointMap[activeTab];
         await apiClient.post(endpoint, payload);
-        showSuccess(`New ${activeTab === 'wardens' ? 'warden' : 'caretaker'} profile registered.`);
+        showSuccess(`New ${roleName.toLowerCase()} profile registered.`);
       }
 
       setShowModal(false);
@@ -99,15 +112,21 @@ export const StaffManagement: React.FC = () => {
   };
 
   const handleDelete = async (id: number | string) => {
+    const roleName = activeTab === 'wardens' ? 'warden' : activeTab === 'caretakers' ? 'caretaker' : 'security staff';
     const isConfirmed = await confirm({
       title: 'Remove Staff Member',
-      message: `Are you sure you want to remove this ${activeTab === 'wardens' ? 'warden' : 'caretaker'} profile? This action will unbind their administrative access.`,
+      message: `Are you sure you want to remove this ${roleName} profile? This action will unbind their administrative access.`,
       confirmText: 'Remove Profile',
       isDestructive: true
     });
     if (!isConfirmed) return;
 
-    const endpoint = activeTab === 'wardens' ? `/hms/wardens/${id}/` : `/hms/caretakers/${id}/`;
+    const endpointMap = {
+      'wardens': `/hms/wardens/${id}/`,
+      'caretakers': `/hms/caretakers/${id}/`,
+      'security': `/hms/security/${id}/`
+    };
+    const endpoint = endpointMap[activeTab];
     try {
       await apiClient.delete(endpoint);
       showSuccess('Staff profile deleted successfully.');
@@ -130,7 +149,7 @@ export const StaffManagement: React.FC = () => {
           className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>Add {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}</span>
+          <span>Add {activeTab === 'wardens' ? 'Warden' : activeTab === 'caretakers' ? 'Caretaker' : 'Security'}</span>
         </button>
       </div>
 
@@ -156,10 +175,20 @@ export const StaffManagement: React.FC = () => {
         >
           Hostel Caretakers ({caretakers.length})
         </button>
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`flex-1 sm:flex-initial text-center px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'security'
+              ? 'bg-[#0D3833] text-white shadow-sm'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Security Staff ({securityStaff.length})
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {(activeTab === 'wardens' ? wardens : caretakers).map((staff: any) => (
+        {(activeTab === 'wardens' ? wardens : activeTab === 'caretakers' ? caretakers : securityStaff).map((staff: any) => (
           <div
             key={staff.id}
             className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
@@ -176,7 +205,7 @@ export const StaffManagement: React.FC = () => {
 
               <h3 className="text-base font-bold text-slate-900">{staff.name}</h3>
               <p className="text-xs text-slate-400 mb-4">
-                {staff.designation || (activeTab === 'wardens' ? 'Hostel Warden' : 'Residential Caretaker')}
+                {staff.designation || (activeTab === 'wardens' ? 'Hostel Warden' : activeTab === 'caretakers' ? 'Residential Caretaker' : 'Security Guard')}
               </p>
 
               <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3 mb-4">
@@ -215,7 +244,7 @@ export const StaffManagement: React.FC = () => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">
-              {editingStaffId ? 'Edit' : 'Add New'} {activeTab === 'wardens' ? 'Warden' : 'Caretaker'}
+              {editingStaffId ? 'Edit' : 'Add New'} {activeTab === 'wardens' ? 'Warden' : activeTab === 'caretakers' ? 'Caretaker' : 'Security Staff'}
             </h3>
             <p className="text-xs text-slate-500 mb-5">Enter staff contact information and experience credentials.</p>
 
@@ -232,7 +261,7 @@ export const StaffManagement: React.FC = () => {
                 />
               </div>
 
-              {activeTab === 'wardens' && (
+              {(activeTab === 'wardens' || activeTab === 'security') && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Designation</label>
                   <input

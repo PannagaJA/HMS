@@ -1,5 +1,5 @@
 export type UserRole = 'ADMIN' | 'WARDEN' | 'SECURITY' | 'STUDENT';
-export type { User, Role, HostelStudent, GatePassRequest, IssueTicket, HostelIssue, HostelWarden, HostelCaretaker } from './legacy';
+export type { User, Role, HostelStudent, GatePassRequest, IssueTicket, HostelIssue, HostelWarden, HostelCaretaker, SecurityStaff } from './legacy';
 
 export interface Profile {
   id: string;
@@ -233,4 +233,22 @@ export interface DashboardStats {
   pending_gate_passes: number;
   active_issues: number;
   total_students?: number;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  priority: 'low' | 'medium' | 'high';
+  created_by_role?: string;
+  created_by_name?: string;
+  created_at: string;
+  is_circular?: boolean;
+  expires_at?: string;
+  circular_number?: string;
+  file_url?: string;
+  file_name?: string;
+  is_read?: boolean;
+  target_roles?: string[];
+  target_hostel_id?: number | null;
 }

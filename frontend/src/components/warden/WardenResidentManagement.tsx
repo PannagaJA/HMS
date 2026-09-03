@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { HostelStudent } from '../../types';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
   SelectContent,
@@ -36,9 +37,11 @@ export const WardenResidentManagement: React.FC = () => {
     }
   };
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const filteredResidents = residents.filter((st) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
+    if (!debouncedSearch) return true;
+    const q = debouncedSearch.toLowerCase();
     const roomNo = (st.room_detail?.no || st.room_no || st.room_number || '').toLowerCase();
     return (
       st.student_name.toLowerCase().includes(q) ||

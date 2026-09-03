@@ -10,6 +10,7 @@ import { apiClient } from '../../api/apiClient';
 import { StatusBadge } from '../common/StatusBadge';
 import type { HostelIssue } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   Select,
   SelectContent,
@@ -60,9 +61,11 @@ export const WardenIssueManagement: React.FC = () => {
     }
   };
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const filteredIssues = issues.filter((iss) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
+    if (!debouncedSearch) return true;
+    const q = debouncedSearch.toLowerCase();
     return (
       iss.title.toLowerCase().includes(q) ||
       iss.description.toLowerCase().includes(q) ||
