@@ -324,7 +324,7 @@ export const StudentManagement: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12 sm:pb-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Resident Directory</h1>
@@ -392,7 +392,96 @@ export const StudentManagement: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {filteredStudents.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-sm">
+              No resident students match your criteria.
+            </div>
+          ) : (
+            filteredStudents.map((s) => (
+              <div key={s.id} className="p-4 space-y-3 hover:bg-slate-50/70 transition-colors">
+                {/* Header: Student Name, Avatar, Status Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-sm shrink-0 border border-teal-200">
+                      {s.student_name?.[0] || 'S'}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm leading-snug">{s.student_name}</h4>
+                      {s.father_name && (
+                        <p className="text-xs text-slate-400">Guardian: {s.father_name}</p>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0 ${
+                    s.room_allotted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${s.room_allotted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    {s.room_allotted ? 'Allotted' : 'Pending'}
+                  </span>
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">USN / Enrollment</span>
+                    <span className="font-mono text-slate-700 font-semibold truncate block mt-0.5">{s.enrollment_no}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Gender</span>
+                    <span className="mt-0.5 inline-block">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                        s.gender === 'F' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {s.gender === 'F' ? 'Female' : 'Male'}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="col-span-2 pt-1.5 border-t border-slate-200/60">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Contact Phone</span>
+                    <span className="font-medium text-slate-700 block mt-0.5">{s.phone || 'N/A'}</span>
+                  </div>
+                  <div className="col-span-2 pt-1.5 border-t border-slate-200/60">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Room & Bed Slot</span>
+                    {s.room_allotted ? (
+                      <div className="mt-0.5">
+                        <span className="font-semibold text-slate-900 block">{s.hostel_name || 'Block'}</span>
+                        <span className="text-xs text-slate-500">Room {s.room_no} · Bed {s.bed_number || '1'}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-700 font-medium bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 inline-block mt-0.5">
+                        Unassigned Bed
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card Action */}
+                <div className="pt-1">
+                  {s.room_allotted ? (
+                    <button
+                      onClick={() => handleVacate(s.id)}
+                      className="w-full text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 py-2.5 rounded-full transition-colors border border-rose-200 cursor-pointer shadow-2xs"
+                    >
+                      Vacate Bed
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenAllocate(s)}
+                      className="w-full text-xs font-semibold text-teal-900 bg-[#D1F2EA] hover:bg-teal-200 py-2.5 rounded-full transition-colors cursor-pointer shadow-2xs"
+                    >
+                      Allocate Room
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-[#D1F2EA]/40 text-xs font-bold uppercase text-slate-700 tracking-wider border-b border-slate-200">
               <tr>
