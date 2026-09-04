@@ -119,3 +119,7 @@ frontend/.vite/
 # Tooling Knowledge Graphs & IDE Local Metadata
 .code-review-graph/
 .agents/
+
+# Supabase Temp
+supabase/.temp/
+
