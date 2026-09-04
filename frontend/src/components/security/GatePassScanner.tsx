@@ -379,7 +379,6 @@ export const GatePassScanner: React.FC = () => {
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
-          </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
