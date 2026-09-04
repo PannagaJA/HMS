@@ -8,7 +8,8 @@ import {
   ArrowRight,
   QrCode,
   ShieldCheck,
-  X
+  X,
+  Phone
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { HostelStudent, GatePassRequest, IssueTicket } from '../../types';
@@ -254,13 +255,23 @@ export const StudentDashboard: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
           {profileData?.roommates?.length ? (
             profileData.roommates.map((roommate, idx) => (
-              <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-[#0D3833] text-white flex items-center justify-center font-bold text-sm shrink-0">
                   {roommate.student_name[0]}
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="text-sm font-bold text-slate-800 truncate">{roommate.student_name}</p>
                   <p className="text-xs text-slate-400 truncate">Bed #{roommate.bed_number || 'N/A'} · {roommate.enrollment_no}</p>
+                  {roommate.phone ? (
+                    <div className="flex items-center gap-1.5 text-xs text-teal-900 font-semibold pt-0.5">
+                      <Phone className="w-3 h-3 text-teal-700 shrink-0" />
+                      <a href={`tel:${roommate.phone}`} className="hover:underline font-mono text-[11px]">
+                        {roommate.phone}
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400 italic pt-0.5">No phone recorded</div>
+                  )}
                 </div>
               </div>
             ))
