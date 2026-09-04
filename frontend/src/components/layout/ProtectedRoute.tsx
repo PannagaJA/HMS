@@ -87,14 +87,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   }
 
   return (
-    <div className="flex h-screen h-[100dvh] w-screen overflow-hidden bg-[#F0FDF9]">
+    <div className="min-h-screen w-screen bg-[#F0FDF9] flex">
       {/* Left Sidebar */}
       <Sidebar isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Fixed Top App Bar */}
-        <header className="h-16 px-4 sm:px-6 lg:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between shrink-0 z-50 shadow-xs">
+        <header className="fixed top-0 left-0 right-0 h-16 px-4 sm:px-6 lg:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between z-50 shadow-xs lg:left-64">
           
           {/* Left Side: Mobile Menu & Logo */}
           <div className="flex items-center gap-3 lg:hidden">
@@ -159,8 +159,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
           </div>
         </header>
 
-        {/* Dynamic Scrollable Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-16 sm:pb-8">
+        {/* Dynamic Page Content with top padding for fixed header */}
+        <main className="flex-1 pt-16 p-4 sm:p-6 lg:p-8 pb-16 sm:pb-8">
           <Outlet />
         </main>
       </div>

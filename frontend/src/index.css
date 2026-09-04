@@ -4,8 +4,7 @@
   html, body {
     margin: 0;
     padding: 0;
-    height: 100%;
-    overflow: hidden !important; /* Body NEVER scrolls or toggles scrollbar */
+    min-height: 100%;
     background-color: #F0FDF9;
     color: #1e293b;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -14,8 +13,7 @@
   }
 
   #root {
-    height: 100%;
-    overflow: hidden;
+    min-height: 100%;
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
