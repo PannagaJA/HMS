@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Search, Download, UserPlus, UploadCloud, FileText, CheckCircle2, AlertTriangle, X, Check, Building2 } from 'lucide-react';
+import { Search, Download, UserPlus, UploadCloud, FileText, CheckCircle2, AlertTriangle, X, Check, Building2, Pencil, Mail, Phone, Loader2 } from 'lucide-react';
 import type { HostelStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
@@ -43,6 +43,19 @@ export const StudentManagement: React.FC = () => {
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [bedNo, setBedNo] = useState('1');
+
+  // Edit Student Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStudentId, setEditingStudentId] = useState<number | null>(null);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editUsn, setEditUsn] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editGender, setEditGender] = useState<'M' | 'F'>('M');
+  const [editPhone, setEditPhone] = useState('');
+  const [editFatherName, setEditFatherName] = useState('');
+  const [editGuardianPhone, setEditGuardianPhone] = useState('');
+  const [editEmergencyContact, setEditEmergencyContact] = useState('');
 
   // Single Student Admission Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -115,6 +128,52 @@ export const StudentManagement: React.FC = () => {
     setSelectedRoomId('');
     setRooms([]);
     setShowAllocateModal(true);
+  };
+
+  const handleOpenEdit = (student: HostelStudent) => {
+    setEditingStudentId(student.id);
+    setEditName(student.student_name || '');
+    setEditUsn(student.enrollment_no || '');
+    setEditEmail(student.email || '');
+    setEditGender(student.gender || 'M');
+    setEditPhone(student.phone || '');
+    setEditFatherName(student.father_name || '');
+    setEditGuardianPhone(student.guardian_phone || '');
+    setEditEmergencyContact(student.emergency_contact || '');
+    setShowEditModal(true);
+  };
+
+  const handleEditStudentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudentId) return;
+
+    if (!editName.trim() || !editUsn.trim()) {
+      showError('Please provide both student name and USN.');
+      return;
+    }
+
+    try {
+      setIsSubmittingEdit(true);
+      await apiClient.patch(`/hms/students/${editingStudentId}/`, {
+        student_name: editName.trim(),
+        enrollment_no: editUsn.trim().toUpperCase(),
+        email: editEmail.trim(),
+        gender: editGender,
+        phone: editPhone.trim(),
+        father_name: editFatherName.trim(),
+        guardian_phone: editGuardianPhone.trim(),
+        emergency_contact: editEmergencyContact.trim()
+      });
+
+      showSuccess(`Resident record for "${editName}" updated successfully.`);
+      setShowEditModal(false);
+      fetchData();
+    } catch (err: any) {
+      console.error('Failed to update student:', err);
+      showError(err.message || 'Failed to update student details.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
   };
 
   const handleHostelChange = async (hostelId: string) => {
@@ -512,8 +571,17 @@ export const StudentManagement: React.FC = () => {
                     </span>
                   </div>
                   <div className="col-span-2 pt-1.5 border-t border-slate-200/60">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Contact Phone</span>
-                    <span className="font-medium text-slate-700 block mt-0.5">{s.phone || 'N/A'}</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Contact & Email</span>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-700 font-medium mt-0.5">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{s.phone || 'N/A'}</span>
+                    </div>
+                    {s.email && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{s.email}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="col-span-2 pt-1.5 border-t border-slate-200/60">
                     <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Room & Bed Slot</span>
@@ -531,18 +599,25 @@ export const StudentManagement: React.FC = () => {
                 </div>
 
                 {/* Card Action */}
-                <div className="pt-1">
+                <div className="pt-1 flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenEdit(s)}
+                    className="flex-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 py-2 rounded-full transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5 border border-slate-200"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Edit</span>
+                  </button>
                   {s.room_allotted ? (
                     <button
                       onClick={() => handleVacate(s.id)}
-                      className="w-full text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 py-2.5 rounded-full transition-colors border border-rose-200 cursor-pointer shadow-2xs"
+                      className="flex-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 py-2 rounded-full transition-colors border border-rose-200 cursor-pointer shadow-2xs"
                     >
                       Vacate Bed
                     </button>
                   ) : (
                     <button
                       onClick={() => handleOpenAllocate(s)}
-                      className="w-full text-xs font-semibold text-teal-900 bg-blue-100 hover:bg-teal-200 py-2.5 rounded-full transition-colors cursor-pointer shadow-2xs"
+                      className="flex-1 text-xs font-semibold text-teal-900 bg-blue-100 hover:bg-teal-200 py-2 rounded-full transition-colors cursor-pointer shadow-2xs"
                     >
                       Allocate Room
                     </button>
@@ -561,7 +636,7 @@ export const StudentManagement: React.FC = () => {
                 <th className="px-6 py-4">Student Details</th>
                 <th className="px-6 py-4">USN / Enrollment</th>
                 <th className="px-6 py-4">Gender</th>
-                <th className="px-6 py-4">Contact Phone</th>
+                <th className="px-6 py-4">Contact & Email</th>
                 <th className="px-6 py-4">Room & Bed Slot</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
@@ -589,8 +664,17 @@ export const StudentManagement: React.FC = () => {
                         {s.gender === 'F' ? 'Female' : 'Male'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-700">
-                      {s.phone || 'N/A'}
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900 text-xs flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{s.phone || 'N/A'}</span>
+                      </div>
+                      {s.email && (
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-1">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate max-w-[190px]">{s.email}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       {s.room_allotted ? (
@@ -613,21 +697,31 @@ export const StudentManagement: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {s.room_allotted ? (
+                      <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => handleVacate(s.id)}
-                          className="text-xs font-semibold text-rose-700 bg-rose-50 px-3.5 py-1.5 rounded-full hover:bg-rose-100 transition-colors shadow-2xs cursor-pointer border border-rose-200"
+                          onClick={() => handleOpenEdit(s)}
+                          className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 hover:text-[#0B1437] px-3 py-1.5 rounded-full transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5 border border-slate-200"
+                          title="Edit Student Details"
                         >
-                          Vacate Bed
+                          <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Edit</span>
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenAllocate(s)}
-                          className="text-xs font-semibold text-teal-900 bg-blue-100 px-4 py-1.5 rounded-full hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer"
-                        >
-                          Allocate Room
-                        </button>
-                      )}
+                        {s.room_allotted ? (
+                          <button
+                            onClick={() => handleVacate(s.id)}
+                            className="text-xs font-semibold text-rose-700 bg-rose-50 px-3.5 py-1.5 rounded-full hover:bg-rose-100 transition-colors shadow-2xs cursor-pointer border border-rose-200"
+                          >
+                            Vacate Bed
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenAllocate(s)}
+                            className="text-xs font-semibold text-teal-900 bg-blue-100 px-4 py-1.5 rounded-full hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer"
+                          >
+                            Allocate Room
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1043,6 +1137,157 @@ export const StudentManagement: React.FC = () => {
                   className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Confirm Allotment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Student Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-xl rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Edit Student Record</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Update personal details, institutional contact, and emergency info</p>
+              </div>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditStudentSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Student Full Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="e.g. Ramesh Kumar"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    USN / Enrollment No <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editUsn}
+                    onChange={(e) => setEditUsn(e.target.value)}
+                    placeholder="e.g. 1AM22CS045"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="e.g. student@amc.edu"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Gender <span className="text-red-500">*</span></label>
+                  <Select value={editGender} onValueChange={(val: 'M' | 'F') => setEditGender(val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="M">Male</SelectItem>
+                      <SelectItem value="F">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Student Mobile Number</label>
+                  <input
+                    type="tel"
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="e.g. 9876543210"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Father / Guardian Name</label>
+                  <input
+                    type="text"
+                    value={editFatherName}
+                    onChange={(e) => setEditFatherName(e.target.value)}
+                    placeholder="e.g. Suresh Kumar"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Contact Phone</label>
+                  <input
+                    type="tel"
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
+                    value={editGuardianPhone}
+                    onChange={(e) => setEditGuardianPhone(e.target.value)}
+                    placeholder="e.g. 9811223344"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Emergency Contact</label>
+                <input
+                  type="text"
+                  value={editEmergencyContact}
+                  onChange={(e) => setEditEmergencyContact(e.target.value)}
+                  placeholder="e.g. 9899001122 (Local Guardian / Relative)"
+                  className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={isSubmittingEdit}
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit}
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmittingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSubmittingEdit ? 'Saving Changes...' : 'Save Changes'}</span>
                 </button>
               </div>
             </form>

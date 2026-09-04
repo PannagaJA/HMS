@@ -259,8 +259,10 @@ export const adminService = {
       const bed = activeAlloc?.bed;
       const room = bed?.room;
       const hostel = room?.hostel;
+      const resolvedEmail = s.email || s.profile?.email || (s.enrollment_no ? `${s.enrollment_no.toLowerCase()}@amc.edu` : '');
       return {
         ...s,
+        email: resolvedEmail,
         room_allotted: !!activeAlloc || !!s.room_allotted,
         hostel_name: hostel?.name || s.hostel_name || '',
         room_no: room?.no || s.room_no || s.room_number || '',
@@ -270,6 +272,74 @@ export const adminService = {
         room_detail: room || s.room_detail || null
       };
     });
+  },
+
+  /**
+   * Update student details
+   */
+  async updateStudent(studentId: number | string, payload: {
+    student_name?: string;
+    enrollment_no?: string;
+    email?: string;
+    gender?: 'M' | 'F';
+    phone?: string;
+    father_name?: string;
+    guardian_phone?: string;
+    emergency_contact?: string;
+  }) {
+    const updateData: any = {};
+    if (payload.student_name !== undefined) updateData.student_name = payload.student_name;
+    if (payload.enrollment_no !== undefined) updateData.enrollment_no = payload.enrollment_no;
+    if (payload.gender !== undefined) updateData.gender = payload.gender;
+    if (payload.phone !== undefined) updateData.phone = payload.phone;
+    if (payload.father_name !== undefined) updateData.father_name = payload.father_name;
+    if (payload.guardian_phone !== undefined) updateData.guardian_phone = payload.guardian_phone;
+    if (payload.emergency_contact !== undefined) updateData.emergency_contact = payload.emergency_contact;
+    if (payload.email !== undefined) updateData.email = payload.email;
+
+    let resData: any = null;
+    const { data, error } = await supabase
+      .from('students')
+      .update(updateData)
+      .eq('id', studentId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      // If error is about email column not existing on students table, omit email and retry
+      if (error.message?.includes('email') || error.code === '42703') {
+        const { email: _omitted, ...safeUpdate } = updateData;
+        const { data: retryData, error: retryErr } = await supabase
+          .from('students')
+          .update(safeUpdate)
+          .eq('id', studentId)
+          .select()
+          .maybeSingle();
+        if (retryErr) throw retryErr;
+        resData = retryData;
+      } else {
+        throw error;
+      }
+    } else {
+      resData = data;
+    }
+
+    // Also sync to auth profile if linked
+    if (resData?.profile_id) {
+      try {
+        const profileUpdate: any = {};
+        if (payload.email) profileUpdate.email = payload.email;
+        if (payload.student_name) profileUpdate.first_name = payload.student_name;
+        if (payload.phone) profileUpdate.phone = payload.phone;
+        if (Object.keys(profileUpdate).length > 0) {
+          await supabase.from('profiles').update(profileUpdate).eq('id', resData.profile_id);
+        }
+      } catch (pe) {
+        console.warn('Student linked profile update warning:', pe);
+      }
+    }
+
+    return resData || { id: studentId, ...payload };
   },
 
   /**

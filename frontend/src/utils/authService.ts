@@ -684,6 +684,13 @@ export const apiClient = {
       const data = await adminService.updateWarden(wardenId, body);
       return { data: data as T };
     }
+    // Update Student
+    if (endpoint.includes('/hms/students/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const studentId = parts[parts.indexOf('students') + 1] || body?.id;
+      const data = await adminService.updateStudent(studentId, body);
+      return { data: data as T };
+    }
     // Update Caretaker
     if (endpoint.includes('/hms/caretakers/')) {
       const parts = endpoint.split('/').filter(Boolean);
@@ -691,17 +698,17 @@ export const apiClient = {
       const data = await adminService.updateCaretaker(caretakerId, body);
       return { data: data as T };
     }
-    // Update Hostel
-    if (endpoint.includes('/hms/hostels/')) {
-      const parts = endpoint.split('/').filter(Boolean);
-      const hostelId = parts[parts.indexOf('hostels') + 1] || body?.id;
-      const data = await adminService.updateHostel(hostelId, body);
-      return { data: data as T };
-    }
     return { data: body as T };
   },
 
   async patch<T = any>(endpoint: string, body: any) {
+    // Update Student
+    if (endpoint.includes('/hms/students/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const studentId = parts[parts.indexOf('students') + 1] || body?.id;
+      const data = await adminService.updateStudent(studentId, body);
+      return { data: data as T };
+    }
     // Update Food Item
     if (endpoint.includes('/hms/menu-items/')) {
       const parts = endpoint.split('/').filter(Boolean);
