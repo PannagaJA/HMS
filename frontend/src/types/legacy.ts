@@ -50,6 +50,7 @@ export interface HostelStudent {
   room_number?: string;
   room_allotted?: boolean;
   hostel?: any;
+  allocations?: any[];
 }
 
 export interface GatePassRequest {

@@ -48,3 +48,21 @@ body[data-scroll-locked] {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
+
+/* Html5Qrcode Camera Video Styling to prevent aspect distortion and black bars */
+#qr-reader-container {
+  border: none !important;
+}
+
+#qr-reader-container video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 1rem !important;
+}
+
+#qr-reader-container img[alt="Info icon"],
+#qr-reader-container img[alt="Camera menu icon"],
+#qr-reader-container div:first-child {
+  display: none !important;
+}

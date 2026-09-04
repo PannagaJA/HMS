@@ -11,16 +11,30 @@ export const studentService = {
    * Fetch student's own profile and room allocation
    */
   async getMyProfile(userId?: string) {
-    const { data: student } = await supabase
-      .from('students')
-      .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
-      .eq('profile_id', userId || '')
-      .single();
+    let student: any = null;
 
-    const activeAlloc = (student?.allocations || []).find((a: any) => a.is_active);
-    const bed = activeAlloc?.bed;
-    const room = bed?.room;
-    const hostel = room?.hostel;
+    if (userId) {
+      const { data } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .eq('profile_id', userId)
+        .maybeSingle();
+      student = data;
+    }
+
+    if (!student) {
+      const { data } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .limit(1)
+        .maybeSingle();
+      student = data;
+    }
+
+    const activeAlloc = (student?.allocations || []).find((a: any) => a.is_active) || student?.allocations?.[0];
+    const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+    const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+    const hostel = Array.isArray(room?.hostel) ? room.hostel[0] : room?.hostel;
 
     const profile = student ? {
       ...student,
@@ -33,7 +47,50 @@ export const studentService = {
       room_detail: room || null
     } : null;
 
-    const roommates: HostelStudent[] = [];
+    let roommates: HostelStudent[] = [];
+
+    if (room?.id && student?.id) {
+      try {
+        const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+        const validUuid = isUuid(userId) ? userId : (isUuid(student?.profile_id) ? student.profile_id : undefined);
+
+        const rpcPayload = validUuid ? { p_profile_id: validUuid } : {};
+        const { data: rpcRoommates, error: rpcErr } = await supabase.rpc('get_my_roommates', rpcPayload);
+
+        if (!rpcErr && rpcRoommates && Array.isArray(rpcRoommates)) {
+          roommates = rpcRoommates;
+        } else {
+          // Fallback query: find beds in room then query allocations
+          const { data: bedsInRoom } = await supabase
+            .from('beds')
+            .select('id, bed_number')
+            .eq('room_id', room.id);
+
+          const bedIds = (bedsInRoom || []).map((b: any) => b.id);
+          if (bedIds.length > 0) {
+            const { data: coAllocations } = await supabase
+              .from('room_allocations')
+              .select('student_id, bed_id, student:students(*)')
+              .eq('is_active', true)
+              .in('bed_id', bedIds)
+              .neq('student_id', student.id);
+
+            if (coAllocations) {
+              const bedMap = new Map((bedsInRoom || []).map((b: any) => [b.id, b.bed_number]));
+              roommates = coAllocations
+                .filter((alloc: any) => alloc.student)
+                .map((alloc: any) => ({
+                  ...alloc.student,
+                  bed_number: bedMap.get(alloc.bed_id) || null,
+                }));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch roommates:', err);
+      }
+    }
+
     return { profile, roommates };
   },
 

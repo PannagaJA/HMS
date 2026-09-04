@@ -97,7 +97,35 @@ export const apiClient = {
       if (floor && floor !== 'all') query = query.eq('floor', floor);
       const { data, error } = await query;
       if (error) throw error;
-      return { data: (data || []) as T };
+
+      const formattedRooms = (data || []).map((r: any) => {
+        let occupied_count = 0;
+        const occupants: any[] = [];
+
+        (r.beds || []).forEach((b: any) => {
+          (b.allocations || []).forEach((a: any) => {
+            if (a.is_active) {
+              occupied_count++;
+              if (a.student) {
+                occupants.push({
+                  student_name: a.student.student_name || 'Resident',
+                  enrollment_no: a.student.enrollment_no || 'N/A',
+                  bed_number: b.bed_number,
+                });
+              }
+            }
+          });
+        });
+
+        return {
+          ...r,
+          occupied_count,
+          current_occupancy: occupied_count,
+          occupants,
+        };
+      });
+
+      return { data: formattedRooms as T };
     }
 
     // 7. Maintenance Issues (/hms/issues/, /warden/issues/, /student/issues/)

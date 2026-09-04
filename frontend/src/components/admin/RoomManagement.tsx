@@ -3,6 +3,8 @@ import { BedDouble, Plus, X, Layers, Building2, Pencil, Trash2 } from 'lucide-re
 import type { HostelRoom, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
 import {
   Select,
   SelectContent,
@@ -12,6 +14,7 @@ import {
 } from '../ui/select';
 
 export const RoomManagement: React.FC = () => {
+  const { user } = useAuth();
   const { showSuccess, showError, showWarning, confirm } = useNotification();
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
@@ -64,10 +67,16 @@ export const RoomManagement: React.FC = () => {
 
   const fetchHostels = async () => {
     try {
-      const res = await apiClient.get<Hostel[]>('/hms/hostels/');
-      setHostels(res.data);
-      if (res.data.length > 0 && !selectedHostelId) {
-        setSelectedHostelId(String(res.data[0].id));
+      let list: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        list = await wardenService.getAssignedHostels(user?.id);
+      } else {
+        const res = await apiClient.get<Hostel[]>('/hms/hostels/');
+        list = res.data || [];
+      }
+      setHostels(list);
+      if (list.length > 0 && !selectedHostelId) {
+        setSelectedHostelId(String(list[0].id));
       }
     } catch (err) {
       console.error('Failed to load hostels', err);
@@ -83,10 +92,55 @@ export const RoomManagement: React.FC = () => {
     }
   };
 
+  const generateNextRoomNumber = (floorStr: string, targetHostelId: string) => {
+    const floorNum = Number(floorStr);
+    const existingRoomsOnFloor = rooms.filter(
+      (r) => String(r.hostel || selectedHostelId) === String(targetHostelId) && Number(r.floor) === floorNum
+    );
+
+    if (floorNum === 0) {
+      // Ground floor format: G01, G02, G03...
+      const gNumbers = existingRoomsOnFloor
+        .map((r) => {
+          const match = (r.no || r.room_no || '').match(/G?0*(\d+)/i);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter((n) => !isNaN(n) && n > 0);
+      const nextSeq = gNumbers.length > 0 ? Math.max(...gNumbers) + 1 : 1;
+      return `G${String(nextSeq).padStart(2, '0')}`;
+    } else {
+      // Standard floor format: 101, 102 (Floor 1), 201, 202 (Floor 2), etc.
+      const baseNum = floorNum * 100;
+      const numList = existingRoomsOnFloor
+        .map((r) => {
+          const val = parseInt(r.no || r.room_no || '0', 10);
+          return isNaN(val) ? 0 : val;
+        })
+        .filter((n) => n >= baseNum && n < baseNum + 100);
+
+      const nextSeq = numList.length > 0 ? Math.max(...numList) + 1 : baseNum + 1;
+      return String(nextSeq);
+    }
+  };
+
+  const handleSingleHostelChange = (hostelVal: string) => {
+    setSingleHostelId(hostelVal);
+    const suggestedNo = generateNextRoomNumber(singleFloor, hostelVal);
+    setSingleRoomNo(suggestedNo);
+  };
+
+  const handleSingleFloorChange = (floorVal: string) => {
+    setSingleFloor(floorVal);
+    const suggestedNo = generateNextRoomNumber(floorVal, singleHostelId || selectedHostelId);
+    setSingleRoomNo(suggestedNo);
+  };
+
   const handleOpenAddSingleRoom = () => {
-    setSingleHostelId(selectedHostelId || (hostels[0] ? String(hostels[0].id) : ''));
-    setSingleFloor('0');
-    setSingleRoomNo('');
+    const targetHostel = selectedHostelId || (hostels[0] ? String(hostels[0].id) : '');
+    setSingleHostelId(targetHostel);
+    const defaultFloor = selectedFloor && selectedFloor !== 'all' ? selectedFloor : '0';
+    setSingleFloor(defaultFloor);
+    setSingleRoomNo(generateNextRoomNumber(defaultFloor, targetHostel));
     setSingleRoomName('');
     setSingleRoomType('S');
     setSingleCapacity(1);
@@ -282,7 +336,7 @@ export const RoomManagement: React.FC = () => {
                 disabled={!selectedHostelId}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select floor" />
+                  <SelectValue placeholder="-- Select Floor --" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Floors</SelectItem>
@@ -570,7 +624,7 @@ export const RoomManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
                   <Select value={editFloor} onValueChange={setEditFloor}>
                     <SelectTrigger className="w-full bg-slate-50">
-                      <SelectValue placeholder="Select floor" />
+                      <SelectValue placeholder="-- Select Floor --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Ground Floor</SelectItem>
@@ -696,7 +750,7 @@ export const RoomManagement: React.FC = () => {
             <form onSubmit={handleCreateSingleRoom} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel</label>
-                <Select value={singleHostelId} onValueChange={setSingleHostelId}>
+                <Select value={singleHostelId} onValueChange={handleSingleHostelChange}>
                   <SelectTrigger className="w-full bg-slate-50">
                     <SelectValue placeholder="Select hostel" />
                   </SelectTrigger>
@@ -711,9 +765,9 @@ export const RoomManagement: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
-                  <Select value={singleFloor} onValueChange={setSingleFloor}>
+                  <Select value={singleFloor} onValueChange={handleSingleFloorChange}>
                     <SelectTrigger className="w-full bg-slate-50">
-                      <SelectValue placeholder="Select floor" />
+                      <SelectValue placeholder="-- Select Floor --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Ground Floor</SelectItem>

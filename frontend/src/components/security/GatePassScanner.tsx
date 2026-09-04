@@ -87,9 +87,6 @@ export const GatePassScanner: React.FC = () => {
         setSearchInput(`${res.data.pass.student_name} (${res.data.pass.enrollment_no})`);
       }
       stopCameraScanner();
-      setTimeout(() => {
-        scannedPassCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 150);
     } catch (err: any) {
       setScannedPass(null);
       setErrorMsg(err.message || err.response?.data?.message || err.response?.data?.error || 'No approved gate pass found matching this Token or Student ID.');
@@ -104,7 +101,6 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(true);
 
     setTimeout(async () => {
-      cameraViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       try {
         const qrCodeScanner = new Html5Qrcode('qr-reader-container');
         scannerRef.current = qrCodeScanner;
@@ -125,7 +121,7 @@ export const GatePassScanner: React.FC = () => {
         setIsCameraActive(false);
         setErrorMsg('Unable to access camera. Ensure camera permissions are allowed in your browser.');
       }
-    }, 150);
+    }, 100);
   };
 
   const stopCameraScanner = async () => {
@@ -301,17 +297,6 @@ export const GatePassScanner: React.FC = () => {
           </div>
         </form>
 
-        {/* Live Camera Scanner Viewport */}
-        {isCameraActive && (
-          <div ref={cameraViewportRef} className="p-4 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col items-center animate-in fade-in duration-200 scroll-mt-6">
-            <div className="text-white text-xs font-semibold mb-3 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span>Point Camera at Student's Phone Screen QR Code</span>
-            </div>
-            <div id="qr-reader-container" className="w-full max-w-sm rounded-2xl overflow-hidden bg-black" />
-          </div>
-        )}
-
         {errorMsg && (
           <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
             <XCircle className="w-5 h-5 flex-shrink-0 text-rose-600" />
@@ -327,150 +312,194 @@ export const GatePassScanner: React.FC = () => {
         )}
       </div>
 
-      {/* SECTION 2: VERIFIED PASS ACTION CARD */}
-      {scannedPass && (
-        <div ref={scannedPassCardRef} className="bg-white p-7 rounded-3xl border-2 border-blue-100 shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5 scroll-mt-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-blue-100 text-teal-950 font-bold flex items-center justify-center text-xl shadow-inner">
-                {scannedPass.student_name?.[0] || 'S'}
+      {/* CAMERA SCANNER MODAL POPUP (For Mobile & Desktop) */}
+      {isCameraActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-slate-800 flex flex-col items-center animate-in zoom-in-95 duration-150 relative">
+            <div className="flex items-center justify-between w-full mb-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-white text-xs font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>Live QR Code Scanner</span>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">{scannedPass.student_name}</h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  {scannedPass.enrollment_no} · {scannedPass.hostel_name} (Room {scannedPass.room_no || 'N/A'})
-                </p>
-                <p className="text-[11px] text-teal-900 font-mono mt-0.5 font-bold">
-                  PASS: {String(scannedPass.pass_type).replace(/_/g, ' ')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold w-fit">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>APPROVED BY {scannedPass.approved_by_name?.toUpperCase() || 'WARDEN'}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Permitted Departure</span>
-              <div className="text-sm font-bold text-slate-800">{scannedPass.out_date} at {formatTime12(scannedPass.out_time) || 'Morning'}</div>
-            </div>
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Curfew Return Deadline</span>
-              <div className="text-sm font-bold text-rose-700">{scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time) || '09:30 PM'}</div>
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-emerald-200 text-xs text-emerald-950">
-            <strong>Approved Purpose:</strong> "{scannedPass.reason || scannedPass.purpose || 'Personal'}"
-          </div>
-
-          {isPassExpired && (
-            <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
-              <div className="flex items-start sm:items-center gap-3">
-                <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
-                <div>
-                  <span className="font-bold text-rose-950 block text-sm">⛔ QR Code Expired (Curfew Passed)</span>
-                  <span className="text-[11px] text-rose-800 font-normal">
-                    This gate pass expired on {scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time) || 'curfew'}. The student never exited during the validity window. Departure is not allowed; the resident must obtain a fresh gate pass.
-                  </span>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-rose-200 text-rose-950 font-bold text-[10px] uppercase tracking-wider shrink-0">
-                Expired Pass
-              </span>
-            </div>
-          )}
-
-          {isOverdueReturn && (
-            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
-              <div className="flex items-start sm:items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5 sm:mt-0" />
-                <div>
-                  <span className="font-bold text-amber-950 block text-sm">⚠️ Overdue Curfew Return</span>
-                  <span className="text-[11px] text-amber-800 font-normal">
-                    Student was scheduled to return by {scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time)}. Late return flag will be recorded on Check In.
-                  </span>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] uppercase tracking-wider shrink-0">
-                Late Entry
-              </span>
-            </div>
-          )}
-
-          {isEntryDone && (
-            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
-              <div className="flex items-start sm:items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-                <div>
-                  <span className="font-bold text-amber-950 block">⛔ QR Code Already Used / Outing Completed</span>
-                  <span className="text-[11px] text-amber-800 font-normal">
-                    Student {scannedPass.student_name} already completed this round-trip (Exited at {scannedPass.actual_exit_time ? new Date(scannedPass.actual_exit_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}, Returned at {scannedPass.actual_entry_time ? new Date(scannedPass.actual_entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}). This pass is closed.
-                  </span>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] uppercase tracking-wider shrink-0">
-                Closed / Used
-              </span>
-            </div>
-          )}
-
-          <div className="pt-2">
-            <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-600">
-              <span>Transit State:</span>
-              <span>
-                {isPassExpired 
-                  ? '🔴 EXPIRED - Outing Window Closed' 
-                  : isEntryDone 
-                  ? '🟢 Full Movement Completed' 
-                  : isOverdueReturn 
-                  ? '⚠️ Student Outside Campus (OVERDUE RETURN)' 
-                  : isExitDone 
-                  ? '🟡 Student Outside Campus' 
-                  : '⚪ Inside Hostel (Awaiting Departure)'}
-              </span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-3">
               <button
-                onClick={() => setPendingConfirmAction('EXIT')}
-                disabled={isExitDone || isPassExpired || actionLoading}
-                className={`w-full sm:flex-1 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                  isPassExpired
-                    ? 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'
-                    : isExitDone
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                    : 'bg-[#0B1437] text-white hover:bg-[#111f54] shadow-md hover:shadow-lg cursor-pointer'
-                }`}
+                type="button"
+                onClick={stopCameraScanner}
+                className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer"
               >
-                <ArrowRight className="w-4 h-4" />
-                <span>
-                  {isPassExpired
-                    ? '⛔ Departure Expired (Not Permitted)'
-                    : isExitDone 
-                    ? `Exit Done (${new Date(scannedPass.actual_exit_time!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` 
-                    : '1. Scan & Mark Gate Exit (Check Out)'}
-                </span>
+                <XCircle className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="w-full flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-slate-800 relative">
+              <div id="qr-reader-container" className="w-full h-64 sm:h-72 rounded-2xl overflow-hidden bg-black" />
+            </div>
+
+            <p className="text-slate-400 text-[11px] sm:text-xs text-center mt-3 font-medium">
+              Point your camera at the student's gate pass QR code on their mobile screen.
+            </p>
+
+            <button
+              type="button"
+              onClick={stopCameraScanner}
+              className="mt-4 w-full py-3 rounded-2xl bg-rose-600/20 text-rose-300 font-bold text-xs hover:bg-rose-600/30 border border-rose-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <StopCircle className="w-4 h-4 text-rose-400" />
+              <span>Cancel / Close Camera</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* VERIFIED PASS RESULT MODAL POPUP */}
+      {scannedPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+          <div ref={scannedPassCardRef} className="bg-white my-auto p-6 sm:p-7 rounded-3xl border-2 border-blue-100 shadow-2xl animate-in zoom-in-95 duration-150 space-y-5 max-w-lg w-full relative">
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 font-bold flex items-center justify-center text-lg shadow-inner">
+                  {scannedPass.student_name?.[0] || 'S'}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">{scannedPass.student_name}</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {scannedPass.enrollment_no} · {scannedPass.hostel_name} (Room {scannedPass.room_no || 'N/A'})
+                  </p>
+                  <p className="text-[11px] text-teal-900 font-mono mt-0.5 font-bold">
+                    PASS: {String(scannedPass.pass_type).replace(/_/g, ' ')}
+                  </p>
+                </div>
+              </div>
 
               <button
-                onClick={() => setPendingConfirmAction('ENTRY')}
-                disabled={!isExitDone || isEntryDone || actionLoading}
-                className={`w-full sm:flex-1 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                  !isExitDone || isEntryDone
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                    : 'bg-emerald-700 text-white hover:bg-emerald-800 shadow-md hover:shadow-lg animate-pulse'
-                }`}
+                type="button"
+                onClick={() => setScannedPass(null)}
+                className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors cursor-pointer"
+                title="Close Result Modal"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Permitted Departure</span>
+                <div className="text-xs font-bold text-slate-800">{scannedPass.out_date} at {formatTime12(scannedPass.out_time) || 'Morning'}</div>
+              </div>
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Curfew Return Deadline</span>
+                <div className="text-xs font-bold text-rose-700">{scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time) || '09:30 PM'}</div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-emerald-200 text-xs text-emerald-950">
+              <strong>Approved Purpose:</strong> "{scannedPass.reason || scannedPass.purpose || 'Personal'}"
+            </div>
+
+            {isPassExpired && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
+                  <div>
+                    <span className="font-bold text-rose-950 block text-xs">⛔ QR Code Expired</span>
+                    <span className="text-[11px] text-rose-800 font-normal">
+                      Pass expired on {scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time) || 'curfew'}.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isOverdueReturn && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5 sm:mt-0" />
+                  <div>
+                    <span className="font-bold text-amber-950 block text-xs">⚠️ Overdue Curfew Return</span>
+                    <span className="text-[11px] text-amber-800 font-normal">
+                      Return deadline was {scannedPass.expected_return_date} at {formatTime12(scannedPass.expected_return_time)}.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isEntryDone && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                  <div>
+                    <span className="font-bold text-amber-950 block text-xs">⛔ QR Code Already Used</span>
+                    <span className="text-[11px] text-amber-800 font-normal">
+                      Student already completed this round-trip pass.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-1">
+              <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-600">
+                <span>Transit State:</span>
                 <span>
-                  {isEntryDone 
-                    ? `Returned (${new Date(scannedPass.actual_entry_time!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` 
-                    : '2. Scan & Mark Gate Entry (Check In)'}
+                  {isPassExpired 
+                    ? '🔴 EXPIRED' 
+                    : isEntryDone 
+                    ? '🟢 Completed' 
+                    : isOverdueReturn 
+                    ? '⚠️ OVERDUE RETURN' 
+                    : isExitDone 
+                    ? '🟡 Outside Campus' 
+                    : '⚪ Inside Hostel'}
                 </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                <button
+                  onClick={() => setPendingConfirmAction('EXIT')}
+                  disabled={isExitDone || isPassExpired || actionLoading}
+                  className={`w-full sm:flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                    isPassExpired
+                      ? 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'
+                      : isExitDone
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-[#0B1437] text-white hover:bg-[#111f54] shadow-md hover:shadow-lg cursor-pointer'
+                  }`}
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span>
+                    {isPassExpired
+                      ? '⛔ Departure Expired'
+                      : isExitDone 
+                      ? `Exit Done` 
+                      : 'Check Out (Exit)'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setPendingConfirmAction('ENTRY')}
+                  disabled={!isExitDone || isEntryDone || actionLoading}
+                  className={`w-full sm:flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    !isExitDone || isEntryDone
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-emerald-700 text-white hover:bg-emerald-800 shadow-md hover:shadow-lg'
+                  }`}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>
+                    {isEntryDone 
+                      ? `Returned` 
+                      : 'Check In (Entry)'}
+                  </span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setScannedPass(null)}
+                className="w-full mt-2 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Done / Close
               </button>
             </div>
           </div>
