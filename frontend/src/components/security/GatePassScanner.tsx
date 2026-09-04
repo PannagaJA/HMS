@@ -138,6 +138,12 @@ export const GatePassScanner: React.FC = () => {
       }
     }
     setIsCameraActive(false);
+
+    // Explicitly reset parent main scroll container to top so navbar is never scrolled out
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleConfirmMovementExecution = async () => {
