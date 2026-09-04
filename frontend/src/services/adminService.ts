@@ -54,27 +54,9 @@ export const adminService = {
     } catch (e) {
       console.warn('Failed to load hostels from supabase:', e);
     }
-
-    // Merge fallback/local hostels if stored
-    const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
-    
-    // Map Supabase hostels and merge any custom assignments stored locally
-    const combinedHostels = hostels.map((h: any) => {
-      const localMatch = localHostels.find(lh => String(lh.id) === String(h.id));
-      if (localMatch) {
-        return {
-          ...h,
-          ...localMatch,
-          wardens: h.wardens?.length ? h.wardens : localMatch.warden ? [{ warden_profile_id: localMatch.warden }] : []
-        };
-      }
-      return h;
-    });
-
-    for (const lh of localHostels) {
-      if (lh.is_active !== false && !combinedHostels.some(h => String(h.id) === String(lh.id))) {
-        combinedHostels.push(lh);
-      }
+    let combinedHostels = hostels;
+    if (combinedHostels.length === 0) {
+      return [];
     }
 
     const [wardensList, caretakersList, activeAllocsRes] = await Promise.all([
@@ -137,48 +119,27 @@ export const adminService = {
     }
 
     if (!createdHostel) {
-      const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
-      createdHostel = {
-        id: Date.now(),
-        name: payload.name,
-        gender: payload.gender,
-        floor_count: payload.floor_count,
-        address: payload.address || '',
-        warden: payload.warden || null,
-        caretaker: payload.caretaker || null,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      localHostels.push(createdHostel);
-      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
-    } else {
-      // If warden is UUID, try linking in DB
-      const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
-      if (isUuid) {
-        try {
-          await supabase.from('warden_hostel_assignments').insert({
-            warden_profile_id: payload.warden,
-            hostel_id: createdHostel.id
-          });
-        } catch (we) {
-          console.warn('Warden assignment insert failed:', we);
-        }
-      }
-
-      // Also store assignment attributes if custom
-      const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
-      const updated = {
-        ...createdHostel,
-        warden: payload.warden || null,
-        caretaker: payload.caretaker || null
-      };
-      localHostels.push(updated);
-      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
-      return updated;
+      throw new Error("Failed to create hostel in the database.");
     }
 
-    return createdHostel;
+    // If warden is UUID, try linking in DB
+    const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
+    if (isUuid) {
+      try {
+        await supabase.from('warden_hostel_assignments').insert({
+          warden_profile_id: payload.warden,
+          hostel_id: createdHostel.id
+        });
+      } catch (we) {
+        console.warn('Warden assignment insert failed:', we);
+      }
+    }
+
+    return {
+      ...createdHostel,
+      warden: payload.warden || null,
+      caretaker: payload.caretaker || null
+    };
   },
 
   async updateHostel(id: string | number, payload: Partial<{ name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }>) {
@@ -212,18 +173,9 @@ export const adminService = {
       }
     } catch (e) {
       console.warn('Hostel update in Supabase failed:', e);
+      throw e;
     }
 
-    const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
-    const index = localHostels.findIndex(h => String(h.id) === String(id));
-    if (index !== -1) {
-      localHostels[index] = { ...localHostels[index], ...payload };
-      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
-      return localHostels[index];
-    } else {
-      localHostels.push({ id, ...payload, is_active: true });
-      localStorage.setItem('hms_custom_hostels', JSON.stringify(localHostels));
-    }
     return { id, ...payload };
   },
 
@@ -232,10 +184,8 @@ export const adminService = {
       await supabase.from('hostels').update({ is_active: false }).eq('id', id);
     } catch (e) {
       console.warn('Hostel soft-delete in Supabase failed:', e);
+      throw e;
     }
-    const localHostels: any[] = JSON.parse(localStorage.getItem('hms_custom_hostels') || '[]');
-    const filtered = localHostels.filter(h => String(h.id) !== String(id));
-    localStorage.setItem('hms_custom_hostels', JSON.stringify(filtered));
     return { success: true };
   },
 
@@ -303,14 +253,7 @@ export const adminService = {
       console.warn('Failed to load students from supabase:', e);
     }
 
-    // Merge fallback / locally created students
-    const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
     const combinedStudents = [...students];
-    for (const ls of localStudents) {
-      if (!combinedStudents.some(s => String(s.id) === String(ls.id) || (ls.enrollment_no && s.enrollment_no === ls.enrollment_no))) {
-        combinedStudents.push(ls);
-      }
-    }
 
     return combinedStudents.map((s: any) => {
       const activeAlloc = (s.allocations || []).find((a: any) => a.is_active);
@@ -392,23 +335,7 @@ export const adminService = {
     }
 
     if (!createdStudent) {
-      const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
-      createdStudent = {
-        id: Date.now(),
-        student_name: payload.student_name,
-        enrollment_no: payload.enrollment_no,
-        gender: payload.gender,
-        phone: payload.phone || '',
-        father_name: payload.father_name || '',
-        guardian_phone: payload.guardian_phone || '',
-        emergency_contact: payload.emergency_contact || '',
-        no_dues: true,
-        status: 'ACTIVE',
-        room_allotted: !!payload.room_id,
-        created_at: new Date().toISOString()
-      };
-      localStudents.unshift(createdStudent);
-      localStorage.setItem('hms_custom_students', JSON.stringify(localStudents));
+      throw new Error("Failed to create student in the database.");
     }
 
     return createdStudent;
@@ -449,31 +376,10 @@ export const adminService = {
         return data;
       }
     } catch (e) {
-      console.warn('Bulk student insert failed, saving locally:', e);
+      console.warn('Bulk student insert failed:', e);
+      throw e;
     }
 
-    // Local storage fallback for bulk items
-    const localStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
-    let baseId = Date.now();
-    for (const s of students) {
-      const newStudent = {
-        id: baseId++,
-        student_name: s.student_name,
-        enrollment_no: s.enrollment_no,
-        gender: s.gender || 'M',
-        phone: s.phone || '',
-        father_name: s.father_name || '',
-        guardian_phone: s.guardian_phone || '',
-        emergency_contact: s.emergency_contact || '',
-        no_dues: true,
-        status: 'ACTIVE',
-        room_allotted: false,
-        created_at: new Date().toISOString()
-      };
-      localStudents.unshift(newStudent);
-      results.push(newStudent);
-    }
-    localStorage.setItem('hms_custom_students', JSON.stringify(localStudents));
     return results;
   },
 
@@ -548,7 +454,9 @@ export const adminService = {
 
   async deleteWarden(id: string | number) {
     if (typeof id === 'string' && id.includes('-')) {
-      throw new Error("Cannot delete a registered system user from this dashboard.");
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
     }
     const { error } = await supabase.from('hostel_wardens').delete().eq('id', id);
     if (error) throw error;
@@ -593,6 +501,11 @@ export const adminService = {
   },
 
   async deleteCaretaker(id: string | number) {
+    if (typeof id === 'string' && id.includes('-')) {
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    }
     const { error } = await supabase.from('hostel_caretakers').delete().eq('id', id);
     if (error) throw error;
     return { success: true };
@@ -661,7 +574,9 @@ export const adminService = {
 
   async deleteSecurityStaff(id: string | number) {
     if (typeof id === 'string' && id.includes('-')) {
-      throw new Error("Cannot delete a registered system user from this dashboard.");
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
     }
     const { error } = await supabase.from('security_staff').delete().eq('id', id);
     if (error) throw error;

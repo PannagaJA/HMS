@@ -60,29 +60,21 @@ serve(async (req: Request) => {
 
     const userId = authData.user.id;
 
-    // 2. Insert into Profiles
-    const { error: profileError } = await supabaseAdmin.from('profiles').update({
+    // 2. Insert or Update Profile
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+      id: userId,
+      email: email,
       role: role.toUpperCase(),
       first_name: name.split(' ')[0],
       last_name: name.split(' ').slice(1).join(' '),
       phone: phone || '',
       is_active: true,
       org_id: org_id,
-    }).eq('id', userId);
+    });
 
     if (profileError) {
-      console.warn("Profile update error:", profileError);
-      // Fallback insert if trigger failed
-      await supabaseAdmin.from('profiles').insert({
-        id: userId,
-        email: email,
-        role: role.toUpperCase(),
-        first_name: name.split(' ')[0],
-        last_name: name.split(' ').slice(1).join(' '),
-        phone: phone || '',
-        is_active: true,
-        org_id: org_id,
-      });
+      console.error("Profile upsert error:", profileError);
+      throw profileError || new Error("Failed to create user profile.");
     }
 
     // 3. Send Email via Resend (Skip for STUDENT)
@@ -140,7 +132,14 @@ serve(async (req: Request) => {
 
     if (emailError) {
       console.error("Resend error:", emailError);
-      throw new Error("Failed to send email via Resend.");
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: "User created successfully, but the welcome email failed to send.",
+        userId 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      })
     }
 
     return new Response(JSON.stringify({ 

@@ -8,6 +8,8 @@ import { formatTime12 } from '../../lib/utils';
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPasses, setRecentPasses] = useState<GatePassRequest[]>([]);
+  const [weeklyTrends, setWeeklyTrends] = useState<{ day: string; count: number; height: string }[]>([]);
+  const [trendStats, setTrendStats] = useState({ peakDay: 'N/A', peakCount: 0, average: 0, trendPercent: '+0%' });
   const [selectedReasonPass, setSelectedReasonPass] = useState<GatePassRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,7 +32,49 @@ export const AdminDashboard: React.FC = () => {
       // Support both { statistics: {...} } and direct {...} payload
       const statData = statsRes.data.statistics || statsRes.data;
       setStats(statData);
-      setRecentPasses(passesRes.data.slice(0, 5));
+      const allPasses = passesRes.data || [];
+      setRecentPasses(allPasses.slice(0, 5));
+
+      // Calculate Weekly Trends
+      const today = new Date();
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const trendArray: { day: string; count: number; height: string }[] = [];
+      let totalPasses = 0;
+      let peakCount = 0;
+      let peakDay = 'N/A';
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const dayStr = days[d.getDay()];
+        const dateStr = d.toISOString().split('T')[0];
+
+        const dayCount = allPasses.filter(p => p.out_date === dateStr).length;
+        totalPasses += dayCount;
+        if (dayCount > peakCount) {
+          peakCount = dayCount;
+          peakDay = dayStr;
+        }
+
+        trendArray.push({
+          day: dayStr,
+          count: dayCount,
+          height: '0%' // calculated later
+        });
+      }
+
+      // Calculate heights relative to peak
+      trendArray.forEach(item => {
+        item.height = peakCount > 0 ? `${Math.max(10, Math.round((item.count / peakCount) * 100))}%` : '10%';
+      });
+
+      setWeeklyTrends(trendArray);
+      setTrendStats({
+        peakDay: peakCount > 0 ? `${peakDay} (${peakCount} Outpasses)` : 'N/A',
+        peakCount,
+        average: Number((totalPasses / 7).toFixed(1)),
+        trendPercent: totalPasses > 0 ? '+Active Movements' : 'No Movements'
+      });
     } catch (err) {
       console.error('Failed to load dashboard data', err);
     } finally {
@@ -136,20 +180,12 @@ export const AdminDashboard: React.FC = () => {
                 <p className="text-xs text-slate-400">Total outpass check-outs recorded over the past 7 days</p>
               </div>
               <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-50 text-[#0B1437] border border-blue-200">
-                +14.2% Movements
+                {trendStats.trendPercent}
               </span>
             </div>
 
             <div className="grid grid-cols-7 gap-3 h-48 items-end pt-6 pb-2 border-b border-slate-100">
-              {[
-                { day: 'Mon', count: 45, height: '40%' },
-                { day: 'Tue', count: 32, height: '30%' },
-                { day: 'Wed', count: 68, height: '65%' },
-                { day: 'Thu', count: 54, height: '50%' },
-                { day: 'Fri', count: 95, height: '90%' },
-                { day: 'Sat', count: 110, height: '100%' },
-                { day: 'Sun', count: 76, height: '70%' },
-              ].map((bar, idx) => (
+              {weeklyTrends.map((bar, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-2 h-full justify-end group">
                   <div className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
                     {bar.count}
@@ -165,8 +201,8 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between pt-4 text-xs text-slate-500">
-            <span>Peak Day: <strong>Saturday (110 Outpasses)</strong></span>
-            <span>Average: <strong>68.5 Passes / Day</strong></span>
+            <span>Peak Day: <strong>{trendStats.peakDay}</strong></span>
+            <span>Average: <strong>{trendStats.average} Passes / Day</strong></span>
           </div>
         </div>
       </div>

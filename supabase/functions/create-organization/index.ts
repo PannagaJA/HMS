@@ -66,27 +66,20 @@ serve(async (req: Request) => {
 
     const userId = authData.user.id;
 
-    // 3. Insert/Update Profile
-    const { error: profileError } = await supabaseAdmin.from('profiles').update({
-      role: 'HMS_ADMIN',
+    // 3. Insert or Update Profile
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+      id: userId,
+      email: adminEmail,
+      role: 'ADMIN',
       first_name: adminName.split(' ')[0],
       last_name: adminName.split(' ').slice(1).join(' '),
       is_active: true,
       org_id: org_id,
-    }).eq('id', userId);
+    });
 
     if (profileError) {
-      console.warn("Profile update error:", profileError);
-      // Fallback insert if trigger failed
-      await supabaseAdmin.from('profiles').insert({
-        id: userId,
-        email: adminEmail,
-        role: 'HMS_ADMIN',
-        first_name: adminName.split(' ')[0],
-        last_name: adminName.split(' ').slice(1).join(' '),
-        is_active: true,
-        org_id: org_id,
-      });
+      console.error("Profile upsert error:", profileError);
+      throw profileError || new Error("Failed to create admin profile.");
     }
 
     // 4. Send Email via Resend
@@ -134,7 +127,14 @@ serve(async (req: Request) => {
 
     if (emailError) {
       console.error("Resend error:", emailError);
-      throw new Error("Failed to send email via Resend.");
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: "Organization created successfully, but the welcome email failed to send.",
+        org_id 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      })
     }
 
     return new Response(JSON.stringify({ 
