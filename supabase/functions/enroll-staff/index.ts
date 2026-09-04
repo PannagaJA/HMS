@@ -28,8 +28,8 @@ serve(async (req: Request) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Generate Temporary Password
-    const tempPassword = 'Temp-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    // Use standard password instead of temporary
+    const tempPassword = 'amc@2026';
 
     // Fetch the org_id of the admin making this request
     const authHeader = req.headers.get('Authorization');
@@ -85,7 +85,18 @@ serve(async (req: Request) => {
       });
     }
 
-    // 3. Send Email via Resend
+    // 3. Send Email via Resend (Skip for STUDENT)
+    if (role.toUpperCase() === 'STUDENT') {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: "Student created successfully. Email sending skipped for students.",
+        userId 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
 
     if (!resendApiKey) {
@@ -108,7 +119,7 @@ serve(async (req: Request) => {
         <p>You have been enrolled as a <strong>${role}</strong>.</p>
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 5px 0;"><strong>Email / Login:</strong> ${email}</p>
-          <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${tempPassword}</code></p>
+          <p style="margin: 5px 0;"><strong>Standard Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${tempPassword}</code></p>
         </div>
         <p><strong>Important Next Steps:</strong></p>
         <ol>
