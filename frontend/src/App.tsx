@@ -62,7 +62,8 @@ function App() {
             {/* Warden Protected Routes (Dedicated Modules matching reference architecture) */}
             <Route element={<ProtectedRoute allowedRoles={['WARDEN']} />}>
               <Route path="/warden/dashboard" element={<WardenDashboard />} />
-              <Route path="/warden/residents" element={<WardenResidentManagement />} />
+              <Route path="/warden/residents" element={<StudentManagement />} />
+              <Route path="/warden/rooms" element={<RoomManagement />} />
               <Route path="/warden/menu" element={<MenuManagement />} />
               <Route path="/warden/passes" element={<WardenGatePassManagement />} />
               <Route path="/warden/issues" element={<WardenIssueManagement />} />

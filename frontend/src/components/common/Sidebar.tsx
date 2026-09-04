@@ -44,7 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
   // Warden Nav Items matching reference Stalight architecture
   const wardenNavItems = [
     { path: '/warden/dashboard', name: 'Warden Dashboard', icon: LayoutDashboard },
-    { path: '/warden/residents', name: 'Resident Students', icon: Users },
+    { path: '/warden/residents', name: 'Residents & Allotments', icon: Users },
+    { path: '/warden/rooms', name: 'Room Allotments & Beds', icon: BedDouble },
     { path: '/warden/menu', name: 'Mess & Dining Menu', icon: UtensilsCrossed },
     { path: '/warden/passes', name: 'Gate Pass Review', icon: Ticket },
     { path: '/warden/issues', name: 'Hostel Issues', icon: Wrench },

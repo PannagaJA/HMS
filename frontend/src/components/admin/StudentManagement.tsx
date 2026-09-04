@@ -4,6 +4,8 @@ import type { HostelStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
 import { useDebounce } from '../../hooks/useDebounce';
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
 import {
   Select,
   SelectContent,
@@ -25,6 +27,7 @@ interface ParsedStudentRow {
 }
 
 export const StudentManagement: React.FC = () => {
+  const { user } = useAuth();
   const { showSuccess, showError, confirm } = useNotification();
   const [students, setStudents] = useState<HostelStudent[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
@@ -64,16 +67,32 @@ export const StudentManagement: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user]);
 
   const fetchData = async () => {
     try {
-      const [sRes, hRes] = await Promise.all([
-        apiClient.get<HostelStudent[]>('/hms/students/'),
-        apiClient.get<Hostel[]>('/hms/hostels/'),
-      ]);
-      setStudents(sRes.data || []);
-      setHostels(hRes.data || []);
+      let hList: Hostel[] = [];
+      let sList: HostelStudent[] = [];
+
+      if (user?.role === 'WARDEN') {
+        hList = await wardenService.getAssignedHostels(user?.id);
+        const assignedIds = hList.map(h => String(h.id));
+        const sRes = await apiClient.get<HostelStudent[]>('/hms/students/');
+        sList = (sRes.data || []).filter(st => {
+          const stHostelId = String(st.hostel || (st.room_detail as any)?.hostel_id || (st.allocations as any)?.[0]?.bed?.room?.hostel_id || '');
+          return !stHostelId || assignedIds.length === 0 || assignedIds.includes(stHostelId);
+        });
+      } else {
+        const [sRes, hRes] = await Promise.all([
+          apiClient.get<HostelStudent[]>('/hms/students/'),
+          apiClient.get<Hostel[]>('/hms/hostels/'),
+        ]);
+        sList = sRes.data || [];
+        hList = hRes.data || [];
+      }
+
+      setStudents(sList);
+      setHostels(hList);
     } catch (err) {
       console.error('Failed to fetch data', err);
     }

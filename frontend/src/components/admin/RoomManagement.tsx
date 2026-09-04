@@ -3,6 +3,8 @@ import { BedDouble, Plus, X, Layers, Building2, Pencil, Trash2 } from 'lucide-re
 import type { HostelRoom, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
+import { wardenService } from '../../services/wardenService';
 import {
   Select,
   SelectContent,
@@ -12,6 +14,7 @@ import {
 } from '../ui/select';
 
 export const RoomManagement: React.FC = () => {
+  const { user } = useAuth();
   const { showSuccess, showError, showWarning, confirm } = useNotification();
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
@@ -64,10 +67,16 @@ export const RoomManagement: React.FC = () => {
 
   const fetchHostels = async () => {
     try {
-      const res = await apiClient.get<Hostel[]>('/hms/hostels/');
-      setHostels(res.data);
-      if (res.data.length > 0 && !selectedHostelId) {
-        setSelectedHostelId(String(res.data[0].id));
+      let list: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        list = await wardenService.getAssignedHostels(user?.id);
+      } else {
+        const res = await apiClient.get<Hostel[]>('/hms/hostels/');
+        list = res.data || [];
+      }
+      setHostels(list);
+      if (list.length > 0 && !selectedHostelId) {
+        setSelectedHostelId(String(list[0].id));
       }
     } catch (err) {
       console.error('Failed to load hostels', err);
