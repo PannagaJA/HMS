@@ -252,7 +252,7 @@ export const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Hostel & Room</span>
                     <span className="font-medium text-slate-700 truncate block">
-                      {p.hostel_name || 'Block A'} (Rm {p.room_no || '101'})
+                      {p.hostel_name ? `${p.hostel_name} ${p.room_no ? `(Rm ${p.room_no})` : ''}` : (p.room_no ? `Room ${p.room_no}` : 'N/A')}
                     </span>
                   </div>
                   <div>
@@ -318,7 +318,7 @@ export const AdminDashboard: React.FC = () => {
                       {p.enrollment_no}
                     </td>
                     <td className="py-4 px-4 text-xs font-medium text-slate-600">
-                      {p.hostel_name || 'Block A'} (Rm {p.room_no || '101'})
+                      {p.hostel_name ? `${p.hostel_name} ${p.room_no ? `(Rm ${p.room_no})` : ''}` : (p.room_no ? `Room ${p.room_no}` : 'N/A')}
                     </td>
                     <td className="py-4 px-4 text-xs font-semibold text-slate-700 uppercase">
                       {p.pass_type}
@@ -375,7 +375,7 @@ export const AdminDashboard: React.FC = () => {
                     {selectedReasonPass.student_name || 'Student'}
                   </h3>
                   <p className="text-xs font-mono text-slate-500 mt-0.5">
-                    {selectedReasonPass.enrollment_no} · {selectedReasonPass.hostel_name || 'Block A'} (Rm {selectedReasonPass.room_no || '101'})
+                    {selectedReasonPass.enrollment_no} · {selectedReasonPass.hostel_name ? `${selectedReasonPass.hostel_name} (Rm ${selectedReasonPass.room_no || 'N/A'})` : (selectedReasonPass.room_no ? `Room ${selectedReasonPass.room_no}` : 'N/A')}
                   </p>
                 </div>
               </div>

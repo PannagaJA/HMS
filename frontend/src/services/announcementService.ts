@@ -6,11 +6,18 @@ export const announcementService = {
   async getUserHostelId(role: string, userId: string): Promise<number | null> {
     try {
       if (role === 'STUDENT') {
-        const { data } = await supabase
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || '');
+        let query = supabase
           .from('students')
-          .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-          .eq('profile_id', userId)
-          .maybeSingle();
+          .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))');
+        
+        if (isUuid) {
+          query = query.eq('profile_id', userId);
+        } else {
+          query = query.limit(1);
+        }
+
+        const { data } = await query.maybeSingle();
 
         const allocations = (data as any)?.allocations || [];
         const activeAlloc = allocations.find((a: any) => a.is_active);
@@ -18,8 +25,11 @@ export const announcementService = {
         return hostelId ? Number(hostelId) : null;
       }
       if (role === 'WARDEN' || role === 'CARETAKER') {
-        const { data } = await supabase.from('warden_hostel_assignments').select('hostel_id').eq('warden_profile_id', userId).maybeSingle();
-        return data?.hostel_id || null;
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || '');
+        if (isUuid) {
+          const { data } = await supabase.from('warden_hostel_assignments').select('hostel_id').eq('warden_profile_id', userId).maybeSingle();
+          return data?.hostel_id || null;
+        }
       }
     } catch (e) {
       console.warn('Could not determine user hostel for announcements', e);

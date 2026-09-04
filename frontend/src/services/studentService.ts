@@ -14,21 +14,30 @@ export const studentService = {
     let student: any = null;
 
     if (userId) {
-      const { data } = await supabase
-        .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
-        .eq('profile_id', userId)
-        .maybeSingle();
-      student = data;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      if (isUuid) {
+        const { data } = await supabase
+          .from('students')
+          .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+          .eq('profile_id', userId)
+          .maybeSingle();
+        student = data;
+      }
     }
 
     if (!student) {
-      const { data } = await supabase
-        .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
-        .limit(1)
-        .maybeSingle();
-      student = data;
+      const stored = localStorage.getItem('hms_user');
+      const userObj = stored ? JSON.parse(stored) : null;
+      const email = userObj?.email;
+      if (email) {
+        const usnPrefix = email.split('@')[0];
+        const { data } = await supabase
+          .from('students')
+          .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+          .or(`email.eq.${email},enrollment_no.ilike.${usnPrefix}`)
+          .maybeSingle();
+        student = data;
+      }
     }
 
     const activeAlloc = (student?.allocations || []).find((a: any) => a.is_active) || student?.allocations?.[0];

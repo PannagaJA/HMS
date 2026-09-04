@@ -64,10 +64,10 @@ export const StudentDashboard: React.FC = () => {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Hi, {student?.student_name || 'Resident Student'}!
+            Hi, {student?.student_name || 'Student'}!
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100/70 mt-1">
-            {student?.hostel_name || 'Aryabhatta Boys Hostel'} · Room {student?.room_detail?.no || '101'} (Bed #{student?.bed_number || '1'})
+            {student?.hostel_name ? `${student.hostel_name} · Room ${student.room_detail?.no || student.room_no || 'N/A'} (Bed #${student.bed_number || 'N/A'})` : 'No Room Allotment Active'}
           </p>
         </div>
 
@@ -105,16 +105,29 @@ export const StudentDashboard: React.FC = () => {
               <span className="text-xs font-bold uppercase tracking-wider opacity-75">Allotted Room</span>
               <BedDouble className="w-5 h-5 opacity-80" />
             </div>
-            <div className="text-3xl font-bold mb-1">
-              Room {student?.room_detail?.no || '101'}
-            </div>
-            <div className="text-xs opacity-80 mb-4">
-              {student?.hostel_name || 'Aryabhatta Boys Hostel'} · Bed #{student?.bed_number || '1'}
-            </div>
+            {student?.room_allotted && (student.room_detail?.no || student.room_no) ? (
+              <>
+                <div className="text-3xl font-bold mb-1">
+                  Room {student.room_detail?.no || student.room_no}
+                </div>
+                <div className="text-xs opacity-80 mb-4">
+                  {student.hostel_name || 'Hostel'} · Bed #{student.bed_number || 'N/A'}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-xl font-bold mb-1 text-slate-700">
+                  Not Allotted
+                </div>
+                <div className="text-xs opacity-80 mb-4 text-slate-500">
+                  Contact warden or admin for room allotment.
+                </div>
+              </>
+            )}
           </div>
           <div className="pt-3 border-t border-emerald-900/10 text-xs flex items-center justify-between">
             <span className="opacity-80">Room Status:</span>
-            <span className="font-bold">Active Allotment</span>
+            <span className="font-bold">{student?.room_allotted ? 'Active Allotment' : 'Pending Allotment'}</span>
           </div>
         </div>
 
@@ -251,7 +264,7 @@ export const StudentDashboard: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-5">
           <div>
             <h3 className="text-base font-bold text-slate-900">Roommates & Shared Quarters</h3>
-            <p className="text-xs text-slate-400">Co-residents allotted in Room {student?.room_detail?.no || '101'}</p>
+            <p className="text-xs text-slate-400">{student?.room_detail?.no || student?.room_no ? `Co-residents allotted in Room ${student.room_detail?.no || student.room_no}` : 'No room allotted yet'}</p>
           </div>
           <span className="w-fit px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
             {profileData?.roommates?.length || 0} Roommates

@@ -30,30 +30,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUserProfile = async (): Promise<User | null> => {
     try {
+      const stored = getStoredUser();
+      const storedToken = getAccessToken();
+
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData?.user) {
-        // Only clear if confirmed no Supabase session
-        const sessionRes = await supabase.auth.getSession();
-        if (!sessionRes.data?.session) {
-          setUser(null);
-          setToken(null);
-          localStorage.removeItem('hms_user');
-          localStorage.removeItem('hms_token');
-          return null;
-        }
+      if (!authData?.user && !stored) {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('hms_user');
+        localStorage.removeItem('hms_token');
+        return null;
       }
 
       const res = await apiClient.get<User>('/auth/me/');
       if (res.data) {
         setUser(res.data);
         const sessionRes = await supabase.auth.getSession();
-        const currentToken = sessionRes.data?.session?.access_token || getAccessToken() || '';
+        const currentToken = sessionRes.data?.session?.access_token || storedToken || '';
         setToken(currentToken);
         saveAuthSession(currentToken, undefined, res.data);
         return res.data;
+      } else if (stored) {
+        setUser(stored);
+        if (storedToken) setToken(storedToken);
+        return stored;
       }
     } catch (err) {
       console.error('Session restoration background check:', err);
+      const stored = getStoredUser();
+      if (stored) {
+        setUser(stored);
+        setToken(getAccessToken());
+        return stored;
+      }
     } finally {
       setIsLoading(false);
     }

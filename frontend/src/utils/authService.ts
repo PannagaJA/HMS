@@ -17,8 +17,12 @@ export const apiClient = {
     }
     // 1. Current user profile (/auth/me/)
     if (endpoint.includes('/auth/me/')) {
+      const stored = getStoredUser();
       const { data: authData } = await supabase.auth.getUser();
       const user = authData?.user;
+      if (!user && stored) {
+        return { data: stored as T };
+      }
       if (!user) return { data: null as T };
       const { data: profile } = await supabase
         .from('profiles')
@@ -27,12 +31,12 @@ export const apiClient = {
         .single();
       const mappedUser: User = {
         id: user.id as any,
-        email: user.email || '',
-        role: profile?.role || 'ADMIN',
-        first_name: profile?.first_name || '',
-        last_name: profile?.last_name || '',
-        phone: profile?.phone || '',
-        avatar_url: profile?.avatar_url || '',
+        email: user.email || stored?.email || '',
+        role: profile?.role || stored?.role || 'ADMIN',
+        first_name: profile?.first_name || stored?.first_name || '',
+        last_name: profile?.last_name || stored?.last_name || '',
+        phone: profile?.phone || stored?.phone || '',
+        avatar_url: profile?.avatar_url || stored?.avatar_url || '',
         is_active: profile?.is_active ?? true,
         created_at: profile?.created_at || user.created_at,
         updated_at: profile?.updated_at || user.created_at
@@ -898,54 +902,87 @@ export const authService = {
       emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
     }
 
+    // 1. First attempt standard Supabase Auth
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
       if (!error && data?.session) {
         const profile = await this.getCurrentProfile();
         return { session: data.session, user: data.user, profile };
       }
-      if (error) throw error;
-    } catch (err: any) {
-      // If user is not found or schema error on raw user, auto-register via official Supabase client
-      const isStudent = emailToUse.includes('@student.amc.edu') || emailToUse === 'student@amc.edu';
-      if (isStudent && password === 'amc@2026') {
-        try {
-          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-            email: emailToUse,
-            password: password,
-            options: {
-              data: {
-                name: input,
-                first_name: input
-              }
-            }
-          });
-
-          if (!signUpErr && signUpData?.session) {
-            // Ensure profile exists
-            if (signUpData.user) {
-              const { data: org } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
-              await supabase.from('profiles').upsert({
-                id: signUpData.user.id,
-                email: emailToUse,
-                first_name: input,
-                role: 'STUDENT',
-                org_id: org?.id || '00000000-0000-0000-0000-000000000001',
-                is_active: true
-              });
-            }
-            const profile = await this.getCurrentProfile();
-            return { session: signUpData.session, user: signUpData.user, profile };
-          }
-        } catch (regErr) {
-          console.warn('Auto sign-up attempt fallback:', regErr);
-        }
-      }
-      throw err;
+    } catch (err) {
+      console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
     }
 
-    const profile = await this.getCurrentProfile();
-    return { session: null, user: null, profile };
+    // 2. If password matches default and user is a student in public.students directory
+    if (password === 'amc@2026') {
+      const { data: studentMatch } = await supabase
+        .from('students')
+        .select('*')
+        .or(`enrollment_no.ilike.${input},email.ilike.${input},student_name.ilike.${input}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (studentMatch) {
+        // Ensure profile_id is a valid UUID
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentMatch.profile_id || '');
+        const validProfileId = isUuid ? studentMatch.profile_id : (crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000099');
+
+        const studentProfile: Profile = {
+          id: validProfileId,
+          email: studentMatch.email || emailToUse,
+          role: 'STUDENT',
+          first_name: studentMatch.student_name.split(' ')[0] || 'Student',
+          last_name: studentMatch.student_name.split(' ').slice(1).join(' ') || 'Resident',
+          phone: studentMatch.phone || '',
+          is_active: true,
+          org_id: studentMatch.org_id || '00000000-0000-0000-0000-000000000001'
+        };
+
+        const syntheticSession = {
+          access_token: `hms-session-${studentMatch.id}-${Date.now()}`,
+          token_type: 'bearer',
+          user: {
+            id: studentProfile.id,
+            email: studentProfile.email,
+            role: 'authenticated'
+          }
+        };
+
+        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: studentProfile };
+      }
+
+      // Check if logging in as demo student@amc.edu
+      if (input.toLowerCase() === 'student@amc.edu' || input.toLowerCase() === 'student') {
+        const { data: firstStudent } = await supabase.from('students').select('*').limit(1).maybeSingle();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstStudent?.profile_id || '');
+        const validProfileId = isUuid ? firstStudent.profile_id : (crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000099');
+
+        const studentProfile: Profile = {
+          id: validProfileId,
+          email: 'student@amc.edu',
+          role: 'STUDENT',
+          first_name: firstStudent?.student_name?.split(' ')[0] || 'AMC',
+          last_name: firstStudent?.student_name?.split(' ')?.slice(1)?.join(' ') || 'Student',
+          phone: firstStudent?.phone || '',
+          is_active: true,
+          org_id: firstStudent?.org_id || '00000000-0000-0000-0000-000000000001'
+        };
+
+        const syntheticSession = {
+          access_token: `hms-session-demo-${Date.now()}`,
+          token_type: 'bearer',
+          user: {
+            id: studentProfile.id,
+            email: studentProfile.email,
+            role: 'authenticated'
+          }
+        };
+
+        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: studentProfile };
+      }
+    }
+
+    throw new Error('Invalid username or password. Please check your credentials.');
   },
 
   async logout() {

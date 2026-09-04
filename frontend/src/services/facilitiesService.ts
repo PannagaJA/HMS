@@ -12,25 +12,8 @@ export const diningService = {
       if (!error && data && data.length > 0) {
         return data;
       }
-
-      // If meal_types is empty in remote DB, ensure the 4 standard meal types exist
-      const standardMealTypes = [
-        { name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00' },
-        { name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00' },
-        { name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00' },
-        { name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00' }
-      ];
-
-      const { data: inserted, error: insertErr } = await supabase
-        .from('meal_types')
-        .insert(standardMealTypes)
-        .select();
-
-      if (!insertErr && inserted && inserted.length > 0) {
-        return inserted;
-      }
     } catch (e) {
-      console.warn('Could not auto-provision meal_types:', e);
+      console.warn('Could not fetch meal_types:', e);
     }
 
     return [
@@ -205,25 +188,34 @@ export const diningService = {
 
     let student: any = null;
     if (userId) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .eq('profile_id', userId)
-        .maybeSingle();
-      if (data) student = data;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      if (isUuid) {
+        const { data } = await supabase
+          .from('students')
+          .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+          .eq('profile_id', userId)
+          .maybeSingle();
+        if (data) student = data;
+      }
     }
 
     if (!student) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .limit(1)
-        .maybeSingle();
-      if (data) student = data;
+      const stored = localStorage.getItem('hms_user');
+      const userObj = stored ? JSON.parse(stored) : null;
+      const email = userObj?.email;
+      if (email) {
+        const usnPrefix = email.split('@')[0];
+        const { data } = await supabase
+          .from('students')
+          .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+          .or(`email.eq.${email},enrollment_no.ilike.${usnPrefix}`)
+          .maybeSingle();
+        if (data) student = data;
+      }
     }
 
     if (!student) {
-      throw new Error('Student record not found for recording meal skip');
+      throw new Error('Student resident record not found for recording meal skip');
     }
 
     const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
