@@ -154,7 +154,7 @@ export const StaffManagement: React.FC = () => {
         </div>
         <button
           onClick={openCreateModal}
-          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
+          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs sm:text-sm font-semibold hover:bg-[#111f54] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add {activeTab === 'wardens' ? 'Warden' : activeTab === 'caretakers' ? 'Caretaker' : 'Security'}</span>
@@ -167,7 +167,7 @@ export const StaffManagement: React.FC = () => {
           onClick={() => setActiveTab('wardens')}
           className={`flex-1 sm:flex-initial text-center px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'wardens'
-              ? 'bg-[#0D3833] text-white shadow-sm'
+              ? 'bg-[#0B1437] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -177,7 +177,7 @@ export const StaffManagement: React.FC = () => {
           onClick={() => setActiveTab('caretakers')}
           className={`flex-1 sm:flex-initial text-center px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'caretakers'
-              ? 'bg-[#0D3833] text-white shadow-sm'
+              ? 'bg-[#0B1437] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -187,7 +187,7 @@ export const StaffManagement: React.FC = () => {
           onClick={() => setActiveTab('security')}
           className={`flex-1 sm:flex-initial text-center px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'security'
-              ? 'bg-[#0D3833] text-white shadow-sm'
+              ? 'bg-[#0B1437] text-white shadow-sm'
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -265,7 +265,7 @@ export const StaffManagement: React.FC = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Dr. Rajesh Sharma"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -277,7 +277,7 @@ export const StaffManagement: React.FC = () => {
                     value={designation}
                     onChange={(e) => setDesignation(e.target.value)}
                     placeholder="e.g. Senior Warden - Block A"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
               )}
@@ -293,7 +293,7 @@ export const StaffManagement: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="9876543210"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
                 <div>
@@ -303,7 +303,7 @@ export const StaffManagement: React.FC = () => {
                     min={0}
                     value={experience}
                     onChange={(e) => setExperience(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
               </div>
@@ -315,7 +315,7 @@ export const StaffManagement: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@university.edu"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -330,7 +330,7 @@ export const StaffManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? 'Processing...' : editingStaffId ? 'Update Staff Member' : 'Save Staff Member'}
                 </button>

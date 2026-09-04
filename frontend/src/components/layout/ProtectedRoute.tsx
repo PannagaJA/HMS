@@ -69,8 +69,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
 
   if (isLoading) {
     return (
-      <div className="h-screen w-screen bg-[#F0FDF9] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-4 border-[#0D3833] border-t-transparent animate-spin" />
+      <div className="h-screen w-screen bg-[#f0f4f8] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-4 border-[#0B1437] border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -87,7 +87,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   }
 
   return (
-    <div className="flex h-screen h-[100dvh] w-screen overflow-hidden bg-[#F0FDF9]">
+    <div className="flex h-screen h-[100dvh] w-screen overflow-hidden bg-[#f0f4f8]">
       {/* Left Sidebar */}
       <Sidebar isOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
 
@@ -125,8 +125,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
           {/* Right Side: Role Badge, Notifications, Profile */}
           <div className="flex items-center gap-3 sm:gap-4 ml-auto">
             {/* Role Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#D1F2EA] text-teal-950 text-[10px] font-bold border border-teal-200 shadow-2xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-600 animate-pulse" />
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 text-[10px] font-bold border border-blue-200 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
               <span>{user?.role || 'PORTAL'}</span>
             </div>
 
@@ -152,7 +152,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
               className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-200" 
               aria-label="User Profile"
             >
-              <div className="w-8 h-8 rounded-full bg-[#0D3833] text-white flex items-center justify-center font-bold text-sm shadow-sm">
+              <div className="w-8 h-8 rounded-full bg-[#0B1437] text-white flex items-center justify-center font-bold text-sm shadow-sm">
                 {user?.username ? user.username.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
               </div>
             </button>

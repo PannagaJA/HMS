@@ -292,7 +292,7 @@ export const RoomManagement: React.FC = () => {
         <div className="flex items-center gap-2.5 w-full sm:w-auto">
           <button
             onClick={handleOpenAddSingleRoom}
-            className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs sm:text-sm font-semibold hover:bg-[#111f54] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Add Room</span>
@@ -362,8 +362,8 @@ export const RoomManagement: React.FC = () => {
 
       {!selectedHostelId ? (
         <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
-          <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
-            <Building2 className="w-8 h-8 text-[#0D3833]" />
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Building2 className="w-8 h-8 text-[#0B1437]" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900">Select a Hostel Block</h3>
@@ -374,8 +374,8 @@ export const RoomManagement: React.FC = () => {
         </div>
       ) : !selectedFloor ? (
         <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
-          <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
-            <Layers className="w-8 h-8 text-[#0D3833]" />
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Layers className="w-8 h-8 text-[#0B1437]" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900">Select a Floor</h3>
@@ -386,8 +386,8 @@ export const RoomManagement: React.FC = () => {
         </div>
       ) : filteredRooms.length === 0 ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
-          <div className="w-16 h-16 rounded-3xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mx-auto shadow-inner">
-            <BedDouble className="w-8 h-8 text-[#0D3833]" />
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <BedDouble className="w-8 h-8 text-[#0B1437]" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900">No Rooms Configured for this Block</h3>
@@ -398,7 +398,7 @@ export const RoomManagement: React.FC = () => {
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
               onClick={handleOpenAddSingleRoom}
-              className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+              className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Single Room</span>
@@ -445,7 +445,7 @@ export const RoomManagement: React.FC = () => {
                     {/* Edit Room Quick Icon Button */}
                     <button
                       onClick={(e) => handleOpenEditRoom(e, room)}
-                      className="p-1 rounded-lg bg-white/80 hover:bg-white text-slate-500 hover:text-[#0D3833] transition-colors border border-slate-200 shadow-2xs cursor-pointer opacity-90 group-hover:opacity-100"
+                      className="p-1 rounded-lg bg-white/80 hover:bg-white text-slate-500 hover:text-[#0B1437] transition-colors border border-slate-200 shadow-2xs cursor-pointer opacity-90 group-hover:opacity-100"
                       title="Edit Room Details"
                     >
                       <Pencil className="w-3 h-3" />
@@ -467,7 +467,7 @@ export const RoomManagement: React.FC = () => {
                     <div
                       key={i}
                       className={`h-2 flex-1 rounded-full ${
-                        i < room.occupied_count ? 'bg-[#0D3833]' : 'bg-white border border-slate-300'
+                        i < room.occupied_count ? 'bg-[#0B1437]' : 'bg-white border border-slate-300'
                       }`}
                       title={`Bed ${i + 1}: ${i < room.occupied_count ? 'Occupied' : 'Vacant'}`}
                     />
@@ -486,8 +486,8 @@ export const RoomManagement: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center font-bold shadow-xs">
-                  <BedDouble className="w-6 h-6 text-[#0D3833]" />
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 flex items-center justify-center font-bold shadow-xs">
+                  <BedDouble className="w-6 h-6 text-[#0B1437]" />
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">Room {selectedRoom.no}</h3>
@@ -573,7 +573,7 @@ export const RoomManagement: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowOccupantsDrawer(false)}
-                className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-sm"
+                className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors cursor-pointer shadow-sm"
               >
                 Done
               </button>
@@ -588,7 +588,7 @@ export const RoomManagement: React.FC = () => {
           <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl relative z-[10000]">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#D1F2EA] text-[#0D3833] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-[#0B1437] flex items-center justify-center">
                   <Pencil className="w-4 h-4" />
                 </div>
                 <div>
@@ -645,7 +645,7 @@ export const RoomManagement: React.FC = () => {
                     required
                     value={editRoomNo}
                     onChange={(e) => setEditRoomNo(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                   />
                 </div>
               </div>
@@ -659,7 +659,7 @@ export const RoomManagement: React.FC = () => {
                   placeholder="e.g. Deluxe Suite"
                   value={editRoomName}
                   onChange={(e) => setEditRoomName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                 />
               </div>
 
@@ -688,7 +688,7 @@ export const RoomManagement: React.FC = () => {
                     required
                     value={editCapacity}
                     onChange={(e) => setEditCapacity(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                   />
                 </div>
               </div>
@@ -714,7 +714,7 @@ export const RoomManagement: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isSubmittingEdit}
-                    className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50"
                   >
                     {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -731,7 +731,7 @@ export const RoomManagement: React.FC = () => {
           <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#D1F2EA] text-[#0D3833] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-[#0B1437] flex items-center justify-center">
                   <Building2 className="w-4 h-4" />
                 </div>
                 <div>
@@ -789,7 +789,7 @@ export const RoomManagement: React.FC = () => {
                     placeholder="e.g. 101, G02"
                     value={singleRoomNo}
                     onChange={(e) => setSingleRoomNo(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                   />
                 </div>
               </div>
@@ -803,7 +803,7 @@ export const RoomManagement: React.FC = () => {
                   placeholder="e.g. Deluxe Room 101"
                   value={singleRoomName}
                   onChange={(e) => setSingleRoomName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                 />
               </div>
 
@@ -832,7 +832,7 @@ export const RoomManagement: React.FC = () => {
                     required
                     value={singleCapacity}
                     onChange={(e) => setSingleCapacity(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                   />
                 </div>
               </div>
@@ -848,7 +848,7 @@ export const RoomManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmittingSingle}
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   {isSubmittingSingle ? 'Adding...' : 'Add Room'}
                 </button>
@@ -932,7 +932,7 @@ export const RoomManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Generate Matrix
                 </button>

@@ -74,7 +74,7 @@ export const StudentGatePasses: React.FC = () => {
         </div>
         <button
           onClick={() => setShowApplyModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
+          className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Apply New Pass</span>
@@ -137,7 +137,7 @@ export const StudentGatePasses: React.FC = () => {
                   {pass.status === 'approved' ? (
                     <button
                       onClick={() => setSelectedQRPass(pass)}
-                      className="w-full py-2.5 rounded-xl bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                      className="w-full py-2.5 rounded-xl bg-blue-100 text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                     >
                       <QrCode className="w-4 h-4 text-teal-900" />
                       <span>Show Security QR Pass</span>
@@ -199,7 +199,7 @@ export const StudentGatePasses: React.FC = () => {
                       {pass.status === 'approved' ? (
                         <button
                           onClick={() => setSelectedQRPass(pass)}
-                          className="px-4 py-1.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center gap-1.5 ml-auto cursor-pointer shadow-xs"
+                          className="px-4 py-1.5 rounded-full bg-blue-100 text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center gap-1.5 ml-auto cursor-pointer shadow-xs"
                         >
                           <QrCode className="w-3.5 h-3.5 text-teal-900" />
                           <span>Show QR</span>
@@ -368,7 +368,7 @@ export const StudentGatePasses: React.FC = () => {
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="State the purpose of your departure..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -383,7 +383,7 @@ export const StudentGatePasses: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Application'}
                 </button>

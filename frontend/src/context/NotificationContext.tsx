@@ -169,7 +169,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 className={`px-5 py-2 rounded-full text-white text-xs font-semibold shadow-sm transition-all cursor-pointer ${
                   confirmState.options.isDestructive
                     ? 'bg-rose-600 hover:bg-rose-700'
-                    : 'bg-[#0D3833] hover:bg-[#064E3B]'
+                    : 'bg-[#0D3833] hover:bg-[#111f54]'
                 }`}
               >
                 {confirmState.options.confirmText || 'Confirm'}

@@ -12,9 +12,9 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const getRoleBadge = (role?: string) => {
     switch (role) {
       case 'ADMIN':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+        return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'WARDEN':
-        return 'bg-teal-100 text-teal-800 border-teal-200';
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case 'SECURITY':
         return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       default:

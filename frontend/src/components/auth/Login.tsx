@@ -335,7 +335,7 @@ export const Login: React.FC = () => {
               <div className="flex items-center justify-center gap-2 text-slate-400">
                 <ShieldCheck className="w-4 h-4 text-slate-400 flex-shrink-0" />
                 <p className="text-xs font-medium text-slate-500 text-center">
-                  Protected by institutional authentication & secure access control.
+                  Protected by institutional authentication
                 </p>
               </div>
             </div>

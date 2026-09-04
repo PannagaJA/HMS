@@ -184,7 +184,7 @@ export const WardenIssueManagement: React.FC = () => {
               disabled={!selectedHostelId}
               className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                 activeFilter === tab.id && selectedHostelId
-                  ? 'bg-[#0D3833] text-white shadow-sm'
+                  ? 'bg-[#0B1437] text-white shadow-sm'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -297,7 +297,7 @@ export const WardenIssueManagement: React.FC = () => {
                         setSelectedIssue(issue);
                         setUpdateStatus(issue.status);
                       }}
-                      className="flex-1 px-4 py-2 rounded-full bg-[#D1F2EA] text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-sm cursor-pointer text-center"
+                      className="flex-1 px-4 py-2 rounded-full bg-blue-100 text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-sm cursor-pointer text-center"
                     >
                       Update Status / Note
                     </button>
@@ -390,7 +390,7 @@ export const WardenIssueManagement: React.FC = () => {
                                 setSelectedIssue(issue);
                                 setUpdateStatus(issue.status);
                               }}
-                              className="px-4 py-1.5 rounded-full bg-[#D1F2EA] text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                              className="px-4 py-1.5 rounded-full bg-blue-100 text-teal-950 text-xs font-semibold hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                             >
                               Update Status / Note
                             </button>
@@ -429,7 +429,7 @@ export const WardenIssueManagement: React.FC = () => {
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setSelectedImageModal(null)}
-                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B]"
+                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54]"
               >
                 Close Preview
               </button>
@@ -513,7 +513,7 @@ export const WardenIssueManagement: React.FC = () => {
             <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
               <button
                 onClick={() => setViewingUpdatesIssue(null)}
-                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] cursor-pointer shadow-xs"
+                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] cursor-pointer shadow-xs"
               >
                 Close
               </button>
@@ -577,7 +577,7 @@ export const WardenIssueManagement: React.FC = () => {
                   value={updateNote}
                   onChange={(e) => setUpdateNote(e.target.value)}
                   placeholder="e.g. Electrician visited and repaired the ceiling fan socket."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -591,7 +591,7 @@ export const WardenIssueManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Save Status
                 </button>

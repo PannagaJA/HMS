@@ -144,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-150 group ${
                     isActive
-                      ? 'bg-[#0D3833] text-white shadow-sm'
+                      ? 'bg-[#0B1437] text-white shadow-sm'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`
                 }
@@ -153,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                   <>
                     <Icon
                       className={`w-4 h-4 transition-colors ${
-                        isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-600'
+                        isActive ? 'text-blue-400' : 'text-slate-400 group-hover:text-slate-600'
                       }`}
                     />
                     <span className="truncate">{item.name}</span>

@@ -288,7 +288,7 @@ export const WardenDashboard: React.FC = () => {
                 selectedRoom.occupants.map((occ: any, i: number) => (
                   <div key={i} className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-[#0D3833] text-white flex items-center justify-center text-xs font-bold">
+                      <div className="w-7 h-7 rounded-full bg-[#0B1437] text-white flex items-center justify-center text-xs font-bold">
                         {occ.student_name?.[0] || 'S'}
                       </div>
                       <div>

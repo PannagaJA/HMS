@@ -50,7 +50,7 @@ export const StudentDashboard: React.FC = () => {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#0D3833] to-[#082925] p-6 sm:p-8 rounded-3xl text-white shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#0B1437] to-[#082925] p-6 sm:p-8 rounded-3xl text-white shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-3 py-1 rounded-full bg-emerald-400/20 text-emerald-300 text-xs font-semibold border border-emerald-400/30">
@@ -93,7 +93,7 @@ export const StudentDashboard: React.FC = () => {
       {/* Main Top 3 Resident Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Room & Bed Card */}
-        <div className="bg-[#E8F8CE] p-6 rounded-3xl text-emerald-950 flex flex-col justify-between shadow-sm">
+        <div className="bg-blue-50 p-6 rounded-3xl text-emerald-950 flex flex-col justify-between shadow-sm">
           <div>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold uppercase tracking-wider opacity-75">Allotted Room</span>
@@ -113,7 +113,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         {/* Active Gate Pass Card with Direct QR Popover */}
-        <div className="bg-[#D1F2EA] p-6 rounded-3xl text-teal-950 flex flex-col justify-between shadow-sm">
+        <div className="bg-blue-100 p-6 rounded-3xl text-teal-950 flex flex-col justify-between shadow-sm">
           <div>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold uppercase tracking-wider opacity-75">Active Gate Pass</span>
@@ -184,18 +184,18 @@ export const StudentDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div 
           onClick={() => navigate('/student/passes')}
-          className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:border-[#0D3833]/40 hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:border-[#0B1437]/40 hover:shadow-md transition-all cursor-pointer group"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
             <Ticket className="w-6 h-6 text-teal-900" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 group-hover:text-[#0D3833] transition-colors">
+          <h3 className="text-base font-bold text-slate-900 group-hover:text-[#0B1437] transition-colors">
             Gate Passes & Outpasses
           </h3>
           <p className="text-xs text-slate-500 mt-1 mb-4">
             Apply for night out, home visit, emergency leave, and show live gate QR permits.
           </p>
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[#0D3833] group-hover:translate-x-1 transition-transform">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#0B1437] group-hover:translate-x-1 transition-transform">
             <span>Go to Gate Passes</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -203,18 +203,18 @@ export const StudentDashboard: React.FC = () => {
 
         <div 
           onClick={() => navigate('/student/issues')}
-          className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:border-[#0D3833]/40 hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:border-[#0B1437]/40 hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="w-12 h-12 rounded-2xl bg-[#E0E7FF] text-indigo-950 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
             <Wrench className="w-6 h-6 text-indigo-900" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 group-hover:text-[#0D3833] transition-colors">
+          <h3 className="text-base font-bold text-slate-900 group-hover:text-[#0B1437] transition-colors">
             Maintenance & Repairs
           </h3>
           <p className="text-xs text-slate-500 mt-1 mb-4">
             Report electrical, carpentry, plumbing, or hygiene issues for prompt repair.
           </p>
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[#0D3833] group-hover:translate-x-1 transition-transform">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#0B1437] group-hover:translate-x-1 transition-transform">
             <span>Go to Issue Board</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -222,18 +222,18 @@ export const StudentDashboard: React.FC = () => {
 
         <div 
           onClick={() => navigate('/student/meals')}
-          className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:border-[#0D3833]/40 hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:border-[#0B1437]/40 hover:shadow-md transition-all cursor-pointer group"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#E8F8CE] text-emerald-950 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-emerald-950 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
             <UtensilsCrossed className="w-6 h-6 text-emerald-900" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 group-hover:text-[#0D3833] transition-colors">
+          <h3 className="text-base font-bold text-slate-900 group-hover:text-[#0B1437] transition-colors">
             Mess & Dining Schedule
           </h3>
           <p className="text-xs text-slate-500 mt-1 mb-4">
             Inspect today's breakfast, lunch, snacks, and dinner or skip meals for rebates.
           </p>
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[#0D3833] group-hover:translate-x-1 transition-transform">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#0B1437] group-hover:translate-x-1 transition-transform">
             <span>Go to Mess & Dining</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -256,7 +256,7 @@ export const StudentDashboard: React.FC = () => {
           {profileData?.roommates?.length ? (
             profileData.roommates.map((roommate, idx) => (
               <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#0D3833] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[#0B1437] text-white flex items-center justify-center font-bold text-sm shrink-0">
                   {roommate.student_name[0]}
                 </div>
                 <div className="min-w-0 flex-1 space-y-0.5">

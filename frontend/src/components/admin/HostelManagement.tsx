@@ -123,7 +123,7 @@ export const HostelManagement: React.FC = () => {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs sm:text-sm font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
+          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs sm:text-sm font-semibold hover:bg-[#111f54] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add Hostel Block</span>
@@ -138,7 +138,7 @@ export const HostelManagement: React.FC = () => {
           >
             <div>
               <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 flex items-center justify-center font-bold">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 flex items-center justify-center font-bold">
                   <Building2 className="w-6 h-6" />
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -215,7 +215,7 @@ export const HostelManagement: React.FC = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Aryabhatta Boys Hostel (Block A)"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -299,7 +299,7 @@ export const HostelManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Save Hostel
                 </button>

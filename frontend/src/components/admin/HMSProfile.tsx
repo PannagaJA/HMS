@@ -103,11 +103,11 @@ export const HMSProfile: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Profile Overview Card */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col items-center text-center">
-          <div className="w-24 h-24 rounded-full bg-[#0D3833] text-white flex items-center justify-center text-3xl font-bold mb-4 shadow-md">
+          <div className="w-24 h-24 rounded-full bg-[#0B1437] text-white flex items-center justify-center text-3xl font-bold mb-4 shadow-md">
             {displayName[0]?.toUpperCase() || 'A'}
           </div>
           <h3 className="text-lg font-bold text-slate-900">{displayName}</h3>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#D1F2EA] text-teal-950 mt-1 mb-4 border border-teal-200">
+          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-teal-950 mt-1 mb-4 border border-teal-200">
             {user?.role || 'HMS USER'}
           </span>
 
@@ -136,7 +136,7 @@ export const HMSProfile: React.FC = () => {
           {/* Profile Form */}
           <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm">
             <div className="flex items-center gap-2 mb-5">
-              <User className="w-5 h-5 text-[#0D3833]" />
+              <User className="w-5 h-5 text-[#0B1437]" />
               <h3 className="text-base font-bold text-slate-900">Personal & Contact Information</h3>
             </div>
 
@@ -156,7 +156,7 @@ export const HMSProfile: React.FC = () => {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
               </div>
@@ -171,7 +171,7 @@ export const HMSProfile: React.FC = () => {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                     />
                   </div>
                 </div>
@@ -187,7 +187,7 @@ export const HMSProfile: React.FC = () => {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder="9876543210"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                     />
                   </div>
                 </div>
@@ -197,7 +197,7 @@ export const HMSProfile: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>{isSaving ? 'Saving Changes...' : 'Save Profile'}</span>
@@ -209,7 +209,7 @@ export const HMSProfile: React.FC = () => {
           {/* Change Password Form */}
           <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm">
             <div className="flex items-center gap-2 mb-5">
-              <KeyRound className="w-5 h-5 text-[#0D3833]" />
+              <KeyRound className="w-5 h-5 text-[#0B1437]" />
               <h3 className="text-base font-bold text-slate-900">Security & Password Management</h3>
             </div>
 
