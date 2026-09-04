@@ -1,5 +1,5 @@
 -- =============================================================================
--- DEFINITIVE FIX FOR INFINITE RECURSION IN POSTGRESQL RLS
+-- Migration 028: Fix Infinite Recursion in Row Level Security (RLS) Policies
 -- =============================================================================
 
 -- 1. Helper function with SECURITY DEFINER to fetch active hostel student IDs

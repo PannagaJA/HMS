@@ -35,6 +35,7 @@ export const GatePassScanner: React.FC = () => {
 
   // Confirmation Dialog State for Check Out & Check In
   const [pendingConfirmAction, setPendingConfirmAction] = useState<'EXIT' | 'ENTRY' | null>(null);
+  const [viewModalPass, setViewModalPass] = useState<GatePassRequest | null>(null);
 
   // Camera Scanner State
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -157,8 +158,7 @@ export const GatePassScanner: React.FC = () => {
   };
 
   const handleSelectFromTable = (pass: GatePassRequest) => {
-    setScannedPass(pass);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setViewModalPass(pass);
   };
 
   const isExitDone = Boolean(scannedPass?.actual_exit_time);
@@ -262,8 +262,12 @@ export const GatePassScanner: React.FC = () => {
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="submit"
-              disabled={loading}
-              className="flex-1 sm:flex-none px-6 py-3.5 rounded-full bg-[#0D3833] text-white font-semibold text-xs hover:bg-[#064E3B] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              disabled={loading || !searchInput.trim()}
+              className={`flex-1 sm:flex-none px-6 py-3.5 rounded-full font-semibold text-xs transition-all flex items-center justify-center gap-2 ${
+                loading || !searchInput.trim()
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                  : 'bg-[#0D3833] text-white hover:bg-[#064E3B] cursor-pointer shadow-sm'
+              }`}
             >
               <QrCode className="w-4 h-4" />
               <span>{loading ? 'Verifying...' : 'Verify Pass'}</span>
@@ -513,7 +517,70 @@ export const GatePassScanner: React.FC = () => {
           />
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Cards View */}
+        <div className="block md:hidden space-y-3">
+          {filteredRecords.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-xs italic">
+              {activeTab === 'outside' 
+                ? 'No students currently outside campus. All residents are accounted for.' 
+                : 'No completed return entries recorded yet today.'}
+            </div>
+          ) : (
+            filteredRecords.map((pass) => (
+              <div key={pass.id} className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3 shadow-2xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Student & Room</span>
+                    <div className="font-bold text-slate-900 text-sm">{pass.student_name}</div>
+                    <div className="text-xs text-slate-500">{pass.enrollment_no} · Room {pass.room_no || '101'}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</span>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-block ${
+                      !pass.actual_entry_time 
+                        ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                        : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                    }`}>
+                      {!pass.actual_entry_time ? '🟡 OUTSIDE' : '🟢 RETURNED'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-white p-3 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pass Type</span>
+                    <span className="font-semibold text-slate-800">{String(pass.pass_type).replace(/_/g, ' ')}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gate Exit Time</span>
+                    <span className="font-mono text-slate-700">
+                      {pass.actual_exit_time ? new Date(pass.actual_exit_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending Exit'}
+                    </span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-50">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Curfew Return</span>
+                    <span className="font-semibold text-rose-700 font-mono">
+                      {pass.expected_return_time || '09:30 PM'} ({pass.expected_return_date})
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Quick Action</span>
+                  <button
+                    onClick={() => handleSelectFromTable(pass)}
+                    className="w-full py-2.5 rounded-xl bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
+                  >
+                    {!pass.actual_entry_time ? 'Mark Check-In' : 'View Pass'}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -574,6 +641,124 @@ export const GatePassScanner: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* VIEW GATE PASS DETAILS POP-UP MODAL */}
+      {viewModalPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 relative max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setViewModalPass(null)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+              title="Close"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3.5 mb-5 pr-8">
+              <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-lg shadow-inner shrink-0">
+                {viewModalPass.student_name?.[0] || 'S'}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">{viewModalPass.student_name}</h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  {viewModalPass.enrollment_no} · {viewModalPass.hostel_name} (Room {viewModalPass.room_no || 'N/A'})
+                </p>
+                <p className="text-[11px] text-[#0D3833] font-mono mt-0.5 font-bold">
+                  PASS: {String(viewModalPass.pass_type).replace(/_/g, ' ')}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200/80 mb-4">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                !viewModalPass.actual_entry_time 
+                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                  : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+              }`}>
+                {!viewModalPass.actual_entry_time ? '🟡 OUTSIDE CAMPUS' : '🟢 RETURNED TO HOSTEL'}
+              </span>
+
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>APPROVED BY {viewModalPass.approved_by_name?.toUpperCase() || 'WARDEN'}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs mb-4">
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Permitted Departure</span>
+                <div className="text-xs font-bold text-slate-800">{viewModalPass.out_date}</div>
+                <div className="text-xs text-slate-600 font-mono">{formatTime12(viewModalPass.out_time) || 'Morning'}</div>
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Curfew Return Deadline</span>
+                <div className="text-xs font-bold text-rose-700">{viewModalPass.expected_return_date}</div>
+                <div className="text-xs text-rose-700 font-mono font-bold">{formatTime12(viewModalPass.expected_return_time) || '09:30 PM'}</div>
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Gate Exit Stamped</span>
+                <div className="text-xs font-mono font-bold text-slate-800">
+                  {viewModalPass.actual_exit_time ? new Date(viewModalPass.actual_exit_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not Exited Yet'}
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Gate Entry Stamped</span>
+                <div className="text-xs font-mono font-bold text-slate-800">
+                  {viewModalPass.actual_entry_time ? new Date(viewModalPass.actual_entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not Checked In Yet'}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 mb-5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Approved Purpose</span>
+              <p className="font-medium text-slate-800">"{viewModalPass.reason || viewModalPass.purpose || 'Personal Outing'}"</p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              {!viewModalPass.actual_entry_time && viewModalPass.actual_exit_time && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScannedPass(viewModalPass);
+                    setPendingConfirmAction('ENTRY');
+                    setViewModalPass(null);
+                  }}
+                  className="flex-1 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Mark Check In</span>
+                </button>
+              )}
+
+              {!viewModalPass.actual_exit_time && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScannedPass(viewModalPass);
+                    setPendingConfirmAction('EXIT');
+                    setViewModalPass(null);
+                  }}
+                  className="flex-1 py-3 rounded-2xl bg-[#0D3833] hover:bg-[#064E3B] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span>Mark Check Out</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setViewModalPass(null)}
+                className="px-5 py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CONFIRMATION POPUP MODAL FOR CHECK OUT & CHECK IN */}
       {pendingConfirmAction && scannedPass && (
