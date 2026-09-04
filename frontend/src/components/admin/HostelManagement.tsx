@@ -208,7 +208,7 @@ export const HostelManagement: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -221,7 +221,7 @@ export const HostelManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Gender Designation</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Gender Designation <span className="text-red-500">*</span></label>
                   <Select value={gender} onValueChange={(val: any) => setGender(val)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select gender" />
@@ -234,7 +234,7 @@ export const HostelManagement: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor Count</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor Count <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min={1}

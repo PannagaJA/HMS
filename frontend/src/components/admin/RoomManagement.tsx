@@ -606,7 +606,7 @@ export const RoomManagement: React.FC = () => {
 
             <form onSubmit={handleUpdateRoom} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Block</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Block <span className="text-red-500">*</span></label>
                 <Select value={editHostelId} onValueChange={setEditHostelId}>
                   <SelectTrigger className="w-full bg-slate-50">
                     <SelectValue placeholder="Select hostel" />
@@ -621,7 +621,7 @@ export const RoomManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor <span className="text-red-500">*</span></label>
                   <Select value={editFloor} onValueChange={setEditFloor}>
                     <SelectTrigger className="w-full bg-slate-50">
                       <SelectValue placeholder="-- Select Floor --" />
@@ -639,7 +639,7 @@ export const RoomManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Number</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Number <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     required
@@ -665,7 +665,7 @@ export const RoomManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type <span className="text-red-500">*</span></label>
                   <Select value={editRoomType} onValueChange={handleEditRoomTypeChange}>
                     <SelectTrigger className="w-full bg-slate-50">
                       <SelectValue placeholder="Select type" />
@@ -680,7 +680,7 @@ export const RoomManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min={1}
@@ -749,7 +749,7 @@ export const RoomManagement: React.FC = () => {
 
             <form onSubmit={handleCreateSingleRoom} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel <span className="text-red-500">*</span></label>
                 <Select value={singleHostelId} onValueChange={handleSingleHostelChange}>
                   <SelectTrigger className="w-full bg-slate-50">
                     <SelectValue placeholder="Select hostel" />
@@ -764,7 +764,7 @@ export const RoomManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor <span className="text-red-500">*</span></label>
                   <Select value={singleFloor} onValueChange={handleSingleFloorChange}>
                     <SelectTrigger className="w-full bg-slate-50">
                       <SelectValue placeholder="-- Select Floor --" />
@@ -782,7 +782,7 @@ export const RoomManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Number</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Number <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     required
@@ -809,7 +809,7 @@ export const RoomManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type <span className="text-red-500">*</span></label>
                   <Select value={singleRoomType} onValueChange={handleSingleRoomTypeChange}>
                     <SelectTrigger className="w-full bg-slate-50">
                       <SelectValue placeholder="Select type" />
@@ -824,7 +824,7 @@ export const RoomManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min={1}
@@ -868,7 +868,7 @@ export const RoomManagement: React.FC = () => {
             <form onSubmit={handleBulkGenerate} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor Number</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor Number <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min={0}
@@ -880,7 +880,7 @@ export const RoomManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Number of Rooms</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Number of Rooms <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min={1}
@@ -895,7 +895,7 @@ export const RoomManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Capacity <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min={1}
@@ -907,7 +907,7 @@ export const RoomManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type <span className="text-red-500">*</span></label>
                   <Select value={bulkRoomType} onValueChange={setBulkRoomType}>
                     <SelectTrigger>
                       <SelectValue placeholder="Room Type" />

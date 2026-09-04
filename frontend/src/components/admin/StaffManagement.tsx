@@ -258,7 +258,7 @@ export const StaffManagement: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -284,12 +284,13 @@ export const StaffManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone (10 Digits)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone (10 Digits) <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
                     required
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
                     maxLength={10}
-                    pattern="[0-9]{10}"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="9876543210"
@@ -297,9 +298,10 @@ export const StaffManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Experience (Years)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Experience (Years) <span className="text-red-500">*</span></label>
                   <input
                     type="number"
+                    required
                     min={0}
                     value={experience}
                     onChange={(e) => setExperience(Number(e.target.value))}

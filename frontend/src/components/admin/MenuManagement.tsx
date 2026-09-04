@@ -550,7 +550,7 @@ export const MenuManagement: React.FC = () => {
 
             <form onSubmit={handleSaveItem} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Item Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Item Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -562,7 +562,7 @@ export const MenuManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Category</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Category <span className="text-red-500">*</span></label>
                 <Select value={itemCategory} onValueChange={(val) => setItemCategory(val)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Category" />

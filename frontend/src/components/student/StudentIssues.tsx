@@ -395,7 +395,7 @@ export const StudentIssues: React.FC = () => {
 
             <form onSubmit={handleRaiseIssue} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Issue Category</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Issue Category <span className="text-red-500">*</span></label>
                 <Select value={issueCategory} onValueChange={(val) => setIssueCategory(val)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Category" />
@@ -412,7 +412,7 @@ export const StudentIssues: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Issue Title</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Issue Title <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -424,7 +424,7 @@ export const StudentIssues: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Detailed Description</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Detailed Description <span className="text-red-500">*</span></label>
                 <textarea
                   rows={3}
                   required

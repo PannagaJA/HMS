@@ -666,7 +666,7 @@ export const StudentManagement: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Gender</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Gender <span className="text-red-500">*</span></label>
                   <Select value={addGender} onValueChange={(val: 'M' | 'F') => setAddGender(val)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select gender" />
@@ -679,9 +679,12 @@ export const StudentManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Student Mobile Number</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Student Mobile Number <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
                     value={addPhone}
                     onChange={(e) => setAddPhone(e.target.value)}
                     placeholder="e.g. 9876543210"
@@ -703,9 +706,12 @@ export const StudentManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Contact Phone</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Contact Phone <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
                     value={addGuardianPhone}
                     onChange={(e) => setAddGuardianPhone(e.target.value)}
                     placeholder="e.g. 9811223344"
@@ -947,7 +953,7 @@ export const StudentManagement: React.FC = () => {
 
             <form onSubmit={handleAllocate} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Hostel Block</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Hostel Block <span className="text-red-500">*</span></label>
                 <Select value={selectedHostelId} onValueChange={handleHostelChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose hostel" />
@@ -961,7 +967,7 @@ export const StudentManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Vacant Room</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Vacant Room <span className="text-red-500">*</span></label>
                 <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
                   <SelectTrigger>
                     <SelectValue placeholder="-- Choose Available Room --" />
@@ -977,7 +983,7 @@ export const StudentManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Number</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Number <span className="text-red-500">*</span></label>
                 <Select value={bedNo} onValueChange={setBedNo}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select Bed" />

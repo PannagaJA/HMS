@@ -419,7 +419,8 @@ export const WardenVisitorLogs: React.FC = () => {
                   required
                   type="tel"
                   maxLength={10}
-                  pattern="[0-9]{10}"
+                  pattern="^[6-9][0-9]{9}$"
+                  title="Enter a valid 10-digit Indian mobile number starting with 6-9"
                   placeholder="9876543210"
                   value={formData.mobile_number}
                   onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value.replace(/\D/g, '').slice(0, 10) })}

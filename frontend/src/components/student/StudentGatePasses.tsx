@@ -300,7 +300,7 @@ export const StudentGatePasses: React.FC = () => {
 
             <form onSubmit={handleApplyPass} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Pass Type</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Pass Type <span className="text-red-500">*</span></label>
                 <Select value={passType} onValueChange={(val) => setPassType(val)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Pass Type" />
@@ -316,7 +316,7 @@ export const StudentGatePasses: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Out Date</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Out Date <span className="text-red-500">*</span></label>
                   <input
                     type="date"
                     required
@@ -326,7 +326,7 @@ export const StudentGatePasses: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Out Time</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Out Time <span className="text-red-500">*</span></label>
                   <input
                     type="time"
                     required
@@ -339,7 +339,7 @@ export const StudentGatePasses: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Expected Return Date</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Expected Return Date <span className="text-red-500">*</span></label>
                   <input
                     type="date"
                     required
@@ -349,7 +349,7 @@ export const StudentGatePasses: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Expected Return Time</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Return Curfew Time <span className="text-red-500">*</span></label>
                   <input
                     type="time"
                     required
@@ -361,7 +361,7 @@ export const StudentGatePasses: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Reason for Departure</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Purpose / Destination Details <span className="text-red-500">*</span></label>
                 <textarea
                   rows={3}
                   required

@@ -148,7 +148,7 @@ export const HMSProfile: React.FC = () => {
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Full Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -163,7 +163,7 @@ export const HMSProfile: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional Email</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional Email <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -176,14 +176,15 @@ export const HMSProfile: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Official Phone (10 Digits)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Official Phone (10 Digits) <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="tel"
                       required
                       maxLength={10}
-                      pattern="[0-9]{10}"
+                      pattern="^[6-9][0-9]{9}$"
+                      title="Please enter a valid 10-digit Indian phone number starting with 6-9"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder="9876543210"
@@ -226,7 +227,7 @@ export const HMSProfile: React.FC = () => {
 
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Current Password</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Current Password <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -242,7 +243,7 @@ export const HMSProfile: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">New Password</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">New Password <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
