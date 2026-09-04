@@ -229,11 +229,10 @@ export const Announcements: React.FC = () => {
   const totalPages = Math.ceil(totalCount / limit) || 1;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Bell className="w-6 h-6 text-[#0B1437]" />
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Announcements & Circulars
           </h1>
           <p className="text-sm text-slate-500 mt-1">Stay updated with official campus notifications</p>
@@ -289,9 +288,6 @@ export const Announcements: React.FC = () => {
         </div>
       ) : filteredAnnouncements.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-slate-200 shadow-sm text-center px-6">
-          <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-            <Bell className="w-8 h-8 text-slate-300" />
-          </div>
           <h3 className="text-lg font-bold text-slate-900">
             {activeTab === 'sent' ? 'No Sent Announcements' : 'No Announcements Found'}
           </h3>
