@@ -32,45 +32,35 @@ export const wardenService = {
     let targetStat: any = null;
 
     if (targetHostelId) {
-      const { data: viewStats } = await supabase
-        .from('view_warden_dashboard_stats')
-        .select('*')
-        .eq('hostel_id', targetHostelId)
-        .maybeSingle();
+      // Calculate live real-time stats for targetHostelId
+      const [roomsRes, passesRes, issuesRes] = await Promise.all([
+        supabase.from('hostel_rooms').select('id, capacity, is_active, beds(id, allocations:room_allocations(id, is_active))').eq('hostel_id', targetHostelId).eq('is_active', true),
+        supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).eq('status', 'pending'),
+        supabase.from('issues').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).neq('status', 'completed')
+      ]);
 
-      if (viewStats) {
-        targetStat = viewStats;
-      } else {
-        // Fallback: calculate live stats for targetHostelId
-        const [roomsRes, passesRes, issuesRes] = await Promise.all([
-          supabase.from('hostel_rooms').select('id, capacity, is_active, beds(id, allocations:room_allocations(id, is_active))').eq('hostel_id', targetHostelId).eq('is_active', true),
-          supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).eq('status', 'pending'),
-          supabase.from('issues').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).neq('status', 'completed')
-        ]);
+      const rooms = roomsRes.data || [];
+      const totalRooms = rooms.length;
+      let totalCap = 0;
+      let occupied = 0;
 
-        const rooms = roomsRes.data || [];
-        const totalRooms = rooms.length;
-        let totalCap = 0;
-        let occupied = 0;
-
-        rooms.forEach((r: any) => {
-          totalCap += (r.capacity || 0);
-          (r.beds || []).forEach((b: any) => {
-            if ((b.allocations || []).some((a: any) => a.is_active)) {
-              occupied++;
-            }
-          });
+      rooms.forEach((r: any) => {
+        totalCap += (r.capacity || 0);
+        (r.beds || []).forEach((b: any) => {
+          if ((b.allocations || []).some((a: any) => a.is_active)) {
+            occupied++;
+          }
         });
+      });
 
-        targetStat = {
-          hostel_id: targetHostelId,
-          total_rooms: totalRooms,
-          total_capacity: totalCap,
-          occupied_beds: occupied,
-          pending_gate_passes: passesRes.count || 0,
-          open_issues: issuesRes.count || 0
-        };
-      }
+      targetStat = {
+        hostel_id: targetHostelId,
+        total_rooms: totalRooms,
+        total_capacity: totalCap,
+        occupied_beds: occupied,
+        pending_gate_passes: passesRes.count || 0,
+        open_issues: issuesRes.count || 0
+      };
     }
 
     const totalRooms = targetStat?.total_rooms || 0;
