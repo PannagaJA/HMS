@@ -94,7 +94,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen h-[100dvh] overflow-hidden">
         {/* Unified Top App Bar */}
-        <div className="h-16 px-4 sm:px-6 lg:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between shrink-0 z-30">
+        <div className="sticky top-0 h-16 px-4 sm:px-6 lg:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between shrink-0 z-40">
           
           {/* Left Side: Mobile Menu & Logo */}
           <div className="flex items-center gap-3 lg:hidden">

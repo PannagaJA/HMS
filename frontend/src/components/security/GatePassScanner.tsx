@@ -87,9 +87,6 @@ export const GatePassScanner: React.FC = () => {
         setSearchInput(`${res.data.pass.student_name} (${res.data.pass.enrollment_no})`);
       }
       stopCameraScanner();
-      setTimeout(() => {
-        scannedPassCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 150);
     } catch (err: any) {
       setScannedPass(null);
       setErrorMsg(err.message || err.response?.data?.message || err.response?.data?.error || 'No approved gate pass found matching this Token or Student ID.');
@@ -104,7 +101,6 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(true);
 
     setTimeout(async () => {
-      cameraViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       try {
         const qrCodeScanner = new Html5Qrcode('qr-reader-container');
         scannerRef.current = qrCodeScanner;
@@ -125,7 +121,7 @@ export const GatePassScanner: React.FC = () => {
         setIsCameraActive(false);
         setErrorMsg('Unable to access camera. Ensure camera permissions are allowed in your browser.');
       }
-    }, 150);
+    }, 100);
   };
 
   const stopCameraScanner = async () => {
