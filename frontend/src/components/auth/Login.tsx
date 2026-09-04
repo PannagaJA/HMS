@@ -132,7 +132,7 @@ export const Login: React.FC = () => {
             {/* Brand Logo */}
             <div className="flex items-center justify-center md:justify-start -mt-3 sm:-mt-5 md:mt-0 mb-7 md:mb-6">
               <img 
-                src="/174df9_bfc0c62f53bf48b2a6941250cfbf8a02~mv2.avif" 
+                src="/image.png" 
                 alt="AMC Logo" 
                 className="h-16 sm:h-26 md:h-20 w-auto object-contain"
               />
