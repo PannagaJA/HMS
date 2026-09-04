@@ -19,15 +19,28 @@ export const StudentMeals: React.FC = () => {
   const fetchDiningData = async () => {
     try {
       setIsLoading(true);
-      const [menuRes, mealTypesRes, skipsRes] = await Promise.all([
+      const [menuRes, mealTypesRes, skipsRes] = await Promise.allSettled([
         apiClient.get('/hms/menus/today_menu/'),
         apiClient.get<MealType[]>('/hms/meal-types/'),
         apiClient.get<number[]>('/mess/skips/'),
       ]);
-      setTodayMenu(menuRes.data);
-      setMealTypes(mealTypesRes.data || []);
-      if (Array.isArray(skipsRes.data)) {
-        setSkippedMealIds(skipsRes.data);
+
+      if (menuRes.status === 'fulfilled') {
+        setTodayMenu(menuRes.value.data);
+      } else {
+        console.error('[StudentMeals] today_menu fetch failed:', menuRes.reason);
+      }
+
+      if (mealTypesRes.status === 'fulfilled') {
+        setMealTypes(mealTypesRes.value.data || []);
+      } else {
+        console.error('[StudentMeals] meal-types fetch failed:', mealTypesRes.reason);
+      }
+
+      if (skipsRes.status === 'fulfilled' && Array.isArray(skipsRes.value.data)) {
+        setSkippedMealIds(skipsRes.value.data);
+      } else if (skipsRes.status === 'rejected') {
+        console.warn('[StudentMeals] meal skips fetch failed (non-critical):', skipsRes.reason);
       }
     } catch (err) {
       console.error('Failed to load meals', err);
@@ -106,18 +119,24 @@ export const StudentMeals: React.FC = () => {
           <div className="py-12 text-center text-slate-400 text-xs">
             Loading dining timetable...
           </div>
-        ) : (
+        ) : (todayMenu?.meals && todayMenu.meals.length > 0) ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {mealTypes.map((mealType) => {
-              const menuForMeal = todayMenu?.meals?.find(
-                (m) => Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
-              );
-              const itemsList = menuForMeal?.items_detail || menuForMeal?.items || [];
-              const isSkipped = skippedMealIds.includes(Number(mealType.id));
+            {todayMenu.meals.map((meal) => {
+              // Get meal type details: prefer from nested meal_type object, fallback to mealTypes list
+              const mealTypeObj = (meal as any).meal_type && typeof (meal as any).meal_type === 'object'
+                ? (meal as any).meal_type
+                : mealTypes.find((mt) => Number(mt.id) === Number((meal as any).meal_type_id || (meal as any).meal_type));
+
+              const mealName = mealTypeObj?.description || mealTypeObj?.name || 'Meal';
+              const timeFrom = mealTypeObj?.time_from || mealTypeObj?.start_time || '';
+              const timeTo = mealTypeObj?.time_to || mealTypeObj?.end_time || '';
+              const mealTypeId = Number((meal as any).meal_type_id || mealTypeObj?.id || 0);
+              const itemsList = (meal as any).items_detail || (meal as any).items || [];
+              const isSkipped = skippedMealIds.includes(mealTypeId);
 
               return (
                 <div
-                  key={mealType.id}
+                  key={(meal as any).id || mealTypeId}
                   className={`p-6 rounded-3xl border flex flex-col justify-between transition-all ${
                     isSkipped
                       ? 'bg-amber-50/50 border-amber-200/80 shadow-2xs'
@@ -127,10 +146,10 @@ export const StudentMeals: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-bold text-slate-900 tracking-tight">
-                        {mealType.description || mealType.name}
+                        {mealName}
                       </span>
                       <span className="text-[10px] font-mono text-slate-500 font-semibold bg-white/80 px-2 py-0.5 rounded-md border border-slate-200/60">
-                        {formatTimeRange12(mealType.start_time || mealType.time_from, mealType.end_time || mealType.time_to)}
+                        {formatTimeRange12(timeFrom, timeTo)}
                       </span>
                     </div>
 
@@ -166,7 +185,7 @@ export const StudentMeals: React.FC = () => {
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleToggleSkipMeal(Number(mealType.id), mealType.description || mealType.name)}
+                          onClick={() => handleToggleSkipMeal(mealTypeId, mealName)}
                           className="w-full py-1.5 rounded-full text-slate-500 hover:text-slate-800 text-[11px] font-semibold hover:bg-amber-100/50 transition-colors cursor-pointer flex items-center justify-center gap-1"
                         >
                           <RotateCcw className="w-3 h-3" />
@@ -176,7 +195,7 @@ export const StudentMeals: React.FC = () => {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => handleToggleSkipMeal(Number(mealType.id), mealType.description || mealType.name)}
+                        onClick={() => handleToggleSkipMeal(mealTypeId, mealName)}
                         className="w-full py-2.5 rounded-full bg-white border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer shadow-2xs"
                       >
                         Skip Meal Today
@@ -187,7 +206,48 @@ export const StudentMeals: React.FC = () => {
               );
             })}
           </div>
+        ) : mealTypes.length > 0 ? (
+          // Fallback: render from mealTypes when no menus configured for today
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {mealTypes.map((mealType) => {
+              const isSkipped = skippedMealIds.includes(Number(mealType.id));
+              return (
+                <div
+                  key={mealType.id}
+                  className="p-6 rounded-3xl border bg-slate-50 border-slate-200/80 shadow-xs flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-slate-900">{mealType.description || mealType.name}</span>
+                      <span className="text-[10px] font-mono text-slate-500 font-semibold bg-white/80 px-2 py-0.5 rounded-md border border-slate-200/60">
+                        {formatTimeRange12(mealType.start_time || mealType.time_from, mealType.end_time || mealType.time_to)}
+                      </span>
+                    </div>
+                    <div className="min-h-[110px] flex items-center justify-center">
+                      <div className="text-xs text-slate-400 italic text-center">
+                        No menu configured for today
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pt-4 border-t border-slate-200/60">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSkipMeal(Number(mealType.id), mealType.description || mealType.name)}
+                      className="w-full py-2.5 rounded-full bg-white border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 transition-all cursor-pointer shadow-2xs"
+                    >
+                      {isSkipped ? 'Cancel Opt-Out' : 'Skip Meal Today'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-12 text-center text-slate-400 text-xs">
+            No dining timetable configured for today.
+          </div>
         )}
+
       </div>
     </div>
   );

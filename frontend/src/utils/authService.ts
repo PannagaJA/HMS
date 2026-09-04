@@ -6,18 +6,14 @@ import { securityService } from '../services/securityService';
 import { studentService } from '../services/studentService';
 import { diningService, issueService } from '../services/facilitiesService';
 
-const apiCache = new Map<string, { timestamp: number; data: any }>();
-const CACHE_TTL = 1000 * 60 * 3; // 3 minutes
-
 export const apiClient = {
   async get<T = any>(endpoint: string) {
-    const cached = apiCache.get(endpoint);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return { data: cached.data as T };
-    }
     // 1. Current user profile (/auth/me/)
     if (endpoint.includes('/auth/me/')) {
       const stored = getStoredUser();
+      if (stored && stored.role === 'STUDENT' && stored.first_name && stored.first_name !== 'Student') {
+        return { data: stored as T };
+      }
       const { data: authData } = await supabase.auth.getUser();
       const user = authData?.user;
       if (!user && stored) {
@@ -28,13 +24,29 @@ export const apiClient = {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+      let firstName = profile?.first_name || stored?.first_name || '';
+      let lastName = profile?.last_name || stored?.last_name || '';
+      const userRole = profile?.role || stored?.role || 'ADMIN';
+
+      if (userRole === 'STUDENT' && (!firstName || firstName === 'Student' || firstName === 'Resident')) {
+        const { data: stData } = await supabase
+          .from('students')
+          .select('student_name')
+          .or(`email.eq.${user.email || stored?.email},profile_id.eq.${user.id}`)
+          .limit(1)
+          .maybeSingle();
+        if (stData?.student_name) {
+          firstName = stData.student_name;
+        }
+      }
+
       const mappedUser: User = {
         id: user.id as any,
         email: user.email || stored?.email || '',
-        role: profile?.role || stored?.role || 'ADMIN',
-        first_name: profile?.first_name || stored?.first_name || '',
-        last_name: profile?.last_name || stored?.last_name || '',
+        role: userRole,
+        first_name: firstName,
+        last_name: lastName,
         phone: profile?.phone || stored?.phone || '',
         avatar_url: profile?.avatar_url || stored?.avatar_url || '',
         is_active: profile?.is_active ?? true,
@@ -207,8 +219,10 @@ export const apiClient = {
 
     // 12. Student Dedicated
     if (endpoint.includes('/my_profile/')) {
+      const stored = getStoredUser();
       const { data: user } = await supabase.auth.getUser();
-      const profile = await studentService.getMyProfile(user.user?.id);
+      const userId = user.user?.id || stored?.id;
+      const profile = await studentService.getMyProfile(userId);
       return { data: profile as T };
     }
 
@@ -931,11 +945,13 @@ export const authService = {
           id: validProfileId,
           email: studentMatch.email || emailToUse,
           role: 'STUDENT',
-          first_name: studentMatch.student_name.split(' ')[0] || 'Student',
-          last_name: studentMatch.student_name.split(' ').slice(1).join(' ') || 'Resident',
+          first_name: studentMatch.student_name,
+          last_name: '',
           phone: studentMatch.phone || '',
           is_active: true,
-          org_id: studentMatch.org_id || '00000000-0000-0000-0000-000000000001'
+          org_id: studentMatch.org_id || '00000000-0000-0000-0000-000000000001',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
 
         const syntheticSession = {
@@ -959,13 +975,15 @@ export const authService = {
 
         const studentProfile: Profile = {
           id: validProfileId,
-          email: 'student@amc.edu',
+          email: firstStudent?.email || 'student@amc.edu',
           role: 'STUDENT',
-          first_name: firstStudent?.student_name?.split(' ')[0] || 'AMC',
-          last_name: firstStudent?.student_name?.split(' ')?.slice(1)?.join(' ') || 'Student',
+          first_name: firstStudent?.student_name || 'Student',
+          last_name: '',
           phone: firstStudent?.phone || '',
           is_active: true,
-          org_id: firstStudent?.org_id || '00000000-0000-0000-0000-000000000001'
+          org_id: firstStudent?.org_id || '00000000-0000-0000-0000-000000000001',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
 
         const syntheticSession = {

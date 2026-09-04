@@ -13,12 +13,14 @@ import {
   Phone
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useAuth } from '../../context/AuthContext';
 import type { HostelStudent, GatePassRequest, IssueTicket } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { formatTime12 } from '../../lib/utils';
 
 export const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showQRModal, setShowQRModal] = useState(false);
 
   const { data: profileData } = useQuery<{ profile: HostelStudent; roommates: HostelStudent[] }>({
@@ -27,7 +29,8 @@ export const StudentDashboard: React.FC = () => {
       const res = await apiClient.get<{ profile: HostelStudent; roommates: HostelStudent[] }>('/student/students/my_profile/');
       return res.data;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const { data: passes = [] } = useQuery<GatePassRequest[]>({
@@ -49,6 +52,7 @@ export const StudentDashboard: React.FC = () => {
   });
 
   const student = profileData?.profile;
+  const displayName = student?.student_name || user?.first_name || 'Resident';
   const activeApprovedPass = passes.find((p) => p.status === 'approved');
   const pendingPassesCount = passes.filter((p) => p.status === 'pending').length;
   const openIssuesCount = issues.filter((i) => i.status !== 'completed' && i.status !== 'resolved').length;
@@ -64,10 +68,10 @@ export const StudentDashboard: React.FC = () => {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Hi, {student?.student_name || 'Student'}!
+            Hi, {displayName}!
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100/70 mt-1">
-            {student?.hostel_name ? `${student.hostel_name} · Room ${student.room_detail?.no || student.room_no || 'N/A'} (Bed #${student.bed_number || 'N/A'})` : 'No Room Allotment Active'}
+            {student?.hostel_name ? `${student.hostel_name} · Room ${student.room_detail?.no || student.room_no || 'N/A'} (Bed #${student.bed_number || 'N/A'})` : (student?.room_allotted ? 'Room Allotted' : 'No Room Allotment Active')}
           </p>
         </div>
 

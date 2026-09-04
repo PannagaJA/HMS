@@ -9,13 +9,26 @@ export const diningService = {
   async getMealTypes(): Promise<MealType[]> {
     try {
       const { data, error } = await supabase.from('meal_types').select('*').order('id', { ascending: true });
+      if (error) {
+        console.error('[diningService.getMealTypes] Supabase error:', error.code, error.message);
+      }
+      console.log(`[diningService.getMealTypes] rows=${data?.length ?? 0}`);
       if (!error && data && data.length > 0) {
-        return data;
+        // Deduplicate by name — keep the first occurrence of each meal type name
+        const seen = new Set<string>();
+        const unique = data.filter((mt: any) => {
+          if (seen.has(mt.name)) return false;
+          seen.add(mt.name);
+          return true;
+        });
+        return unique;
       }
     } catch (e) {
       console.warn('Could not fetch meal_types:', e);
     }
 
+    // Fallback hardcoded defaults when DB has no data
+    console.warn('[diningService.getMealTypes] Using hardcoded defaults — no meal_types in DB or RLS blocking');
     return [
       { id: 1, name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00', start_time: '07:30', end_time: '09:30' },
       { id: 2, name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00', start_time: '12:30', end_time: '14:30' },
@@ -131,17 +144,53 @@ export const diningService = {
       .eq('day_of_week', appDayId);
 
     if (error) {
-      console.warn('Error fetching today menu:', error);
+      console.error('[diningService.getTodayMenu] Supabase error:', error.code, error.message);
     }
 
-    const meals = (data || []).map((m: any) => {
-      const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
+    const menuRows = data || [];
+    console.log(`[diningService.getTodayMenu] day=${currentDayName}(${appDayId}), rows=${menuRows.length}`);
+
+    // Check if nested join returned empty items for any menu
+    // This happens when RLS blocks menu_item_links for students.
+    // Fallback: fetch menu items directly using menu IDs.
+    const menuIds = menuRows.map((m: any) => m.id);
+    let directItemMap: Record<number, any[]> = {};
+
+    const someEmpty = menuRows.some((m: any) => !m.links || m.links.length === 0);
+    if (menuIds.length > 0 && someEmpty) {
+      const { data: links, error: linksErr } = await supabase
+        .from('menu_item_links')
+        .select('menu_id, item_id, item:menu_items(id, name, description, vegetarian)')
+        .in('menu_id', menuIds);
+
+      if (linksErr) {
+        console.error('[diningService.getTodayMenu] links fallback error:', linksErr.code, linksErr.message);
+      } else {
+        console.log(`[diningService.getTodayMenu] direct links fetched: ${links?.length ?? 0}`);
+        for (const link of links || []) {
+          const item = Array.isArray(link.item) ? link.item[0] : link.item;
+          if (!item) continue;
+          if (!directItemMap[link.menu_id]) directItemMap[link.menu_id] = [];
+          directItemMap[link.menu_id].push({
+            ...item,
+            is_veg: Boolean(item.vegetarian ?? true)
+          });
+        }
+      }
+    }
+
+    const meals = menuRows.map((m: any) => {
+      // Use nested join items first; fall back to direct query results
+      const joinedItems = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
         ...i,
         is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
       }));
+      const items = joinedItems.length > 0 ? joinedItems : (directItemMap[m.id] || []);
+
       return {
         ...m,
         meal_type: m.meal_type_id || m.meal_type?.id,
+        meal_type_id: m.meal_type_id || m.meal_type?.id,
         items,
         items_detail: items
       };
@@ -204,13 +253,24 @@ export const diningService = {
       const userObj = stored ? JSON.parse(stored) : null;
       const email = userObj?.email;
       if (email) {
-        const usnPrefix = email.split('@')[0];
-        const { data } = await supabase
+        // Try email match first
+        const { data: byEmail } = await supabase
           .from('students')
           .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-          .or(`email.eq.${email},enrollment_no.ilike.${usnPrefix}`)
+          .ilike('email', email)
           .maybeSingle();
-        if (data) student = data;
+        if (byEmail) student = byEmail;
+
+        // Then try USN prefix
+        if (!student) {
+          const usnPrefix = email.split('@')[0];
+          const { data: byUsn } = await supabase
+            .from('students')
+            .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+            .ilike('enrollment_no', usnPrefix)
+            .maybeSingle();
+          if (byUsn) student = byUsn;
+        }
       }
     }
 
@@ -263,8 +323,7 @@ export const diningService = {
     }
 
     if (!studentId) {
-      const { data } = await supabase.from('students').select('id').limit(1).maybeSingle();
-      if (data) studentId = data.id;
+      throw new Error('Could not find student record to cancel meal skip');
     }
 
     if (!studentId) return { success: false };
@@ -287,21 +346,48 @@ export const diningService = {
     const dayStr = String(dayOfWeek);
     let resolvedMealTypeId: number | null = Number(mealTypeId);
 
-    // Verify mealTypeId exists in DB, or resolve correct ID
-    const { data: validMealType } = await supabase.from('meal_types').select('id, name').eq('id', resolvedMealTypeId).maybeSingle();
-    if (!validMealType) {
-      // Find by code order
-      const codeIndex = typeof mealTypeId === 'number' ? mealTypeId - 1 : ['BR', 'LN', 'SN', 'DN'].indexOf(String(mealTypeId));
-      const code = ['BR', 'LN', 'SN', 'DN'][codeIndex >= 0 && codeIndex <= 3 ? codeIndex : 0];
-      const { data: matched } = await supabase.from('meal_types').select('id').eq('name', code).maybeSingle();
-      if (matched) {
-        resolvedMealTypeId = matched.id;
+    // Always resolve by looking up what meal type ID is actually used by existing menus for this hostel.
+    // This avoids the duplicate-org problem (8 meal types from 2 orgs).
+    // Strategy: find the correct meal_type_id by matching the code name that corresponds to the position passed in.
+    const codeMap: Record<number, string> = { 1: 'BR', 2: 'LN', 3: 'SN', 4: 'DN' };
+    let targetCode: string | null = null;
+
+    // If mealTypeId is a code string like 'BR', use it directly
+    if (typeof mealTypeId === 'string' && ['BR', 'LN', 'SN', 'DN'].includes(mealTypeId)) {
+      targetCode = mealTypeId;
+    } else {
+      // It's a numeric ID — check if the passed-in ID is valid first
+      const { data: directMatch } = await supabase
+        .from('meal_types').select('id, name').eq('id', resolvedMealTypeId).maybeSingle();
+      if (directMatch) {
+        // Use it, but also get the name code so we can find duplicates correctly
+        targetCode = directMatch.name;
       } else {
-        // Insert standard meal types if completely missing
-        const { data: created } = await supabase.from('meal_types').insert({
-          name: code,
-          description: code === 'BR' ? 'Breakfast' : code === 'LN' ? 'Lunch' : code === 'SN' ? 'Snacks' : 'Dinner'
-        }).select().single();
+        // Treat the number as a positional index (1=BR, 2=LN, 3=SN, 4=DN)
+        targetCode = codeMap[Number(mealTypeId)] || 'BR';
+      }
+    }
+
+    // Now find the FIRST meal_type row matching this code — this picks the one used by existing menus
+    if (targetCode) {
+      const { data: allByCode } = await supabase
+        .from('meal_types').select('id, name').eq('name', targetCode).order('id', { ascending: true });
+      if (allByCode && allByCode.length > 0) {
+        // Prefer the ID already in use by existing menus for this hostel
+        if (hostelId) {
+          const { data: existingMenus } = await supabase
+            .from('menus').select('meal_type_id').eq('hostel_id', Number(hostelId));
+          const usedIds = new Set((existingMenus || []).map((m: any) => m.meal_type_id));
+          const inUse = allByCode.find((mt: any) => usedIds.has(mt.id));
+          resolvedMealTypeId = inUse ? inUse.id : allByCode[0].id;
+        } else {
+          resolvedMealTypeId = allByCode[0].id;
+        }
+      } else {
+        // Insert missing meal type
+        const descMap: Record<string, string> = { BR: 'Breakfast', LN: 'Lunch', SN: 'Evening Snacks & Tea', DN: 'Dinner' };
+        const { data: created } = await supabase
+          .from('meal_types').insert({ name: targetCode, description: descMap[targetCode] }).select().single();
         if (created) resolvedMealTypeId = created.id;
       }
     }

@@ -34,7 +34,7 @@ export const StudentManagement: React.FC = () => {
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedHostelFilter, setSelectedHostelFilter] = useState<string>('ALL');
+  const [selectedHostelFilter, setSelectedHostelFilter] = useState<string>('');
   const [filterAllotted, setFilterAllotted] = useState<'ALL' | 'ALLOTTED' | 'UNALLOTTED'>('ALL');
   
   // Allocate Modal State
@@ -96,6 +96,14 @@ export const StudentManagement: React.FC = () => {
 
       setStudents(sList);
       setHostels(hList);
+      if (hList.length > 0) {
+        setSelectedHostelFilter((prev) => {
+          if (!prev || prev === 'ALL' || !hList.some(h => String(h.id) === prev)) {
+            return String(hList[0].id);
+          }
+          return prev;
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch data', err);
     }
@@ -342,9 +350,16 @@ export const StudentManagement: React.FC = () => {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const filteredStudents = students.filter((s) => {
-    if (selectedHostelFilter !== 'ALL') {
+    if (selectedHostelFilter && selectedHostelFilter !== 'ALL') {
       const stHostelId = String(s.hostel || (s.room_detail as any)?.hostel_id || (s.allocations as any)?.[0]?.bed?.room?.hostel_id || '');
-      if (stHostelId !== selectedHostelFilter) return false;
+      if (stHostelId) {
+        if (stHostelId !== selectedHostelFilter) return false;
+      } else {
+        const currentHostel = hostels.find(h => String(h.id) === selectedHostelFilter);
+        if (currentHostel && currentHostel.gender && currentHostel.gender !== 'C' && s.gender) {
+          if (s.gender !== currentHostel.gender) return false;
+        }
+      }
     }
     const matchesSearch = s.student_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
                           s.enrollment_no.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
@@ -411,11 +426,10 @@ export const StudentManagement: React.FC = () => {
               <SelectTrigger className="h-10 rounded-2xl bg-slate-50 text-xs font-semibold border border-slate-200 px-3.5">
                 <div className="flex items-center gap-1.5 truncate">
                   <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <SelectValue placeholder="All Hostels" />
+                  <SelectValue placeholder="Select Hostel" />
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All Hostels ({hostels.length})</SelectItem>
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
                     {h.name} ({h.gender})

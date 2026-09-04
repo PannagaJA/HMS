@@ -8,6 +8,7 @@ export interface Profile {
   first_name: string;
   last_name: string;
   phone?: string;
+  org_id?: string;
   avatar_url?: string;
   is_active: boolean;
   created_at: string;

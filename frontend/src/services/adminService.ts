@@ -10,33 +10,36 @@ export const adminService = {
    * Fetch aggregated system-wide dashboard stats
    */
   async getDashboardStats() {
-    const { data, error } = await supabase.from('view_admin_dashboard_stats').select('*').single();
-    if (!error && data) {
-      return { statistics: data };
-    }
-    // Live table fallback
-    const [h, r, a, p, iss] = await Promise.all([
-      supabase.from('hostels').select('id', { count: 'exact', head: true }),
-      supabase.from('hostel_rooms').select('id, capacity').eq('is_active', true),
+    // Always use direct table queries for accuracy — avoids view field name inconsistencies
+    // (view may return 'open_issues' vs 'active_issues' depending on which SQL fix was run)
+    const [h, beds, a, p, iss] = await Promise.all([
+      supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true),
+      supabase.from('beds').select('id', { count: 'exact', head: true }),
       supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true),
-      supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('issues').select('id', { count: 'exact', head: true }).neq('status', 'completed')
+      // Match both PENDING (uppercase) and pending (lowercase) in case of data inconsistency
+      supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending'),
+      // Count issues that are NOT completed (handles both case variants)
+      supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)')
     ]);
-    const totalCapacity = (r.data || []).reduce((sum, item) => sum + (item.capacity || 0), 0);
+
+
+    const totalCapacity = beds.count || 0;
     const occupied = a.count || 0;
-    return {
-      statistics: {
-        total_hostels: h.count || 0,
-        total_rooms: (r.data || []).length,
-        total_capacity: totalCapacity,
-        occupied_beds: occupied,
-        vacant_beds: Math.max(0, totalCapacity - occupied),
-        occupancy_rate: totalCapacity > 0 ? Math.round((occupied / totalCapacity) * 100) : 0,
-        pending_gate_passes: p.count || 0,
-        active_issues: iss.count || 0
-      }
+
+    const stats = {
+      total_hostels: h.count || 0,
+      total_capacity: totalCapacity,
+      occupied_beds: occupied,
+      vacant_beds: Math.max(0, totalCapacity - occupied),
+      occupancy_rate: totalCapacity > 0 ? Math.round((occupied / totalCapacity) * 100) : 0,
+      pending_gate_passes: p.count || 0,
+      active_issues: iss.count || 0
     };
+
+    console.log('[adminService.getDashboardStats] stats:', stats);
+    return { statistics: stats };
   },
+
 
   /**
    * Fetch all active hostel blocks with occupancy metrics

@@ -11,6 +11,12 @@ export const studentService = {
    * Fetch student's own profile and room allocation
    */
   async getMyProfile(userId?: string) {
+    const stored = localStorage.getItem('hms_user');
+    const userObj = stored ? JSON.parse(stored) : null;
+    const email = userObj?.email;
+    const studentName = userObj?.first_name || userObj?.student_name;
+    const phone = userObj?.phone;
+
     let student: any = null;
 
     if (userId) {
@@ -25,22 +31,65 @@ export const studentService = {
       }
     }
 
-    if (!student) {
-      const stored = localStorage.getItem('hms_user');
-      const userObj = stored ? JSON.parse(stored) : null;
-      const email = userObj?.email;
-      if (email) {
-        const usnPrefix = email.split('@')[0];
-        const { data } = await supabase
-          .from('students')
-          .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
-          .or(`email.eq.${email},enrollment_no.ilike.${usnPrefix}`)
+    if (!student && email) {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .ilike('email', email)
+        .maybeSingle();
+      if (!error) student = data;
+    }
+
+    // Strategy 3: look up by USN (part before @)
+    if (!student && email) {
+      const usnPrefix = email.split('@')[0];
+      const { data, error } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .ilike('enrollment_no', usnPrefix)
+        .maybeSingle();
+      if (!error) student = data;
+    }
+
+    if (!student && studentName && studentName !== 'Student' && studentName !== 'Resident') {
+      const { data } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .ilike('student_name', studentName)
+        .limit(1)
+        .maybeSingle();
+      student = data;
+    }
+
+    if (!student && phone) {
+      const { data } = await supabase
+        .from('students')
+        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .eq('phone', phone)
+        .limit(1)
+        .maybeSingle();
+      student = data;
+    }
+
+    // No dangerous fallback — if no student found, return null profile
+
+    let activeAlloc = (student?.allocations || []).find((a: any) => a.is_active) || student?.allocations?.[0];
+
+    // If activeAlloc not loaded via nested join, perform explicit query
+    if (student?.id && !activeAlloc) {
+      try {
+        const { data: allocData } = await supabase
+          .from('room_allocations')
+          .select('*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*)))')
+          .eq('student_id', student.id)
+          .eq('is_active', true)
           .maybeSingle();
-        student = data;
+        if (allocData) activeAlloc = allocData;
+      } catch (ae) {
+        console.warn('Direct room_allocations query:', ae);
       }
     }
 
-    const activeAlloc = (student?.allocations || []).find((a: any) => a.is_active) || student?.allocations?.[0];
     const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
     const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
     const hostel = Array.isArray(room?.hostel) ? room.hostel[0] : room?.hostel;
@@ -60,39 +109,29 @@ export const studentService = {
 
     if (room?.id && student?.id) {
       try {
-        const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
-        const validUuid = isUuid(userId) ? userId : (isUuid(student?.profile_id) ? student.profile_id : undefined);
+        // Query co-residents in the same room directly (no RPC needed)
+        const { data: bedsInRoom } = await supabase
+          .from('beds')
+          .select('id, bed_number')
+          .eq('room_id', room.id);
 
-        const rpcPayload = validUuid ? { p_profile_id: validUuid } : {};
-        const { data: rpcRoommates, error: rpcErr } = await supabase.rpc('get_my_roommates', rpcPayload);
+        const bedIds = (bedsInRoom || []).map((b: any) => b.id);
+        if (bedIds.length > 0) {
+          const { data: coAllocations } = await supabase
+            .from('room_allocations')
+            .select('student_id, bed_id, student:students(id, student_name, enrollment_no, phone, gender)')
+            .eq('is_active', true)
+            .in('bed_id', bedIds)
+            .neq('student_id', student.id);
 
-        if (!rpcErr && rpcRoommates && Array.isArray(rpcRoommates)) {
-          roommates = rpcRoommates;
-        } else {
-          // Fallback query: find beds in room then query allocations
-          const { data: bedsInRoom } = await supabase
-            .from('beds')
-            .select('id, bed_number')
-            .eq('room_id', room.id);
-
-          const bedIds = (bedsInRoom || []).map((b: any) => b.id);
-          if (bedIds.length > 0) {
-            const { data: coAllocations } = await supabase
-              .from('room_allocations')
-              .select('student_id, bed_id, student:students(*)')
-              .eq('is_active', true)
-              .in('bed_id', bedIds)
-              .neq('student_id', student.id);
-
-            if (coAllocations) {
-              const bedMap = new Map((bedsInRoom || []).map((b: any) => [b.id, b.bed_number]));
-              roommates = coAllocations
-                .filter((alloc: any) => alloc.student)
-                .map((alloc: any) => ({
-                  ...alloc.student,
-                  bed_number: bedMap.get(alloc.bed_id) || null,
-                }));
-            }
+          if (coAllocations) {
+            const bedMap = new Map((bedsInRoom || []).map((b: any) => [b.id, b.bed_number]));
+            roommates = coAllocations
+              .filter((alloc: any) => alloc.student)
+              .map((alloc: any) => ({
+                ...alloc.student,
+                bed_number: bedMap.get(alloc.bed_id) || null,
+              }));
           }
         }
       } catch (err) {

@@ -35,8 +35,8 @@ export const wardenService = {
       // Calculate live real-time stats for targetHostelId
       const [roomsRes, passesRes, issuesRes] = await Promise.all([
         supabase.from('hostel_rooms').select('id, capacity, is_active, beds(id, allocations:room_allocations(id, is_active))').eq('hostel_id', targetHostelId).eq('is_active', true),
-        supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).eq('status', 'pending'),
-        supabase.from('issues').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).neq('status', 'completed')
+        supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).or('status.eq.PENDING,status.eq.pending'),
+        supabase.from('issues').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)')
       ]);
 
       const rooms = roomsRes.data || [];
@@ -147,10 +147,11 @@ export const wardenService = {
 
     const { data, error } = await query;
     if (error) {
-      console.warn('Error fetching warden gate passes from Supabase:', error);
+      console.error('[wardenService.getGatePasses] Supabase error:', error.code, error.message, error.details);
       return [];
     }
 
+    console.log(`[wardenService.getGatePasses] Fetched ${data?.length ?? 0} gate passes`);
     return (data || []).map((gp: any) => ({
       ...gp,
       student_name: gp.student?.student_name || 'Resident Student',
@@ -215,10 +216,11 @@ export const wardenService = {
 
     const { data: issues, error } = await query;
     if (error) {
-      console.warn('Error fetching issues from Supabase in wardenService:', error);
+      console.error('[wardenService.getIssues] Supabase error:', error.code, error.message, error.details);
       return [];
     }
 
+    console.log(`[wardenService.getIssues] Fetched ${issues?.length ?? 0} issues`);
     let list = issues || [];
 
     return list.map((i: any) => {
