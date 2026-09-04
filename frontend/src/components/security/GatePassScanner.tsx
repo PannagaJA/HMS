@@ -104,7 +104,6 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(true);
 
     setTimeout(async () => {
-      cameraViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       try {
         const qrCodeScanner = new Html5Qrcode('qr-reader-container');
         scannerRef.current = qrCodeScanner;
