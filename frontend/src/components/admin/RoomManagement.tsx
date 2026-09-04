@@ -92,10 +92,49 @@ export const RoomManagement: React.FC = () => {
     }
   };
 
+  const generateNextRoomNumber = (floorStr: string, targetHostelId: string) => {
+    const floorNum = Number(floorStr);
+    const existingRoomsOnFloor = rooms.filter(
+      (r) => String(r.hostel || selectedHostelId) === String(targetHostelId) && Number(r.floor) === floorNum
+    );
+
+    if (floorNum === 0) {
+      // Ground floor format: G01, G02, G03...
+      const gNumbers = existingRoomsOnFloor
+        .map((r) => {
+          const match = (r.no || r.room_no || '').match(/G?0*(\d+)/i);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter((n) => !isNaN(n) && n > 0);
+      const nextSeq = gNumbers.length > 0 ? Math.max(...gNumbers) + 1 : 1;
+      return `G${String(nextSeq).padStart(2, '0')}`;
+    } else {
+      // Standard floor format: 101, 102 (Floor 1), 201, 202 (Floor 2), etc.
+      const baseNum = floorNum * 100;
+      const numList = existingRoomsOnFloor
+        .map((r) => {
+          const val = parseInt(r.no || r.room_no || '0', 10);
+          return isNaN(val) ? 0 : val;
+        })
+        .filter((n) => n >= baseNum && n < baseNum + 100);
+
+      const nextSeq = numList.length > 0 ? Math.max(...numList) + 1 : baseNum + 1;
+      return String(nextSeq);
+    }
+  };
+
+  const handleSingleFloorChange = (floorVal: string) => {
+    setSingleFloor(floorVal);
+    const suggestedNo = generateNextRoomNumber(floorVal, singleHostelId || selectedHostelId);
+    setSingleRoomNo(suggestedNo);
+  };
+
   const handleOpenAddSingleRoom = () => {
-    setSingleHostelId(selectedHostelId || (hostels[0] ? String(hostels[0].id) : ''));
-    setSingleFloor('0');
-    setSingleRoomNo('');
+    const targetHostel = selectedHostelId || (hostels[0] ? String(hostels[0].id) : '');
+    setSingleHostelId(targetHostel);
+    const defaultFloor = selectedFloor && selectedFloor !== 'all' ? selectedFloor : '0';
+    setSingleFloor(defaultFloor);
+    setSingleRoomNo(generateNextRoomNumber(defaultFloor, targetHostel));
     setSingleRoomName('');
     setSingleRoomType('S');
     setSingleCapacity(1);
@@ -720,7 +759,7 @@ export const RoomManagement: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
-                  <Select value={singleFloor} onValueChange={setSingleFloor}>
+                  <Select value={singleFloor} onValueChange={handleSingleFloorChange}>
                     <SelectTrigger className="w-full bg-slate-50">
                       <SelectValue placeholder="Select floor" />
                     </SelectTrigger>
