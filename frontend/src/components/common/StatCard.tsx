@@ -18,10 +18,10 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
 }) => {
   const variantStyles = {
-    primary: 'bg-blue-50 text-[#0B1437]',
-    secondary: 'bg-indigo-50 text-indigo-950',
-    accent: 'bg-sky-50 text-sky-950',
-    muted: 'bg-slate-100 text-slate-800',
+    primary: 'bg-blue-50/90 text-[#0B1437] border border-blue-200/80 shadow-xs',
+    secondary: 'bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 shadow-xs',
+    accent: 'bg-sky-50/90 text-sky-950 border border-sky-200/80 shadow-xs',
+    muted: 'bg-slate-100/90 text-slate-900 border border-slate-200/80 shadow-xs',
   };
 
   const barStyles = {
@@ -42,11 +42,11 @@ export const StatCard: React.FC<StatCardProps> = ({
         </button>
       </div>
 
-      <div className="text-xs font-medium opacity-75 mb-1">{title}</div>
-      <div className="text-3xl font-bold tracking-tight mb-4">{value}</div>
+      <div className="text-xs font-bold text-slate-700 mb-1">{title}</div>
+      <div className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900">{value}</div>
 
-      <div className="flex items-end justify-between pt-2 border-t border-black/5">
-        <div className="text-xs font-semibold opacity-80">
+      <div className="flex items-end justify-between pt-2 border-t border-black/10">
+        <div className="text-xs font-bold text-slate-700">
           {change}
         </div>
         <div className="flex items-end gap-1 h-7">
