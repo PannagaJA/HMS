@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   QrCode, 
   Search, 
@@ -313,8 +314,8 @@ export const GatePassScanner: React.FC = () => {
       </div>
 
       {/* CAMERA SCANNER MODAL POPUP (For Mobile & Desktop) */}
-      {isCameraActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+      {isCameraActive && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-slate-900 rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-slate-800 flex flex-col items-center animate-in zoom-in-95 duration-150 relative">
             <div className="flex items-center justify-between w-full mb-3 pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2 text-white text-xs font-bold">
@@ -347,12 +348,13 @@ export const GatePassScanner: React.FC = () => {
               <span>Cancel / Close Camera</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* VERIFIED PASS RESULT MODAL POPUP */}
-      {scannedPass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+      {scannedPass && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
           <div ref={scannedPassCardRef} className="bg-white my-auto p-6 sm:p-7 rounded-3xl border-2 border-[#D1F2EA] shadow-2xl animate-in zoom-in-95 duration-150 space-y-5 max-w-lg w-full relative">
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -461,7 +463,7 @@ export const GatePassScanner: React.FC = () => {
                     isPassExpired
                       ? 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'
                       : isExitDone
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      ? 'bg-[#0D3833]/10 text-slate-400 cursor-not-allowed border border-slate-200'
                       : 'bg-[#0D3833] text-white hover:bg-[#064E3B] shadow-md hover:shadow-lg cursor-pointer'
                   }`}
                 >
@@ -502,7 +504,8 @@ export const GatePassScanner: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SECTION 3: HOSTEL STUDENTS GATE LEDGER TABLE */}
@@ -796,7 +799,7 @@ export const GatePassScanner: React.FC = () => {
 
       {/* CONFIRMATION POPUP MODAL FOR CHECK OUT & CHECK IN */}
       {pendingConfirmAction && scannedPass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-md w-full p-7 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-150">
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 border ${
               pendingConfirmAction === 'EXIT' 
