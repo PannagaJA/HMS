@@ -123,6 +123,12 @@ export const RoomManagement: React.FC = () => {
     }
   };
 
+  const handleSingleHostelChange = (hostelVal: string) => {
+    setSingleHostelId(hostelVal);
+    const suggestedNo = generateNextRoomNumber(singleFloor, hostelVal);
+    setSingleRoomNo(suggestedNo);
+  };
+
   const handleSingleFloorChange = (floorVal: string) => {
     setSingleFloor(floorVal);
     const suggestedNo = generateNextRoomNumber(floorVal, singleHostelId || selectedHostelId);
@@ -330,7 +336,7 @@ export const RoomManagement: React.FC = () => {
                 disabled={!selectedHostelId}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select floor" />
+                  <SelectValue placeholder="-- Select Floor --" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Floors</SelectItem>
@@ -618,7 +624,7 @@ export const RoomManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
                   <Select value={editFloor} onValueChange={setEditFloor}>
                     <SelectTrigger className="w-full bg-slate-50">
-                      <SelectValue placeholder="Select floor" />
+                      <SelectValue placeholder="-- Select Floor --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Ground Floor</SelectItem>
@@ -744,7 +750,7 @@ export const RoomManagement: React.FC = () => {
             <form onSubmit={handleCreateSingleRoom} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel</label>
-                <Select value={singleHostelId} onValueChange={setSingleHostelId}>
+                <Select value={singleHostelId} onValueChange={handleSingleHostelChange}>
                   <SelectTrigger className="w-full bg-slate-50">
                     <SelectValue placeholder="Select hostel" />
                   </SelectTrigger>
@@ -761,7 +767,7 @@ export const RoomManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor</label>
                   <Select value={singleFloor} onValueChange={handleSingleFloorChange}>
                     <SelectTrigger className="w-full bg-slate-50">
-                      <SelectValue placeholder="Select floor" />
+                      <SelectValue placeholder="-- Select Floor --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Ground Floor</SelectItem>
