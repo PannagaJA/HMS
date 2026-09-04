@@ -6,8 +6,15 @@ import { securityService } from '../services/securityService';
 import { studentService } from '../services/studentService';
 import { diningService, issueService } from '../services/facilitiesService';
 
+const apiCache = new Map<string, { timestamp: number; data: any }>();
+const CACHE_TTL = 1000 * 60 * 3; // 3 minutes
+
 export const apiClient = {
   async get<T = any>(endpoint: string) {
+    const cached = apiCache.get(endpoint);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return { data: cached.data as T };
+    }
     // 1. Current user profile (/auth/me/)
     if (endpoint.includes('/auth/me/')) {
       const { data: authData } = await supabase.auth.getUser();

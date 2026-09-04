@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   BedDouble, 
   Ticket, 
@@ -18,29 +19,34 @@ import { formatTime12 } from '../../lib/utils';
 
 export const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [profileData, setProfileData] = useState<{ profile: HostelStudent; roommates: HostelStudent[] } | null>(null);
-  const [passes, setPasses] = useState<GatePassRequest[]>([]);
-  const [issues, setIssues] = useState<IssueTicket[]>([]);
   const [showQRModal, setShowQRModal] = useState(false);
 
-  useEffect(() => {
-    fetchStudentData();
-  }, []);
+  const { data: profileData } = useQuery<{ profile: HostelStudent; roommates: HostelStudent[] }>({
+    queryKey: ['studentProfile'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ profile: HostelStudent; roommates: HostelStudent[] }>('/student/students/my_profile/');
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const fetchStudentData = async () => {
-    try {
-      const [profileRes, passesRes, issuesRes] = await Promise.all([
-        apiClient.get('/student/students/my_profile/'),
-        apiClient.get<GatePassRequest[]>('/security/gate-passes/my_passes/'),
-        apiClient.get<IssueTicket[]>('/hms/issues/'),
-      ]);
-      setProfileData(profileRes.data);
-      setPasses(passesRes.data);
-      setIssues(issuesRes.data);
-    } catch (err) {
-      console.error('Failed to load student dashboard', err);
-    }
-  };
+  const { data: passes = [] } = useQuery<GatePassRequest[]>({
+    queryKey: ['myGatePasses'],
+    queryFn: async () => {
+      const res = await apiClient.get<GatePassRequest[]>('/security/gate-passes/my_passes/');
+      return res.data || [];
+    },
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const { data: issues = [] } = useQuery<IssueTicket[]>({
+    queryKey: ['myIssues'],
+    queryFn: async () => {
+      const res = await apiClient.get<IssueTicket[]>('/hms/issues/');
+      return res.data || [];
+    },
+    staleTime: 1000 * 60 * 2,
+  });
 
   const student = profileData?.profile;
   const activeApprovedPass = passes.find((p) => p.status === 'approved');

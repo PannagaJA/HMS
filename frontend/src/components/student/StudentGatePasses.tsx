@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, QrCode, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { GatePassRequest } from '../../types';
@@ -16,7 +17,7 @@ import { formatTime12 } from '../../lib/utils';
 
 export const StudentGatePasses: React.FC = () => {
   const { showSuccess, showError } = useNotification();
-  const [passes, setPasses] = useState<GatePassRequest[]>([]);
+  const queryClient = useQueryClient();
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedQRPass, setSelectedQRPass] = useState<GatePassRequest | null>(null);
 
@@ -27,42 +28,41 @@ export const StudentGatePasses: React.FC = () => {
   const [outTime, setOutTime] = useState('');
   const [returnDate, setReturnDate] = useState('');
   const [returnTime, setReturnTime] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchPasses();
-  }, []);
-
-  const fetchPasses = async () => {
-    try {
+  const { data: passes = [] } = useQuery<GatePassRequest[]>({
+    queryKey: ['myGatePasses'],
+    queryFn: async () => {
       const res = await apiClient.get<GatePassRequest[]>('/security/gate-passes/my_passes/');
-      setPasses(res.data);
-    } catch (err) {
-      console.error('Failed to load passes', err);
-    }
-  };
+      return res.data || [];
+    },
+    staleTime: 1000 * 60 * 2,
+  });
 
-  const handleApplyPass = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await apiClient.post('/security/gate-passes/', {
-        pass_type: passType,
-        reason,
-        out_date: outDate,
-        out_time: outTime,
-        expected_return_date: returnDate,
-        expected_return_time: returnTime,
-      });
+  const applyMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      return apiClient.post('/security/gate-passes/', payload);
+    },
+    onSuccess: () => {
       showSuccess('Gate pass application submitted for warden review.');
       setShowApplyModal(false);
       setReason('');
-      fetchPasses();
-    } catch (err: any) {
+      queryClient.invalidateQueries({ queryKey: ['myGatePasses'] });
+    },
+    onError: (err: any) => {
       showError(err.response?.data?.error || 'Failed to submit gate pass');
-    } finally {
-      setIsSubmitting(false);
-    }
+    },
+  });
+
+  const handleApplyPass = (e: React.FormEvent) => {
+    e.preventDefault();
+    applyMutation.mutate({
+      pass_type: passType,
+      reason,
+      out_date: outDate,
+      out_time: outTime,
+      expected_return_date: returnDate,
+      expected_return_time: returnTime,
+    });
   };
 
   return (
@@ -382,10 +382,10 @@ export const StudentGatePasses: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={applyMutation.isPending}
                   className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Application'}
+                  {applyMutation.isPending ? 'Submitting...' : 'Submit Application'}
                 </button>
               </div>
             </form>

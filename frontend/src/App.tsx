@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
@@ -35,9 +37,10 @@ import { StudentMeals } from './components/student/StudentMeals';
 
 function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <NotificationProvider>
+          <BrowserRouter>
           <Routes>
             {/* Public Auth Route */}
             <Route path="/login" element={<Login />} />
@@ -98,6 +101,7 @@ function App() {
         </BrowserRouter>
       </NotificationProvider>
     </AuthProvider>
+  </QueryClientProvider>
   );
 }
 
