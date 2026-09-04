@@ -40,6 +40,7 @@ export const GatePassScanner: React.FC = () => {
   // Camera Scanner State
   const [isCameraActive, setIsCameraActive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const cameraViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchGatePassRecords();
@@ -99,6 +100,7 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(true);
 
     setTimeout(async () => {
+      cameraViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       try {
         const qrCodeScanner = new Html5Qrcode('qr-reader-container');
         scannerRef.current = qrCodeScanner;
@@ -297,7 +299,7 @@ export const GatePassScanner: React.FC = () => {
 
         {/* Live Camera Scanner Viewport */}
         {isCameraActive && (
-          <div className="p-4 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col items-center animate-in fade-in duration-200">
+          <div ref={cameraViewportRef} className="p-4 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col items-center animate-in fade-in duration-200 scroll-mt-6">
             <div className="text-white text-xs font-semibold mb-3 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
               <span>Point Camera at Student's Phone Screen QR Code</span>
