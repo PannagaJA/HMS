@@ -44,8 +44,8 @@ serve(async (req: Request) => {
 
     const org_id = orgData.id;
 
-    // Generate Temporary Password
-    const tempPassword = 'Temp-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    // Use standard password instead of temporary
+    const tempPassword = 'amc@2026';
 
     // 2. Create Auth User
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -113,7 +113,7 @@ serve(async (req: Request) => {
         <p>You have been assigned as the <strong>HMS Admin</strong>.</p>
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 5px 0;"><strong>Email / Login:</strong> ${adminEmail}</p>
-          <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${tempPassword}</code></p>
+          <p style="margin: 5px 0;"><strong>Standard Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${tempPassword}</code></p>
         </div>
         <p><strong>Important Next Steps:</strong></p>
         <ol>
