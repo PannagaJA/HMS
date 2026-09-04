@@ -7,24 +7,34 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['amc-favicon.png'],
+      includeAssets: ['app-logo.png', 'amc-favicon.png'],
       manifest: {
-        name: 'Starlight Campus',
-        short_name: 'Starlight',
-        description: 'Starlight Campus Management System',
+        name: 'AMC Hostel Management System',
+        short_name: 'HostelDesk',
+        description: 'Enterprise Hostel Management System Portal',
         theme_color: '#0D3833',
         background_color: '#F0FDF9',
         display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
         icons: [
           {
-            src: 'amc-favicon.png',
+            src: 'app-logo.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
-            src: 'amc-favicon.png',
+            src: 'app-logo.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'app-logo.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }
