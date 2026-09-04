@@ -87,9 +87,6 @@ export const GatePassScanner: React.FC = () => {
         setSearchInput(`${res.data.pass.student_name} (${res.data.pass.enrollment_no})`);
       }
       stopCameraScanner();
-      setTimeout(() => {
-        scannedPassCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
     } catch (err: any) {
       setScannedPass(null);
       setErrorMsg(err.message || err.response?.data?.message || err.response?.data?.error || 'No approved gate pass found matching this Token or Student ID.');
@@ -137,12 +134,6 @@ export const GatePassScanner: React.FC = () => {
       }
     }
     setIsCameraActive(false);
-
-    // Explicitly reset parent main scroll container to top so navbar is never scrolled out
-    const mainEl = document.querySelector('main');
-    if (mainEl) {
-      mainEl.scrollTo({ top: 0, behavior: 'smooth' });
-    }
   };
 
   const handleConfirmMovementExecution = async () => {
