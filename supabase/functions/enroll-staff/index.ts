@@ -31,6 +31,18 @@ serve(async (req: Request) => {
     // Generate Temporary Password
     const tempPassword = 'Temp-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
+    // Fetch the org_id of the admin making this request
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) throw new Error("Missing Authorization header");
+    const token = authHeader.replace('Bearer ', '');
+    
+    const { data: { user: adminUser }, error: verifyError } = await supabaseAdmin.auth.getUser(token);
+    if (verifyError || !adminUser) throw new Error("Invalid admin token");
+    
+    const { data: adminProfile } = await supabaseAdmin.from('profiles').select('org_id').eq('id', adminUser.id).single();
+    const org_id = adminProfile?.org_id;
+    if (!org_id) throw new Error("Admin has no organization assigned");
+
     // 1. Create Auth User
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -55,6 +67,7 @@ serve(async (req: Request) => {
       last_name: name.split(' ').slice(1).join(' '),
       phone: phone || '',
       is_active: true,
+      org_id: org_id,
     }).eq('id', userId);
 
     if (profileError) {
@@ -68,6 +81,7 @@ serve(async (req: Request) => {
         last_name: name.split(' ').slice(1).join(' '),
         phone: phone || '',
         is_active: true,
+        org_id: org_id,
       });
     }
 
