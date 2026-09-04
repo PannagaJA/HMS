@@ -97,30 +97,23 @@ export const adminService = {
 
   async createHostel(payload: { name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }) {
     let createdHostel: any = null;
-    try {
-      const { data, error } = await supabase
-        .from('hostels')
-        .insert({
-          name: payload.name,
-          gender: payload.gender,
-          floor_count: payload.floor_count,
-          address: payload.address || '',
-          warden_id: payload.warden || null,
-          caretaker_id: payload.caretaker || null,
-          is_active: true
-        })
-        .select()
-        .single();
-      if (!error && data) {
-        createdHostel = data;
-      }
-    } catch (e) {
-      console.warn('Hostels table insert failed, saving locally:', e);
+    const { data, error } = await supabase
+      .from('hostels')
+      .insert({
+        name: payload.name,
+        gender: payload.gender,
+        floor_count: payload.floor_count,
+        address: payload.address || '',
+        warden_id: payload.warden || null,
+        caretaker_id: payload.caretaker || null,
+        is_active: true
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      throw error || new Error("Failed to create hostel in the database.");
     }
-
-    if (!createdHostel) {
-      throw new Error("Failed to create hostel in the database.");
-    }
+    createdHostel = data;
 
     // If warden is UUID, try linking in DB
     const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
@@ -144,13 +137,16 @@ export const adminService = {
 
   async updateHostel(id: string | number, payload: Partial<{ name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }>) {
     try {
+      const sanitizedWardenId = payload.warden === 'none' || payload.warden === '' ? null : (payload.warden !== undefined ? payload.warden : undefined);
+      const sanitizedCaretakerId = payload.caretaker === 'none' || payload.caretaker === '' ? null : (payload.caretaker !== undefined ? payload.caretaker : undefined);
+
       await supabase.from('hostels').update({
         ...(payload.name ? { name: payload.name } : {}),
         ...(payload.gender ? { gender: payload.gender } : {}),
         ...(payload.floor_count !== undefined ? { floor_count: payload.floor_count } : {}),
         ...(payload.address !== undefined ? { address: payload.address } : {}),
-        ...(payload.warden !== undefined ? { warden_id: payload.warden } : {}),
-        ...(payload.caretaker !== undefined ? { caretaker_id: payload.caretaker } : {})
+        ...(sanitizedWardenId !== undefined ? { warden_id: sanitizedWardenId } : {}),
+        ...(sanitizedCaretakerId !== undefined ? { caretaker_id: sanitizedCaretakerId } : {})
       }).eq('id', id);
 
       const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
@@ -164,7 +160,7 @@ export const adminService = {
         } catch (we) {
           console.warn('Warden assignment update failed:', we);
         }
-      } else if (payload.warden === null || payload.warden === 'none') {
+      } else if (payload.warden === null || payload.warden === 'none' || payload.warden === '') {
         try {
           await supabase.from('warden_hostel_assignments').delete().eq('hostel_id', id);
         } catch (we) {
@@ -287,55 +283,49 @@ export const adminService = {
     room_id?: number | string;
     bed_number?: number | string;
   }) {
-    let createdStudent: any = null;
-    try {
-      const { data, error } = await supabase
-        .from('students')
-        .insert({
-          student_name: payload.student_name,
-          enrollment_no: payload.enrollment_no,
-          gender: payload.gender,
-          phone: payload.phone || '',
-          father_name: payload.father_name || '',
-          guardian_phone: payload.guardian_phone || '',
-          emergency_contact: payload.emergency_contact || '',
-          no_dues: true,
-          status: 'ACTIVE'
-        })
-        .select()
-        .single();
-      
-      if (!error && data) {
-        createdStudent = data;
-
-        // Immediate room allocation if specified
-        if (payload.room_id) {
-          try {
-            let bedId: any = null;
-            const bedNum = payload.bed_number ? Number(payload.bed_number) : 1;
-            const { data: bedRecord } = await supabase
-              .from('beds')
-              .select('id')
-              .eq('room_id', payload.room_id)
-              .eq('bed_number', bedNum)
-              .single();
-            bedId = bedRecord?.id;
-
-            await supabase.rpc('allocate_student_room', {
-              p_student_id: data.id,
-              p_bed_id: bedId
-            });
-          } catch (ae) {
-            console.warn('Initial room allocation failed:', ae);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Student table insert failed, saving locally:', e);
+    const { data, error } = await supabase
+      .from('students')
+      .insert({
+        student_name: payload.student_name,
+        enrollment_no: payload.enrollment_no,
+        gender: payload.gender,
+        phone: payload.phone || '',
+        father_name: payload.father_name || '',
+        guardian_phone: payload.guardian_phone || '',
+        emergency_contact: payload.emergency_contact || '',
+        no_dues: true,
+        status: 'ACTIVE'
+      })
+      .select()
+      .single();
+    
+    if (error || !data) {
+      throw error || new Error("Failed to create student in the database.");
     }
+    const createdStudent = data;
 
-    if (!createdStudent) {
-      throw new Error("Failed to create student in the database.");
+    // Immediate room allocation if specified
+    if (payload.room_id) {
+      try {
+        let bedId: any = null;
+        const bedNum = payload.bed_number ? Number(payload.bed_number) : 1;
+        const { data: bedRecord } = await supabase
+          .from('beds')
+          .select('id')
+          .eq('room_id', payload.room_id)
+          .eq('bed_number', bedNum)
+          .single();
+        bedId = bedRecord?.id;
+
+        if (bedId) {
+          await supabase.rpc('allocate_student_room', {
+            p_student_id: data.id,
+            p_bed_id: bedId
+          });
+        }
+      } catch (ae) {
+        console.warn('Initial room allocation failed:', ae);
+      }
     }
 
     return createdStudent;

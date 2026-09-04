@@ -202,7 +202,17 @@ export const WardenDashboard: React.FC = () => {
           </div>
         </div>
 
-        {!selectedFloor ? (
+        {!selectedHostelId || !stats?.managed_hostels?.length ? (
+          <div className="bg-slate-50/70 p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-900 flex items-center justify-center mx-auto border border-amber-200">
+              <DoorClosed className="w-5 h-5 text-amber-700" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-800">No Hostel Block Assigned</h4>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              You are currently not assigned to any hostel block. An administrator can assign you to a block from the Hostel Management dashboard.
+            </p>
+          </div>
+        ) : !selectedFloor ? (
           <div className="bg-slate-50/70 p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2.5">
             <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-900 flex items-center justify-center mx-auto border border-teal-200">
               <Layers className="w-5 h-5" />

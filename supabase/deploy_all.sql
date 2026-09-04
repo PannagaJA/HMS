@@ -375,6 +375,10 @@ CREATE TABLE IF NOT EXISTS public.announcements (
     created_by_role TEXT,
     created_by_name TEXT,
     is_circular BOOLEAN DEFAULT FALSE,
+    expires_at TIMESTAMPTZ,
+    circular_number TEXT,
+    file_url TEXT,
+    file_name TEXT,
     target_hostel_id BIGINT REFERENCES public.hostels(id) ON DELETE CASCADE,
     org_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -907,7 +911,7 @@ BEGIN
   END IF;
 
   NEW.hostel_id := v_hostel_id;
-  NEW.org_id := COALESCE(NEW.org_id, v_org_id);
+  NEW.org_id := COALESCE(NEW.org_id, v_org_id, public.user_org_id());
   IF TG_TABLE_NAME IN ('issues', 'gate_passes', 'visitor_logs') THEN
     NEW.room_id := v_room_id;
   END IF;
@@ -931,6 +935,65 @@ FOR EACH ROW EXECUTE FUNCTION public.trig_fn_snapshot_student_location();
 DROP TRIGGER IF EXISTS tr_snapshot_mealskip_loc ON public.student_meal_skips;
 CREATE TRIGGER tr_snapshot_mealskip_loc BEFORE INSERT ON public.student_meal_skips
 FOR EACH ROW EXECUTE FUNCTION public.trig_fn_snapshot_student_location();
+
+-- 14.1 Automatic Multi-Tenant Org ID Assignment Trigger
+CREATE OR REPLACE FUNCTION public.trig_fn_set_org_id()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    NEW.org_id := public.user_org_id();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS tr_set_org_id_hostels ON public.hostels;
+CREATE TRIGGER tr_set_org_id_hostels BEFORE INSERT ON public.hostels FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_warden_assignments ON public.warden_hostel_assignments;
+CREATE TRIGGER tr_set_org_id_warden_assignments BEFORE INSERT ON public.warden_hostel_assignments FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_courses ON public.hostel_courses;
+CREATE TRIGGER tr_set_org_id_courses BEFORE INSERT ON public.hostel_courses FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_rooms ON public.hostel_rooms;
+CREATE TRIGGER tr_set_org_id_rooms BEFORE INSERT ON public.hostel_rooms FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_beds ON public.beds;
+CREATE TRIGGER tr_set_org_id_beds BEFORE INSERT ON public.beds FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_students ON public.students;
+CREATE TRIGGER tr_set_org_id_students BEFORE INSERT ON public.students FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_allocations ON public.room_allocations;
+CREATE TRIGGER tr_set_org_id_allocations BEFORE INSERT ON public.room_allocations FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_meal_types ON public.meal_types;
+CREATE TRIGGER tr_set_org_id_meal_types BEFORE INSERT ON public.meal_types FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_menu_items ON public.menu_items;
+CREATE TRIGGER tr_set_org_id_menu_items BEFORE INSERT ON public.menu_items FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_menus ON public.menus;
+CREATE TRIGGER tr_set_org_id_menus BEFORE INSERT ON public.menus FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_menu_links ON public.menu_item_links;
+CREATE TRIGGER tr_set_org_id_menu_links BEFORE INSERT ON public.menu_item_links FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_wardens ON public.hostel_wardens;
+CREATE TRIGGER tr_set_org_id_wardens BEFORE INSERT ON public.hostel_wardens FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_caretakers ON public.hostel_caretakers;
+CREATE TRIGGER tr_set_org_id_caretakers BEFORE INSERT ON public.hostel_caretakers FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_security ON public.security_staff;
+CREATE TRIGGER tr_set_org_id_security BEFORE INSERT ON public.security_staff FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_announcements ON public.announcements;
+CREATE TRIGGER tr_set_org_id_announcements BEFORE INSERT ON public.announcements FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_announcements_read ON public.announcements_read;
+CREATE TRIGGER tr_set_org_id_announcements_read BEFORE INSERT ON public.announcements_read FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
 
 -- 15. Enable RLS
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
@@ -998,6 +1061,11 @@ CREATE POLICY policy_courses_admin ON public.hostel_courses FOR ALL TO authentic
 USING (org_id = public.user_org_id() AND public.is_admin())
 WITH CHECK (org_id = public.user_org_id() AND public.is_admin());
 
+CREATE OR REPLACE FUNCTION public.user_student_id()
+RETURNS BIGINT AS $$
+  SELECT id FROM public.students WHERE profile_id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp;
+
 CREATE POLICY policy_students_select ON public.students FOR SELECT TO authenticated
 USING (
   org_id = public.user_org_id() AND (
@@ -1023,7 +1091,7 @@ USING (
   org_id = public.user_org_id() AND (
     public.is_admin()
     OR public.is_security()
-    OR EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    OR student_id = public.user_student_id()
     OR (public.is_warden() AND EXISTS (
       SELECT 1 FROM public.beds b
       JOIN public.hostel_rooms r ON b.room_id = r.id
@@ -1040,14 +1108,14 @@ USING (
   org_id = public.user_org_id() AND (
     public.is_admin()
     OR public.is_security()
-    OR EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    OR student_id = public.user_student_id()
     OR (public.is_warden() AND hostel_id IN (SELECT public.get_warden_hostel_ids(auth.uid())))
   )
 );
 CREATE POLICY policy_issues_insert_student ON public.issues FOR INSERT TO authenticated
 WITH CHECK (
   org_id = public.user_org_id() AND (
-    EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    student_id = public.user_student_id()
     OR public.is_admin()
   )
 );
@@ -1061,8 +1129,7 @@ USING (
     ))
     OR EXISTS (
       SELECT 1 FROM public.issues i 
-      JOIN public.students s ON i.student_id = s.id 
-      WHERE i.id = issue_id AND s.profile_id = auth.uid()
+      WHERE i.id = issue_id AND i.student_id = public.user_student_id()
     )
   )
 );
@@ -1072,14 +1139,14 @@ USING (
   org_id = public.user_org_id() AND (
     public.is_admin()
     OR public.is_security()
-    OR EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    OR student_id = public.user_student_id()
     OR (public.is_warden() AND hostel_id IN (SELECT public.get_warden_hostel_ids(auth.uid())))
   )
 );
 CREATE POLICY policy_gate_passes_insert ON public.gate_passes FOR INSERT TO authenticated
 WITH CHECK (
   org_id = public.user_org_id() AND (
-    EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    student_id = public.user_student_id()
     OR public.is_admin()
   )
 );
@@ -1090,7 +1157,7 @@ USING (
     public.is_admin()
     OR public.is_security()
     OR (public.is_warden() AND hostel_id IN (SELECT public.get_warden_hostel_ids(auth.uid())))
-    OR EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    OR student_id = public.user_student_id()
   )
 );
 CREATE POLICY policy_visitor_logs_insert ON public.visitor_logs FOR INSERT TO authenticated
@@ -1113,20 +1180,20 @@ USING (
   org_id = public.user_org_id() AND (
     public.is_admin()
     OR (public.is_warden() AND hostel_id IN (SELECT public.get_warden_hostel_ids(auth.uid())))
-    OR EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    OR student_id = public.user_student_id()
   )
 );
 CREATE POLICY policy_meal_skips_insert ON public.student_meal_skips FOR INSERT TO authenticated
 WITH CHECK (
   org_id = public.user_org_id() AND (
-    EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    student_id = public.user_student_id()
     OR public.is_admin()
   )
 );
 CREATE POLICY policy_meal_skips_delete ON public.student_meal_skips FOR DELETE TO authenticated
 USING (
   org_id = public.user_org_id() AND (
-    EXISTS (SELECT 1 FROM public.students s WHERE s.id = student_id AND s.profile_id = auth.uid())
+    student_id = public.user_student_id()
     OR public.is_admin()
   )
 );

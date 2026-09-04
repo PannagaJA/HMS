@@ -310,17 +310,157 @@ export const apiClient = {
       return { data: data as T };
     }
 
-    // Create Room with physical beds
+    // Bulk Room Generation
+    if (endpoint.includes('/hms/rooms/bulk_create_rooms/')) {
+      const hostelId = Number(body?.hostel_id || body?.hostel);
+      const floor = Number(body?.floor ?? 0);
+      const roomCount = Number(body?.room_count || body?.count || 1);
+      const capacity = Number(body?.capacity || 2);
+      const roomType = body?.room_type || 'D';
+
+      if (!hostelId || isNaN(hostelId)) {
+        throw new Error('Please select a valid hostel.');
+      }
+      if (roomCount < 1) {
+        throw new Error('Room count must be at least 1.');
+      }
+
+      // Fetch existing rooms on this floor to avoid duplicate room numbering
+      const { data: existingRooms } = await supabase
+        .from('hostel_rooms')
+        .select('no')
+        .eq('hostel_id', hostelId)
+        .eq('floor', floor);
+
+      const existingNos = new Set((existingRooms || []).map(r => r.no));
+      const createdRooms: any[] = [];
+
+      for (let i = 1; i <= roomCount; i++) {
+        // e.g., floor 1 -> 101, 102, ...; floor 0 (Ground) -> G01, G02, ...
+        let roomNumber = floor === 0 ? `G${String(i).padStart(2, '0')}` : `${floor}${String(i).padStart(2, '0')}`;
+        let suffix = 1;
+        while (existingNos.has(roomNumber)) {
+          roomNumber = floor === 0 ? `G${String(i).padStart(2, '0')}-${suffix}` : `${floor}${String(i).padStart(2, '0')}-${suffix}`;
+          suffix++;
+        }
+        existingNos.add(roomNumber);
+
+        // Try RPC first
+        let newRoomId: any = null;
+        try {
+          const { data: rpcRoomId, error: rpcErr } = await supabase.rpc('create_room_with_beds', {
+            p_hostel_id: hostelId,
+            p_room_no: roomNumber,
+            p_floor: floor,
+            p_capacity: capacity,
+            p_room_type: roomType
+          });
+          if (!rpcErr && rpcRoomId) {
+            newRoomId = rpcRoomId;
+          }
+        } catch (e) {
+          // ignore RPC error and fallback
+        }
+
+        // Fallback to table insert if RPC wasn't available
+        if (!newRoomId) {
+          const { data: newRoom, error: roomErr } = await supabase
+            .from('hostel_rooms')
+            .insert({
+              hostel_id: hostelId,
+              no: roomNumber,
+              floor: floor,
+              capacity: capacity,
+              room_type: roomType,
+              is_active: true
+            })
+            .select()
+            .single();
+
+          if (roomErr || !newRoom) {
+            console.error(`Failed to create bulk room ${roomNumber}:`, roomErr);
+            throw roomErr || new Error(`Failed to create room ${roomNumber}`);
+          }
+          newRoomId = newRoom.id;
+
+          const bedsPayload = Array.from({ length: capacity }, (_, bIdx) => ({
+            room_id: newRoom.id,
+            bed_number: bIdx + 1
+          }));
+          await supabase.from('beds').insert(bedsPayload);
+        }
+
+        createdRooms.push({ id: newRoomId, room_no: roomNumber });
+      }
+
+      return { data: { success: true, count: createdRooms.length, rooms: createdRooms } as T };
+    }
+
+    // Create Single Room with physical beds
     if (endpoint.includes('/hms/rooms/')) {
-      const { data, error } = await supabase.rpc('create_room_with_beds', {
-        p_hostel_id: body?.hostel || body?.hostel_id,
-        p_room_no: body?.no || body?.room_no,
-        p_floor: body?.floor || 0,
-        p_capacity: body?.capacity || 2,
-        p_room_type: body?.room_type || 'D'
-      });
-      if (error) throw error;
-      return { data: data as T };
+      const rawHostelId = body?.hostel || body?.hostel_id;
+      const hostelId = rawHostelId !== undefined && rawHostelId !== '' ? Number(rawHostelId) : null;
+      const roomNo = String(body?.no || body?.room_no || '').trim();
+      const floor = body?.floor !== undefined ? Number(body.floor) : 0;
+      const capacity = body?.capacity !== undefined ? Number(body.capacity) : 2;
+      const roomType = body?.room_type || 'D';
+
+      if (!hostelId || isNaN(hostelId)) {
+        throw new Error('Please select a valid hostel.');
+      }
+      if (!roomNo) {
+        throw new Error('Please provide a valid room number.');
+      }
+
+      try {
+        const { data, error } = await supabase.rpc('create_room_with_beds', {
+          p_hostel_id: hostelId,
+          p_room_no: roomNo,
+          p_floor: floor,
+          p_capacity: capacity,
+          p_room_type: roomType
+        });
+        if (!error && data) {
+          return { data: data as T };
+        }
+        if (error && error.code !== '42883' && error.code !== 'PGRST202') {
+          console.warn('RPC create_room_with_beds returned error, attempting direct insert fallback:', error);
+        }
+      } catch (rpcErr) {
+        console.warn('RPC create_room_with_beds call failed, attempting direct insert fallback:', rpcErr);
+      }
+
+      // Direct Table Fallback
+      const { data: newRoom, error: roomErr } = await supabase
+        .from('hostel_rooms')
+        .insert({
+          hostel_id: hostelId,
+          no: roomNo,
+          floor: floor,
+          capacity: capacity,
+          room_type: roomType,
+          is_active: true
+        })
+        .select()
+        .single();
+
+      if (roomErr || !newRoom) {
+        console.error('Direct room insert failed:', roomErr);
+        throw roomErr || new Error('Failed to create room in database.');
+      }
+
+      // Create Beds
+      const bedsPayload = Array.from({ length: capacity }, (_, i) => ({
+        room_id: newRoom.id,
+        bed_number: i + 1
+      }));
+
+      const { error: bedErr } = await supabase.from('beds').insert(bedsPayload);
+      if (bedErr) {
+        console.warn('Failed to insert physical beds:', bedErr);
+      }
+
+      return { data: newRoom as T };
     }
 
     // Warden Creation
@@ -580,17 +720,36 @@ export const apiClient = {
       return { data: data as T };
     }
 
-    // Room Resizing via RPC
+    // Room Resizing via RPC with direct table fallback
     if (endpoint.includes('/hms/rooms/')) {
       const parts = endpoint.split('/');
       const roomId = parseInt(parts[parts.indexOf('rooms') + 1] || '0', 10);
       if (body?.capacity) {
-        const { data, error } = await supabase.rpc('resize_room_capacity', {
-          p_room_id: roomId,
-          p_new_capacity: body.capacity
-        });
+        try {
+          const { data, error } = await supabase.rpc('resize_room_capacity', {
+            p_room_id: roomId,
+            p_new_capacity: body.capacity
+          });
+          if (!error && data) {
+            return { data: data as T };
+          }
+        } catch (e) {
+          console.warn('RPC resize_room_capacity failed, attempting direct table update:', e);
+        }
+
+        const { data: updated, error } = await supabase
+          .from('hostel_rooms')
+          .update({
+            capacity: body.capacity,
+            ...(body.name ? { name: body.name } : {}),
+            ...(body.room_type ? { room_type: body.room_type } : {})
+          })
+          .eq('id', roomId)
+          .select()
+          .single();
+
         if (error) throw error;
-        return { data: data as T };
+        return { data: updated as T };
       }
     }
 
@@ -657,15 +816,30 @@ export const apiClient = {
       return { data: { success: true } as T };
     }
 
-    // Decommission Room (RPC)
+    // Decommission Room (RPC with fallback)
     if (endpoint.includes('/hms/rooms/')) {
       const parts = endpoint.split('/');
       const roomId = parseInt(parts[parts.indexOf('rooms') + 1] || '0', 10);
-      const { data, error } = await supabase.rpc('decommission_room', {
-        p_room_id: roomId
-      });
+      try {
+        const { data, error } = await supabase.rpc('decommission_room', {
+          p_room_id: roomId
+        });
+        if (!error && data) {
+          return { data: data as T };
+        }
+      } catch (e) {
+        console.warn('RPC decommission_room failed, updating table directly:', e);
+      }
+
+      const { data: updated, error } = await supabase
+        .from('hostel_rooms')
+        .update({ is_active: false })
+        .eq('id', roomId)
+        .select()
+        .single();
+
       if (error) throw error;
-      return { data: data as T };
+      return { data: updated as T };
     }
 
     // Warden Delete

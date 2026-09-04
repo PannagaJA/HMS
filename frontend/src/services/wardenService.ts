@@ -113,15 +113,7 @@ export const wardenService = {
       }
     }
 
-    // 3. Fallback: If no explicit assignment in DB for this warden, default to Boys Hostel or first active hostel
-    if (managedHostels.length === 0) {
-      const { data: allHostels } = await supabase.from('hostels').select('*').eq('is_active', true);
-      if (allHostels && allHostels.length > 0) {
-        const boysHostel = allHostels.find((h) => h.name.toLowerCase().includes('boys'));
-        managedHostels = [boysHostel || allHostels[0]];
-      }
-    }
-
+    // 3. Only return explicitly assigned hostels (via warden_hostel_assignments or hostels.warden_id)
     return managedHostels;
   },
 

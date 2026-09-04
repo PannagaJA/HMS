@@ -26,14 +26,36 @@ export const diningService = {
   },
 
   async createMenuItem(payload: { name: string; category?: string; description?: string; is_veg?: boolean }) {
-    const { data, error } = await supabase.from('menu_items').insert({
+    const insertObj: any = {
       name: payload.name,
-      category: payload.category || 'Main Course',
       description: payload.description || '',
       vegetarian: payload.is_veg ?? true
-    }).select().single();
-    if (error) throw error;
-    return data;
+    };
+    if (payload.category) {
+      insertObj.category = payload.category;
+    }
+
+    try {
+      const { data, error } = await supabase.from('menu_items').insert(insertObj).select().single();
+      if (!error && data) return data;
+      if (error && error.message?.includes('category')) {
+        // If remote DB lacks the category column, fallback without it
+        delete insertObj.category;
+        const { data: retryData, error: retryErr } = await supabase.from('menu_items').insert(insertObj).select().single();
+        if (retryErr) throw retryErr;
+        return retryData;
+      }
+      if (error) throw error;
+      return data;
+    } catch (e: any) {
+      if (e?.message?.includes('category')) {
+        delete insertObj.category;
+        const { data: retryData, error: retryErr } = await supabase.from('menu_items').insert(insertObj).select().single();
+        if (retryErr) throw retryErr;
+        return retryData;
+      }
+      throw e;
+    }
   },
 
   async updateMenuItem(id: number | string, payload: Partial<{ name: string; category: string; description: string; is_veg: boolean }>) {
@@ -42,9 +64,25 @@ export const diningService = {
       updateBody.vegetarian = payload.is_veg;
       delete updateBody.is_veg;
     }
-    const { data, error } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
+      if (error && error.message?.includes('category')) {
+        delete updateBody.category;
+        const { data: retryData, error: retryErr } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
+        if (retryErr) throw retryErr;
+        return retryData;
+      }
+      if (error) throw error;
+      return data;
+    } catch (e: any) {
+      if (e?.message?.includes('category')) {
+        delete updateBody.category;
+        const { data: retryData, error: retryErr } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
+        if (retryErr) throw retryErr;
+        return retryData;
+      }
+      throw e;
+    }
   },
 
   async deleteMenuItem(id: number | string) {
