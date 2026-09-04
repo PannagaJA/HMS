@@ -80,13 +80,13 @@ export const StudentMeals: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hostel Mess & Dining</h1>
-          <p className="text-sm text-slate-500 mt-0.5">View today's recurring meal menu, dining timetable, and food schedule</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Hostel Mess & Dining</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">View today's recurring meal menu, dining timetable, and food schedule</p>
         </div>
-        <span className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs border border-teal-200 shadow-2xs">
-          <Calendar className="w-4 h-4 text-teal-700" />
+        <span className="w-fit self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs border border-teal-200 shadow-2xs">
+          <Calendar className="w-4 h-4 text-teal-700 shrink-0" />
           <span>Today: {todayMenu?.day_name || 'Daily Timetable'}</span>
         </span>
       </div>
