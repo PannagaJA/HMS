@@ -7,16 +7,38 @@ import type { MealType, MenuItem, Menu, HostelIssue } from '../types';
 
 export const diningService = {
   async getMealTypes(): Promise<MealType[]> {
-    const { data, error } = await supabase.from('meal_types').select('*').order('id', { ascending: true });
-    if (error || !data || data.length === 0) {
-      return [
-        { id: 1, name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00', start_time: '07:30', end_time: '09:30' },
-        { id: 2, name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00', start_time: '12:30', end_time: '14:30' },
-        { id: 3, name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00', start_time: '17:00', end_time: '18:30' },
-        { id: 4, name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00', start_time: '20:00', end_time: '22:00' },
-      ] as any;
+    try {
+      const { data, error } = await supabase.from('meal_types').select('*').order('id', { ascending: true });
+      if (!error && data && data.length > 0) {
+        return data;
+      }
+
+      // If meal_types is empty in remote DB, ensure the 4 standard meal types exist
+      const standardMealTypes = [
+        { name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00' },
+        { name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00' },
+        { name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00' },
+        { name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00' }
+      ];
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from('meal_types')
+        .insert(standardMealTypes)
+        .select();
+
+      if (!insertErr && inserted && inserted.length > 0) {
+        return inserted;
+      }
+    } catch (e) {
+      console.warn('Could not auto-provision meal_types:', e);
     }
-    return data;
+
+    return [
+      { id: 1, name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00', start_time: '07:30', end_time: '09:30' },
+      { id: 2, name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00', start_time: '12:30', end_time: '14:30' },
+      { id: 3, name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00', start_time: '17:00', end_time: '18:30' },
+      { id: 4, name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00', start_time: '20:00', end_time: '22:00' },
+    ] as any;
   },
 
   async getMenuItems(): Promise<MenuItem[]> {
@@ -271,7 +293,28 @@ export const diningService = {
 
   async saveMenuSlot(dayOfWeek: number | string, mealTypeId: number | string, itemIds: (number | string)[], hostelId?: number | string) {
     const dayStr = String(dayOfWeek);
-    const mealIdNum = Number(mealTypeId);
+    let resolvedMealTypeId: number | null = Number(mealTypeId);
+
+    // Verify mealTypeId exists in DB, or resolve correct ID
+    const { data: validMealType } = await supabase.from('meal_types').select('id, name').eq('id', resolvedMealTypeId).maybeSingle();
+    if (!validMealType) {
+      // Find by code order
+      const codeIndex = typeof mealTypeId === 'number' ? mealTypeId - 1 : ['BR', 'LN', 'SN', 'DN'].indexOf(String(mealTypeId));
+      const code = ['BR', 'LN', 'SN', 'DN'][codeIndex >= 0 && codeIndex <= 3 ? codeIndex : 0];
+      const { data: matched } = await supabase.from('meal_types').select('id').eq('name', code).maybeSingle();
+      if (matched) {
+        resolvedMealTypeId = matched.id;
+      } else {
+        // Insert standard meal types if completely missing
+        const { data: created } = await supabase.from('meal_types').insert({
+          name: code,
+          description: code === 'BR' ? 'Breakfast' : code === 'LN' ? 'Lunch' : code === 'SN' ? 'Snacks' : 'Dinner'
+        }).select().single();
+        if (created) resolvedMealTypeId = created.id;
+      }
+    }
+
+    const mealIdNum = resolvedMealTypeId;
 
     let targetHostelId = hostelId ? Number(hostelId) : null;
     if (!targetHostelId) {
@@ -296,18 +339,35 @@ export const diningService = {
     if (existing) {
       menuId = existing.id;
     } else {
-      const { data: inserted, error } = await supabase
+      const { data: upserted, error: upsertErr } = await supabase
         .from('menus')
-        .insert({
+        .upsert({
           hostel_id: targetHostelId,
           day_of_week: dayStr,
           meal_type_id: mealIdNum,
           is_recurring: true
-        })
-        .select()
+        }, { onConflict: 'hostel_id,day_of_week,meal_type_id' })
+        .select('id')
         .single();
-      if (error) throw error;
-      menuId = inserted.id;
+
+      if (upsertErr) {
+        // Double check if existing record exists
+        const { data: refetched } = await supabase
+          .from('menus')
+          .select('id')
+          .eq('hostel_id', targetHostelId)
+          .eq('day_of_week', dayStr)
+          .eq('meal_type_id', mealIdNum)
+          .maybeSingle();
+
+        if (refetched) {
+          menuId = refetched.id;
+        } else {
+          throw upsertErr;
+        }
+      } else {
+        menuId = upserted.id;
+      }
     }
 
     if (menuId) {
