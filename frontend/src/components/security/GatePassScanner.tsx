@@ -87,6 +87,9 @@ export const GatePassScanner: React.FC = () => {
         setSearchInput(`${res.data.pass.student_name} (${res.data.pass.enrollment_no})`);
       }
       stopCameraScanner();
+      setTimeout(() => {
+        scannedPassCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } catch (err: any) {
       setScannedPass(null);
       setErrorMsg(err.message || err.response?.data?.message || err.response?.data?.error || 'No approved gate pass found matching this Token or Student ID.');
@@ -101,6 +104,7 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(true);
 
     setTimeout(async () => {
+      cameraViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       try {
         const qrCodeScanner = new Html5Qrcode('qr-reader-container');
         scannerRef.current = qrCodeScanner;
@@ -299,7 +303,7 @@ export const GatePassScanner: React.FC = () => {
 
         {/* Live Camera Scanner Viewport */}
         {isCameraActive && (
-          <div ref={cameraViewportRef} className="p-4 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col items-center animate-in fade-in duration-200 scroll-mt-6">
+          <div ref={cameraViewportRef} className="p-4 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col items-center animate-in fade-in duration-200 scroll-mt-24">
             <div className="text-white text-xs font-semibold mb-3 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
               <span>Point Camera at Student's Phone Screen QR Code</span>
@@ -325,7 +329,7 @@ export const GatePassScanner: React.FC = () => {
 
       {/* SECTION 2: VERIFIED PASS ACTION CARD */}
       {scannedPass && (
-        <div ref={scannedPassCardRef} className="bg-white p-7 rounded-3xl border-2 border-[#D1F2EA] shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5 scroll-mt-6">
+        <div ref={scannedPassCardRef} className="bg-white p-7 rounded-3xl border-2 border-[#D1F2EA] shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5 scroll-mt-24">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-xl shadow-inner">
