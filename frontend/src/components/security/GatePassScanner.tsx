@@ -41,6 +41,7 @@ export const GatePassScanner: React.FC = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const cameraViewportRef = useRef<HTMLDivElement>(null);
+  const scannedPassCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchGatePassRecords();
@@ -86,6 +87,9 @@ export const GatePassScanner: React.FC = () => {
         setSearchInput(`${res.data.pass.student_name} (${res.data.pass.enrollment_no})`);
       }
       stopCameraScanner();
+      setTimeout(() => {
+        scannedPassCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     } catch (err: any) {
       setScannedPass(null);
       setErrorMsg(err.message || err.response?.data?.message || err.response?.data?.error || 'No approved gate pass found matching this Token or Student ID.');
@@ -325,7 +329,7 @@ export const GatePassScanner: React.FC = () => {
 
       {/* SECTION 2: VERIFIED PASS ACTION CARD */}
       {scannedPass && (
-        <div className="bg-white p-7 rounded-3xl border-2 border-[#D1F2EA] shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5">
+        <div ref={scannedPassCardRef} className="bg-white p-7 rounded-3xl border-2 border-[#D1F2EA] shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5 scroll-mt-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-xl shadow-inner">
