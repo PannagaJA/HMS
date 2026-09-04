@@ -85,14 +85,14 @@ export const StudentIssues: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Maintenance & Room Support</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Report room repairs, plumbing, electrical, and facility issues</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Maintenance & Room Support</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Report room repairs, plumbing, electrical, and facility issues</p>
         </div>
         <button
           onClick={() => setShowRaiseModal(true)}
-          className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Report New Issue</span>
@@ -108,7 +108,7 @@ export const StudentIssues: React.FC = () => {
         ) : (
           issues.map((issue) => (
             <div key={issue.id} className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-800 uppercase tracking-wider">
                   {issue.category}
                 </span>
@@ -149,18 +149,18 @@ export const StudentIssues: React.FC = () => {
                 </div>
               )}
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                <span>Priority: <strong className="text-slate-700">{issue.priority || 'Normal'}</strong></span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedUpdatesIssue(issue)}
-                    className="px-3 py-1.5 rounded-full bg-slate-50 border border-teal-200 text-teal-950 font-semibold text-xs hover:bg-teal-50 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  >
-                    <History className="w-3.5 h-3.5 text-teal-800" />
-                    <span>View Updates ({issue.updates?.length || 0})</span>
-                  </button>
-                  <span>{new Date(issue.created_at).toLocaleDateString()}</span>
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-2 text-xs">
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Priority: <strong className="text-slate-700">{issue.priority || 'Normal'}</strong></span>
+                  <span className="font-mono">{new Date(issue.created_at).toLocaleDateString()}</span>
                 </div>
+                <button
+                  onClick={() => setSelectedUpdatesIssue(issue)}
+                  className="w-full py-2.5 rounded-xl bg-slate-50 border border-teal-200 text-teal-950 font-bold text-xs hover:bg-teal-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <History className="w-4 h-4 text-teal-800" />
+                  <span>View Updates ({issue.updates?.length || 0})</span>
+                </button>
               </div>
             </div>
           ))

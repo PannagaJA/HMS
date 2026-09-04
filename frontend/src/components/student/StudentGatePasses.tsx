@@ -67,22 +67,98 @@ export const StudentGatePasses: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Gate Passes & Outpasses</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Apply for hostel departure permits, view warden approvals, and present your Security QR Pass</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">My Gate Passes & Outpasses</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Apply for hostel departure permits, view warden approvals, and present your Security QR Pass</p>
         </div>
         <button
           onClick={() => setShowApplyModal(true)}
-          className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer"
+          className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Apply New Pass</span>
         </button>
       </div>
 
-      <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm space-y-6">
-        <div className="overflow-x-auto">
+      <div className="bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/80 shadow-sm space-y-6">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden space-y-3.5">
+          {passes.length === 0 ? (
+            <div className="py-10 px-4 text-center text-slate-400 text-xs italic bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+              No gate passes applied yet. Click "Apply New Pass" above to create one.
+            </div>
+          ) : (
+            passes.map((pass) => (
+              <div key={pass.id} className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3 shadow-2xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pass Type</span>
+                    <span className="font-bold text-slate-900 text-sm">
+                      {String(pass.pass_type).replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</span>
+                    <StatusBadge status={pass.status} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-white p-3 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Out Date & Time</span>
+                    <span className="font-semibold text-slate-800 block">
+                      {pass.out_date}
+                    </span>
+                    <span className="text-slate-500 font-mono text-[11px] block">
+                      {formatTime12(pass.out_time) || 'N/A'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Expected Return</span>
+                    <span className="font-semibold text-rose-700 block">
+                      {pass.expected_return_date || pass.return_date}
+                    </span>
+                    <span className="text-rose-600 font-mono text-[11px] font-bold block">
+                      {formatTime12(pass.expected_return_time) || 'N/A'}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 pt-1 border-t border-slate-50">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reason / Purpose</span>
+                    <span className="text-slate-700 italic">
+                      "{pass.reason || pass.purpose || 'Personal'}"
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  {pass.status === 'approved' ? (
+                    <button
+                      onClick={() => setSelectedQRPass(pass)}
+                      className="w-full py-2.5 rounded-xl bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                      <QrCode className="w-4 h-4 text-teal-900" />
+                      <span>Show Security QR Pass</span>
+                    </button>
+                  ) : pass.status === 'completed' ? (
+                    <div className="py-2 text-[11px] font-semibold text-slate-500 flex items-center justify-center gap-1.5 bg-slate-100 rounded-xl">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Completed Movement
+                    </div>
+                  ) : (
+                    <div className="py-2 text-[11px] text-slate-400 italic text-center bg-slate-100/60 rounded-xl">
+                      Pending Warden Review
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">

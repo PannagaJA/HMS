@@ -6,8 +6,16 @@ export const announcementService = {
   async getUserHostelId(role: string, userId: string): Promise<number | null> {
     try {
       if (role === 'STUDENT') {
-        const { data } = await supabase.from('students').select('hostel_id').eq('profile_id', userId).maybeSingle();
-        return data?.hostel_id || null;
+        const { data } = await supabase
+          .from('students')
+          .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+        const allocations = (data as any)?.allocations || [];
+        const activeAlloc = allocations.find((a: any) => a.is_active);
+        const hostelId = activeAlloc?.bed?.room?.hostel_id || allocations[0]?.bed?.room?.hostel_id || null;
+        return hostelId ? Number(hostelId) : null;
       }
       if (role === 'WARDEN' || role === 'CARETAKER') {
         const { data } = await supabase.from('warden_hostel_assignments').select('hostel_id').eq('warden_profile_id', userId).maybeSingle();

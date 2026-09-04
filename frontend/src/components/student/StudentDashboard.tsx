@@ -240,32 +240,32 @@ export const StudentDashboard: React.FC = () => {
       </div>
 
       {/* Roommates Directory */}
-      <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/80 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-5">
           <div>
             <h3 className="text-base font-bold text-slate-900">Roommates & Shared Quarters</h3>
             <p className="text-xs text-slate-400">Co-residents allotted in Room {student?.room_detail?.no || '101'}</p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+          <span className="w-fit px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
             {profileData?.roommates?.length || 0} Roommates
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
           {profileData?.roommates?.length ? (
             profileData.roommates.map((roommate, idx) => (
               <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#0D3833] text-white flex items-center justify-center font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-[#0D3833] text-white flex items-center justify-center font-bold text-sm shrink-0">
                   {roommate.student_name[0]}
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-800">{roommate.student_name}</p>
-                  <p className="text-xs text-slate-400">Bed #{roommate.bed_number || 'N/A'} · {roommate.enrollment_no}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-slate-800 truncate">{roommate.student_name}</p>
+                  <p className="text-xs text-slate-400 truncate">Bed #{roommate.bed_number || 'N/A'} · {roommate.enrollment_no}</p>
                 </div>
               </div>
             ))
           ) : (
-            <div className="col-span-3 text-center py-6 text-slate-400 text-xs italic">
+            <div className="col-span-1 sm:col-span-2 md:col-span-3 text-center py-6 px-4 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
               Single occupancy or no other roommates currently allotted in this room.
             </div>
           )}
