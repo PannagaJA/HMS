@@ -74,6 +74,7 @@ export interface Student {
   profile_id?: string;
   student_name: string;
   enrollment_no: string;
+  email?: string;
   father_name?: string;
   course_id?: number;
   dob?: string;

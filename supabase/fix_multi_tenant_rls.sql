@@ -9,6 +9,7 @@ ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS circular_number TEXT;
 ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS file_url TEXT;
 ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS file_name TEXT;
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Main Course';
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS email TEXT;
 
 -- 1. Helper function for fast, recursion-free student lookup
 CREATE OR REPLACE FUNCTION public.user_student_id()
@@ -25,6 +26,8 @@ DROP POLICY IF EXISTS policy_issue_updates_select ON public.issue_updates;
 DROP POLICY IF EXISTS policy_gate_passes_select ON public.gate_passes;
 DROP POLICY IF EXISTS policy_gate_passes_insert ON public.gate_passes;
 DROP POLICY IF EXISTS policy_visitor_logs_select ON public.visitor_logs;
+DROP POLICY IF EXISTS policy_visitor_logs_insert ON public.visitor_logs;
+DROP POLICY IF EXISTS policy_visitor_logs_update ON public.visitor_logs;
 DROP POLICY IF EXISTS policy_meal_skips_select ON public.student_meal_skips;
 DROP POLICY IF EXISTS policy_meal_skips_insert ON public.student_meal_skips;
 DROP POLICY IF EXISTS policy_meal_skips_delete ON public.student_meal_skips;
@@ -121,6 +124,31 @@ USING (
   )
 );
 
+CREATE POLICY policy_visitor_logs_insert ON public.visitor_logs FOR INSERT TO authenticated
+WITH CHECK (
+  org_id = public.user_org_id() AND (
+    public.is_admin()
+    OR public.is_security()
+    OR public.is_warden()
+  )
+);
+
+CREATE POLICY policy_visitor_logs_update ON public.visitor_logs FOR UPDATE TO authenticated
+USING (
+  org_id = public.user_org_id() AND (
+    public.is_admin()
+    OR public.is_security()
+    OR public.is_warden()
+  )
+)
+WITH CHECK (
+  org_id = public.user_org_id() AND (
+    public.is_admin()
+    OR public.is_security()
+    OR public.is_warden()
+  )
+);
+
 CREATE POLICY policy_meal_skips_select ON public.student_meal_skips FOR SELECT TO authenticated
 USING (
   org_id = public.user_org_id() AND (
@@ -205,6 +233,9 @@ CREATE TRIGGER tr_set_org_id_announcements BEFORE INSERT ON public.announcements
 
 DROP TRIGGER IF EXISTS tr_set_org_id_announcements_read ON public.announcements_read;
 CREATE TRIGGER tr_set_org_id_announcements_read BEFORE INSERT ON public.announcements_read FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+
+DROP TRIGGER IF EXISTS tr_set_org_id_visitor_logs ON public.visitor_logs;
+CREATE TRIGGER tr_set_org_id_visitor_logs BEFORE INSERT ON public.visitor_logs FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
 
 -- 6. Update Location Snapshot Trigger
 CREATE OR REPLACE FUNCTION public.trig_fn_snapshot_student_location()

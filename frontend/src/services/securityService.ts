@@ -390,7 +390,16 @@ export const securityService = {
       hostelId = hostelId || defaultRoom?.hostel_id || 1;
     }
 
-    const { data, error } = await supabase.from('visitor_logs').insert({
+    let orgId: string | null = null;
+    const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', (await supabase.auth.getUser()).data.user?.id || '').maybeSingle();
+    orgId = profile?.org_id || null;
+
+    if (!orgId) {
+      const { data: org } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
+      orgId = org?.id || '00000000-0000-0000-0000-000000000001';
+    }
+
+    const insertPayload: any = {
       student_id: student.id,
       hostel_id: hostelId,
       room_id: roomId,
@@ -398,7 +407,12 @@ export const securityService = {
       mobile_number: payload.mobile_number,
       purpose: payload.purpose || 'Visit',
       check_in_time: new Date().toISOString()
-    }).select().single();
+    };
+    if (orgId) {
+      insertPayload.org_id = orgId;
+    }
+
+    const { data, error } = await supabase.from('visitor_logs').insert(insertPayload).select().single();
 
     if (error) throw error;
     return data;

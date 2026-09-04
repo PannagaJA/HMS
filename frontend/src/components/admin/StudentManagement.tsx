@@ -17,6 +17,7 @@ import {
 interface ParsedStudentRow {
   student_name: string;
   enrollment_no: string;
+  email?: string;
   gender: 'M' | 'F';
   phone?: string;
   father_name?: string;
@@ -48,6 +49,7 @@ export const StudentManagement: React.FC = () => {
   const [isSubmittingSingle, setIsSubmittingSingle] = useState(false);
   const [addName, setAddName] = useState('');
   const [addUsn, setAddUsn] = useState('');
+  const [addEmail, setAddEmail] = useState('');
   const [addGender, setAddGender] = useState<'M' | 'F'>('M');
   const [addPhone, setAddPhone] = useState('');
   const [addFatherName, setAddFatherName] = useState('');
@@ -180,6 +182,7 @@ export const StudentManagement: React.FC = () => {
   const handleOpenAddStudent = () => {
     setAddName('');
     setAddUsn('');
+    setAddEmail('');
     setAddGender('M');
     setAddPhone('');
     setAddFatherName('');
@@ -205,6 +208,7 @@ export const StudentManagement: React.FC = () => {
       await apiClient.post('/hms/students/create/', {
         student_name: addName.trim(),
         enrollment_no: addUsn.trim().toUpperCase(),
+        email: addEmail.trim() || undefined,
         gender: addGender,
         phone: addPhone.trim(),
         father_name: addFatherName.trim(),
@@ -260,6 +264,7 @@ export const StudentManagement: React.FC = () => {
 
       const studentName = rowObj.student_name || rowObj.name || values[0] || '';
       const enrollmentNo = rowObj.enrollment_no || rowObj.usn || rowObj.roll_no || values[1] || '';
+      const email = rowObj.email || rowObj.email_id || rowObj.mail || '';
       const rawGender = (rowObj.gender || values[2] || 'M').toUpperCase();
       const gender: 'M' | 'F' = rawGender.startsWith('F') ? 'F' : 'M';
       const phone = rowObj.phone || rowObj.mobile || values[3] || '';
@@ -273,6 +278,7 @@ export const StudentManagement: React.FC = () => {
       rows.push({
         student_name: studentName,
         enrollment_no: enrollmentNo.toUpperCase(),
+        email: email || undefined,
         gender,
         phone,
         father_name: fatherName,
@@ -634,7 +640,7 @@ export const StudentManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSingleStudentSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Student Full Name <span className="text-rose-500">*</span>
@@ -660,6 +666,19 @@ export const StudentManagement: React.FC = () => {
                     onChange={(e) => setAddUsn(e.target.value)}
                     placeholder="e.g. 1AM22CS045"
                     className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Student Email (for Portal Login)
+                  </label>
+                  <input
+                    type="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    placeholder="e.g. student@amc.edu"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
               </div>

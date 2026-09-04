@@ -275,6 +275,7 @@ export const adminService = {
   async createStudent(payload: {
     student_name: string;
     enrollment_no: string;
+    email?: string;
     gender: 'M' | 'F';
     phone?: string;
     father_name?: string;
@@ -283,6 +284,25 @@ export const adminService = {
     room_id?: number | string;
     bed_number?: number | string;
   }) {
+    let profileId: string | null = null;
+    const studentEmail = payload.email || `${payload.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
+
+    try {
+      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
+        body: {
+          name: payload.student_name,
+          email: studentEmail,
+          phone: payload.phone || '',
+          role: 'STUDENT'
+        }
+      });
+      if (!edgeError && edgeData?.userId) {
+        profileId = edgeData.userId;
+      }
+    } catch (e) {
+      console.warn('Student enroll edge function skipped:', e);
+    }
+
     const { data, error } = await supabase
       .from('students')
       .insert({
@@ -293,6 +313,7 @@ export const adminService = {
         father_name: payload.father_name || '',
         guardian_phone: payload.guardian_phone || '',
         emergency_contact: payload.emergency_contact || '',
+        profile_id: profileId,
         no_dues: true,
         status: 'ACTIVE'
       })

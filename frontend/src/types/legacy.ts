@@ -36,6 +36,7 @@ export interface HostelStudent {
   id: number;
   student_name: string;
   enrollment_no: string;
+  email?: string;
   father_name?: string;
   gender: 'M' | 'F';
   phone?: string;
