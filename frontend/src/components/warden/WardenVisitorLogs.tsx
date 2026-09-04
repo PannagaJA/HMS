@@ -186,7 +186,7 @@ export const WardenVisitorLogs: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="w-full sm:w-auto px-4 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Register New Visitor
         </button>
@@ -229,7 +229,7 @@ export const WardenVisitorLogs: React.FC = () => {
             placeholder="Search by visitor name, resident student, mobile number, or purpose..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
           />
         </div>
       </div>
@@ -409,7 +409,7 @@ export const WardenVisitorLogs: React.FC = () => {
                   placeholder="e.g. Ramesh Kumar"
                   value={formData.visitor_name}
                   onChange={(e) => setFormData({ ...formData, visitor_name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -423,7 +423,7 @@ export const WardenVisitorLogs: React.FC = () => {
                   placeholder="9876543210"
                   value={formData.mobile_number}
                   onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -435,7 +435,7 @@ export const WardenVisitorLogs: React.FC = () => {
                   placeholder="e.g. Parents visiting, delivering documents"
                   value={formData.purpose}
                   onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -449,7 +449,7 @@ export const WardenVisitorLogs: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-xs cursor-pointer"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-xs cursor-pointer"
                 >
                   Check In Visitor
                 </button>

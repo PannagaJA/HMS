@@ -6,7 +6,7 @@ interface StatCardProps {
   value: string | number;
   subtitle?: string;
   change?: string;
-  variant: 'lime' | 'teal' | 'pink' | 'lavender';
+  variant: 'primary' | 'secondary' | 'accent' | 'muted';
   icon: React.ReactNode;
 }
 
@@ -18,17 +18,17 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
 }) => {
   const variantStyles = {
-    lime: 'bg-[#E8F8CE] text-emerald-950',
-    teal: 'bg-[#D1F2EA] text-teal-950',
-    pink: 'bg-[#FCE2E1] text-rose-950',
-    lavender: 'bg-[#E0E7FF] text-indigo-950',
+    primary: 'bg-blue-50 text-[#0B1437]',
+    secondary: 'bg-indigo-50 text-indigo-950',
+    accent: 'bg-sky-50 text-sky-950',
+    muted: 'bg-slate-100 text-slate-800',
   };
 
   const barStyles = {
-    lime: 'bg-emerald-800',
-    teal: 'bg-teal-800',
-    pink: 'bg-rose-800',
-    lavender: 'bg-indigo-800',
+    primary: 'bg-blue-600',
+    secondary: 'bg-indigo-600',
+    accent: 'bg-sky-600',
+    muted: 'bg-slate-400',
   };
 
   return (

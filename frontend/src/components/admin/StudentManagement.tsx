@@ -334,7 +334,7 @@ export const StudentManagement: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={handleOpenAddStudent}
-            className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <UserPlus className="w-4 h-4" />
             <span>Add Student</span>
@@ -346,7 +346,7 @@ export const StudentManagement: React.FC = () => {
               setParsedRows([]);
               setShowBulkModal(true);
             }}
-            className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#0D3833] text-xs font-semibold hover:bg-emerald-100 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#0B1437] text-xs font-semibold hover:bg-emerald-100 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <UploadCloud className="w-4 h-4 text-emerald-700" />
             <span>Bulk Import CSV</span>
@@ -370,7 +370,7 @@ export const StudentManagement: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by student name or USN..."
-            className="w-full bg-slate-50 pl-10 pr-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+            className="w-full bg-slate-50 pl-10 pr-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
           />
         </div>
 
@@ -381,7 +381,7 @@ export const StudentManagement: React.FC = () => {
               onClick={() => setFilterAllotted(tab)}
               className={`flex-1 sm:flex-initial text-center px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 filterAllotted === tab
-                  ? 'bg-[#0D3833] text-white shadow-sm'
+                  ? 'bg-[#0B1437] text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -404,7 +404,7 @@ export const StudentManagement: React.FC = () => {
                 {/* Header: Student Name, Avatar, Status Badge */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-sm shrink-0 border border-teal-200">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-teal-950 font-bold flex items-center justify-center text-sm shrink-0 border border-teal-200">
                       {s.student_name?.[0] || 'S'}
                     </div>
                     <div>
@@ -469,7 +469,7 @@ export const StudentManagement: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => handleOpenAllocate(s)}
-                      className="w-full text-xs font-semibold text-teal-900 bg-[#D1F2EA] hover:bg-teal-200 py-2.5 rounded-full transition-colors cursor-pointer shadow-2xs"
+                      className="w-full text-xs font-semibold text-teal-900 bg-blue-100 hover:bg-teal-200 py-2.5 rounded-full transition-colors cursor-pointer shadow-2xs"
                     >
                       Allocate Room
                     </button>
@@ -483,7 +483,7 @@ export const StudentManagement: React.FC = () => {
         {/* Desktop View: Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-[#D1F2EA]/40 text-xs font-bold uppercase text-slate-700 tracking-wider border-b border-slate-200">
+            <thead className="bg-blue-100/40 text-xs font-bold uppercase text-slate-700 tracking-wider border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4">Student Details</th>
                 <th className="px-6 py-4">USN / Enrollment</th>
@@ -550,7 +550,7 @@ export const StudentManagement: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => handleOpenAllocate(s)}
-                          className="text-xs font-semibold text-teal-900 bg-[#D1F2EA] px-4 py-1.5 rounded-full hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer"
+                          className="text-xs font-semibold text-teal-900 bg-blue-100 px-4 py-1.5 rounded-full hover:bg-teal-200 transition-colors shadow-2xs cursor-pointer"
                         >
                           Allocate Room
                         </button>
@@ -592,7 +592,7 @@ export const StudentManagement: React.FC = () => {
                     value={addName}
                     onChange={(e) => setAddName(e.target.value)}
                     placeholder="e.g. Ramesh Kumar"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
 
@@ -606,7 +606,7 @@ export const StudentManagement: React.FC = () => {
                     value={addUsn}
                     onChange={(e) => setAddUsn(e.target.value)}
                     placeholder="e.g. 1AM22CS045"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 font-mono"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
                   />
                 </div>
               </div>
@@ -632,7 +632,7 @@ export const StudentManagement: React.FC = () => {
                     value={addPhone}
                     onChange={(e) => setAddPhone(e.target.value)}
                     placeholder="e.g. 9876543210"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
               </div>
@@ -645,7 +645,7 @@ export const StudentManagement: React.FC = () => {
                     value={addFatherName}
                     onChange={(e) => setAddFatherName(e.target.value)}
                     placeholder="e.g. Suresh Kumar"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
 
@@ -656,7 +656,7 @@ export const StudentManagement: React.FC = () => {
                     value={addGuardianPhone}
                     onChange={(e) => setAddGuardianPhone(e.target.value)}
                     placeholder="e.g. 9811223344"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
               </div>
@@ -668,7 +668,7 @@ export const StudentManagement: React.FC = () => {
                   value={addEmergencyContact}
                   onChange={(e) => setAddEmergencyContact(e.target.value)}
                   placeholder="e.g. 9899001122 (Local Guardian / Relative)"
-                  className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -678,7 +678,7 @@ export const StudentManagement: React.FC = () => {
                     type="checkbox"
                     checked={addAllotDirectly}
                     onChange={(e) => setAddAllotDirectly(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#0D3833] focus:ring-[#0D3833] border-slate-300"
+                    className="w-4 h-4 rounded text-[#0B1437] focus:ring-[#0B1437] border-slate-300"
                   />
                   <span className="text-xs font-semibold text-slate-800">
                     Immediately allocate a hostel room & bed slot upon admission
@@ -748,7 +748,7 @@ export const StudentManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmittingSingle}
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   {isSubmittingSingle ? 'Registering...' : 'Register Student'}
                 </button>
@@ -870,7 +870,7 @@ export const StudentManagement: React.FC = () => {
                 type="button"
                 onClick={handleCommitBulkImport}
                 disabled={isImporting || parsedRows.filter(r => r.isValid).length === 0}
-                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>
@@ -948,7 +948,7 @@ export const StudentManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Confirm Allotment
                 </button>

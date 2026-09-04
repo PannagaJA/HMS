@@ -233,7 +233,7 @@ export const Announcements: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Bell className="w-6 h-6 text-[#0D3833]" />
+            <Bell className="w-6 h-6 text-[#0B1437]" />
             Announcements & Circulars
           </h1>
           <p className="text-sm text-slate-500 mt-1">Stay updated with official campus notifications</p>
@@ -247,14 +247,14 @@ export const Announcements: React.FC = () => {
               placeholder="Search announcements..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833] transition-all"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] transition-all"
             />
           </div>
           
           {canCreate && (
             <button 
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#0D3833] hover:bg-[#064E3B] text-white rounded-xl text-sm font-bold shadow-sm transition-colors shrink-0"
+              className="flex items-center gap-2 px-4 py-2 bg-[#0B1437] hover:bg-[#111f54] text-white rounded-xl text-sm font-bold shadow-sm transition-colors shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Announcement</span>
@@ -267,13 +267,13 @@ export const Announcements: React.FC = () => {
         <div className="flex items-center gap-2 border-b border-slate-200 mb-6">
           <button
             onClick={() => { setActiveTab('received'); setPage(1); }}
-            className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'received' ? 'border-[#0D3833] text-[#0D3833]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'received' ? 'border-[#0B1437] text-[#0B1437]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Received
           </button>
           <button
             onClick={() => { setActiveTab('sent'); setPage(1); }}
-            className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'sent' ? 'border-[#0D3833] text-[#0D3833]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'sent' ? 'border-[#0B1437] text-[#0B1437]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Sent
           </button>
@@ -283,7 +283,7 @@ export const Announcements: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center h-64 bg-white rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex flex-col items-center gap-3 text-slate-400">
-            <Loader2 className="w-8 h-8 animate-spin text-[#0D3833]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[#0B1437]" />
             <span className="text-sm font-medium">Loading announcements...</span>
           </div>
         </div>
@@ -313,7 +313,7 @@ export const Announcements: React.FC = () => {
                   setSelectedAnnouncement(announcement);
                   if (activeTab === 'received' && !announcement.is_read) handleMarkRead(announcement.id);
                 }}
-                className={`cursor-pointer bg-white rounded-2xl border ${announcement.is_read || activeTab === 'sent' ? 'border-slate-200 shadow-sm' : 'border-[#0D3833]/30 shadow-md ring-1 ring-[#0D3833]/5'} p-5 flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5`}
+                className={`cursor-pointer bg-white rounded-2xl border ${announcement.is_read || activeTab === 'sent' ? 'border-slate-200 shadow-sm' : 'border-[#0B1437]/30 shadow-md ring-1 ring-[#0B1437]/5'} p-5 flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5`}
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex flex-wrap gap-2">
@@ -327,7 +327,7 @@ export const Announcements: React.FC = () => {
                     )}
                   </div>
                   {activeTab === 'received' && !announcement.is_read && (
-                    <span className="flex w-2.5 h-2.5 rounded-full bg-[#0D3833] shrink-0" />
+                    <span className="flex w-2.5 h-2.5 rounded-full bg-[#0B1437] shrink-0" />
                   )}
                 </div>
 
@@ -353,7 +353,7 @@ export const Announcements: React.FC = () => {
                       <Trash2 className="w-4 h-4" /> Delete
                     </button>
                   ) : (
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-[#0D3833] transition-colors">
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-[#0B1437] transition-colors">
                       <Eye className="w-3.5 h-3.5" /> View Details
                     </span>
                   )}
@@ -471,7 +471,7 @@ export const Announcements: React.FC = () => {
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-[#0D3833]" />
+                <Plus className="w-5 h-5 text-[#0B1437]" />
                 New Announcement
               </h2>
               <button 
@@ -493,7 +493,7 @@ export const Announcements: React.FC = () => {
                   value={newAnnouncement.title}
                   onChange={e => setNewAnnouncement(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="Enter a descriptive title..."
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833] focus:bg-white transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all"
                 />
               </div>
 
@@ -507,7 +507,7 @@ export const Announcements: React.FC = () => {
                   value={newAnnouncement.message}
                   onChange={e => setNewAnnouncement(prev => ({ ...prev, message: e.target.value }))}
                   placeholder="Type the full announcement details here..."
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833] focus:bg-white transition-all resize-none"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all resize-none"
                 />
               </div>
 
@@ -517,7 +517,7 @@ export const Announcements: React.FC = () => {
                   <select
                     value={newAnnouncement.priority}
                     onChange={e => setNewAnnouncement(prev => ({ ...prev, priority: e.target.value as any }))}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833] focus:bg-white transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all"
                   >
                     <option value="low">🟢 Low Priority</option>
                     <option value="medium">🟡 Medium Priority</option>
@@ -530,7 +530,7 @@ export const Announcements: React.FC = () => {
                   <select
                     value={newAnnouncement.target_hostel_id}
                     onChange={e => setNewAnnouncement(prev => ({ ...prev, target_hostel_id: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833] focus:bg-white transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all"
                   >
                     <option value="">🏫 All Hostels</option>
                     {hostels.map(h => (
@@ -552,7 +552,7 @@ export const Announcements: React.FC = () => {
                           type="checkbox"
                           checked={newAnnouncement.target_roles.includes(role)}
                           onChange={() => handleRoleToggle(role)}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-[#0D3833] focus:ring-[#0D3833]"
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-[#0B1437] focus:ring-[#0B1437]"
                         />
                         {role.charAt(0) + role.slice(1).toLowerCase()}
                       </label>
@@ -574,7 +574,7 @@ export const Announcements: React.FC = () => {
                   min={new Date().toISOString().split('T')[0]}
                   value={newAnnouncement.expires_at}
                   onChange={e => setNewAnnouncement(prev => ({ ...prev, expires_at: e.target.value }))}
-                  className="w-full sm:w-1/2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833] focus:bg-white transition-all"
+                  className="w-full sm:w-1/2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all"
                 />
               </div>
 
@@ -591,7 +591,7 @@ export const Announcements: React.FC = () => {
               <button
                 onClick={handleCreateAnnouncement}
                 disabled={isSubmitting || !newAnnouncement.title || !newAnnouncement.message || newAnnouncement.target_roles.length === 0}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#0D3833] hover:bg-[#064E3B] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-sm"
+                className="flex items-center gap-2 px-6 py-2.5 bg-[#0B1437] hover:bg-[#111f54] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-sm"
               >
                 {isSubmitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>

@@ -144,7 +144,7 @@ export const VisitorLogsManagement: React.FC = () => {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+            className="px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
           >
             <span>+ Check In Visitor</span>
           </button>
@@ -185,7 +185,7 @@ export const VisitorLogsManagement: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             disabled={!selectedHostelId}
             placeholder="Search visitor, student, or purpose..."
-            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 disabled:opacity-50"
+            className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 disabled:opacity-50"
           />
         </div>
 
@@ -198,7 +198,7 @@ export const VisitorLogsManagement: React.FC = () => {
               disabled={!selectedHostelId}
               className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                 filterStatus === tab && selectedHostelId
-                  ? 'bg-[#0D3833] text-white shadow-sm'
+                  ? 'bg-[#0B1437] text-white shadow-sm'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -445,7 +445,7 @@ export const VisitorLogsManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Register Check-In
                 </button>

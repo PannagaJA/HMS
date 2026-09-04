@@ -92,7 +92,7 @@ export const StudentIssues: React.FC = () => {
         </div>
         <button
           onClick={() => setShowRaiseModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Report New Issue</span>
@@ -246,7 +246,7 @@ export const StudentIssues: React.FC = () => {
                       <td className="py-4 pr-6 text-right">
                         <button
                           onClick={() => setSelectedUpdatesIssue(issue)}
-                          className="px-3.5 py-1.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center gap-1.5 ml-auto cursor-pointer shadow-2xs whitespace-nowrap"
+                          className="px-3.5 py-1.5 rounded-full bg-blue-100 text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center gap-1.5 ml-auto cursor-pointer shadow-2xs whitespace-nowrap"
                         >
                           <History className="w-3.5 h-3.5 text-teal-900" />
                           <span>View Updates ({issue.updates?.length || 0})</span>
@@ -284,7 +284,7 @@ export const StudentIssues: React.FC = () => {
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setSelectedImageModal(null)}
-                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B]"
+                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54]"
               >
                 Close Preview
               </button>
@@ -367,7 +367,7 @@ export const StudentIssues: React.FC = () => {
             <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
               <button
                 onClick={() => setSelectedUpdatesIssue(null)}
-                className="px-5 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] cursor-pointer shadow-xs"
+                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] cursor-pointer shadow-xs"
               >
                 Close
               </button>
@@ -431,7 +431,7 @@ export const StudentIssues: React.FC = () => {
                   value={issueDesc}
                   onChange={(e) => setIssueDesc(e.target.value)}
                   placeholder="Describe the exact problem and location..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -498,7 +498,7 @@ export const StudentIssues: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Issue Ticket'}
                 </button>

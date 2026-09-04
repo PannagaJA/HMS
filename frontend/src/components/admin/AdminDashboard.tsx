@@ -41,7 +41,7 @@ export const AdminDashboard: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 rounded-full border-4 border-[#0D3833] border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-4 border-[#0B1437] border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -59,32 +59,32 @@ export const AdminDashboard: React.FC = () => {
       {/* 4 Pastel Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          variant="lime"
+          variant="primary"
           title="Total Hostels"
           value={stats?.total_hostels || 0}
           change="+2 Blocks Active"
-          icon={<Building2 className="w-5 h-5 text-emerald-950" />}
+          icon={<Building2 className="w-5 h-5 text-[#0B1437]" />}
         />
         <StatCard
-          variant="teal"
+          variant="secondary"
           title="Occupancy Rate"
           value={`${stats?.occupancy_rate || 0}%`}
           change={`${stats?.total_students || stats?.occupied_beds || 0} / ${stats?.total_capacity || 0} Beds`}
-          icon={<BedDouble className="w-5 h-5 text-teal-950" />}
+          icon={<BedDouble className="w-5 h-5 text-slate-800" />}
         />
         <StatCard
-          variant="pink"
+          variant="accent"
           title="Pending Gate Passes"
           value={stats?.pending_gate_passes || 0}
           change="Action Required"
-          icon={<Clock className="w-5 h-5 text-rose-950" />}
+          icon={<Clock className="w-5 h-5 text-sky-950" />}
         />
         <StatCard
-          variant="lavender"
+          variant="muted"
           title="Active Issues"
           value={stats?.active_issues || 0}
           change="Open Maintenance"
-          icon={<AlertCircle className="w-5 h-5 text-indigo-950" />}
+          icon={<AlertCircle className="w-5 h-5 text-slate-800" />}
         />
       </div>
 
@@ -100,8 +100,8 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Visual Ring / Donut */}
             <div className="relative flex items-center justify-center my-6">
-              <div className="w-44 h-44 rounded-full border-[18px] border-[#D1F2EA] flex items-center justify-center relative">
-                <div className="w-28 h-28 rounded-full border-[10px] border-[#E8F8CE] flex flex-col items-center justify-center">
+              <div className="w-44 h-44 rounded-full border-[18px] border-blue-100 flex items-center justify-center relative">
+                <div className="w-28 h-28 rounded-full border-[10px] border-blue-50 flex flex-col items-center justify-center">
                   <span className="text-2xl font-bold text-slate-900">{stats?.occupancy_rate || 0}%</span>
                   <span className="text-[10px] text-slate-400 font-medium">Occupied</span>
                 </div>
@@ -111,14 +111,14 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#0D3833]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#0B1437]" />
                   <span className="font-medium text-slate-700">Occupied Beds</span>
                 </div>
                 <span className="font-bold text-slate-900">{stats?.total_students || stats?.occupied_beds || 0} Beds</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#D1F2EA]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-100" />
                   <span className="font-medium text-slate-700">Vacant Beds</span>
                 </div>
                 <span className="font-bold text-slate-900">{stats?.vacant_beds || 0} Beds</span>
@@ -135,7 +135,7 @@ export const AdminDashboard: React.FC = () => {
                 <h3 className="font-bold text-slate-900 text-base">Weekly Gate Movement Trends</h3>
                 <p className="text-xs text-slate-400">Total outpass check-outs recorded over the past 7 days</p>
               </div>
-              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#E8F8CE] text-emerald-900 border border-emerald-200">
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-50 text-[#0B1437] border border-blue-200">
                 +14.2% Movements
               </span>
             </div>
@@ -156,7 +156,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div
                     style={{ height: bar.height }}
-                    className="w-full max-w-[36px] bg-[#D1F2EA] rounded-2xl group-hover:bg-[#0D3833] transition-all"
+                    className="w-full max-w-[36px] bg-blue-100 rounded-2xl group-hover:bg-[#0B1437] transition-all"
                   />
                   <span className="text-[11px] font-semibold text-slate-500">{bar.day}</span>
                 </div>
@@ -194,7 +194,7 @@ export const AdminDashboard: React.FC = () => {
               <div key={p.id} className="p-4 space-y-3 hover:bg-slate-50/70 transition-colors">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#E8F8CE] text-emerald-950 font-bold flex items-center justify-center text-sm shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 text-[#0B1437] font-bold flex items-center justify-center text-sm shrink-0">
                       {p.student_name?.[0] || 'S'}
                     </div>
                     <div>
@@ -203,7 +203,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${
-                    p.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    p.status === 'approved' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                     p.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                     p.status === 'completed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                     'bg-rose-50 text-rose-700 border-rose-200'
@@ -273,7 +273,7 @@ export const AdminDashboard: React.FC = () => {
                 recentPasses.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-4 pl-6 font-semibold text-slate-800 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#E8F8CE] text-emerald-950 font-bold flex items-center justify-center text-xs">
+                      <div className="w-8 h-8 rounded-full bg-blue-50 text-[#0B1437] font-bold flex items-center justify-center text-xs">
                         {p.student_name?.[0] || 'S'}
                       </div>
                       <span>{p.student_name || 'Student'}</span>
@@ -292,7 +292,7 @@ export const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="py-4 px-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
-                        p.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        p.status === 'approved' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                         p.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                         p.status === 'completed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                         'bg-rose-50 text-rose-700 border-rose-200'
@@ -331,7 +331,7 @@ export const AdminDashboard: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-sm shadow-xs">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-slate-800 font-bold flex items-center justify-center text-sm shadow-xs">
                   {selectedReasonPass.student_name?.[0] || 'S'}
                 </div>
                 <div>
@@ -363,7 +363,7 @@ export const AdminDashboard: React.FC = () => {
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-0.5">Status</span>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                  selectedReasonPass.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  selectedReasonPass.status === 'approved' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                   selectedReasonPass.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                   selectedReasonPass.status === 'completed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                   'bg-rose-50 text-rose-700 border-rose-200'

@@ -247,7 +247,7 @@ export const GatePassScanner: React.FC = () => {
       <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-[#0D3833]" />
+            <QrCode className="w-5 h-5 text-[#0B1437]" />
             <h3 className="text-base font-bold text-slate-900">Scan Student QR Code / Enter USN</h3>
           </div>
           <span className="text-xs text-slate-400 font-medium">Supports Live Webcam & Barcode Readers</span>
@@ -261,7 +261,7 @@ export const GatePassScanner: React.FC = () => {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Scan QR token, paste UUID, or enter USN (e.g. STU2026001)..."
-              className="w-full bg-slate-50 pl-12 pr-4 py-3.5 rounded-full text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833]"
+              className="w-full bg-slate-50 pl-12 pr-4 py-3.5 rounded-full text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437]"
             />
           </div>
 
@@ -272,7 +272,7 @@ export const GatePassScanner: React.FC = () => {
               className={`flex-1 sm:flex-none px-6 py-3.5 rounded-full font-semibold text-xs transition-all flex items-center justify-center gap-2 ${
                 loading || !searchInput.trim()
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
-                  : 'bg-[#0D3833] text-white hover:bg-[#064E3B] cursor-pointer shadow-sm'
+                  : 'bg-[#0B1437] text-white hover:bg-[#111f54] cursor-pointer shadow-sm'
               }`}
             >
               <QrCode className="w-4 h-4" />
@@ -283,7 +283,7 @@ export const GatePassScanner: React.FC = () => {
               <button
                 type="button"
                 onClick={startCameraScanner}
-                className="px-5 py-3.5 rounded-full bg-[#D1F2EA] text-teal-950 font-bold text-xs hover:bg-teal-200 border border-teal-300 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+                className="px-5 py-3.5 rounded-full bg-blue-100 text-teal-950 font-bold text-xs hover:bg-teal-200 border border-teal-300 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
               >
                 <Camera className="w-4 h-4 text-teal-900" />
                 <span>Open Camera</span>
@@ -329,10 +329,10 @@ export const GatePassScanner: React.FC = () => {
 
       {/* SECTION 2: VERIFIED PASS ACTION CARD */}
       {scannedPass && (
-        <div ref={scannedPassCardRef} className="bg-white p-7 rounded-3xl border-2 border-[#D1F2EA] shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5 scroll-mt-6">
+        <div ref={scannedPassCardRef} className="bg-white p-7 rounded-3xl border-2 border-blue-100 shadow-md animate-in fade-in zoom-in-95 duration-150 space-y-5 scroll-mt-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-xl shadow-inner">
+              <div className="w-14 h-14 rounded-2xl bg-blue-100 text-teal-950 font-bold flex items-center justify-center text-xl shadow-inner">
                 {scannedPass.student_name?.[0] || 'S'}
               </div>
               <div>
@@ -363,7 +363,7 @@ export const GatePassScanner: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-[#E8F8CE]/50 border border-emerald-200 text-xs text-emerald-950">
+          <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-emerald-200 text-xs text-emerald-950">
             <strong>Approved Purpose:</strong> "{scannedPass.reason || scannedPass.purpose || 'Personal'}"
           </div>
 
@@ -443,7 +443,7 @@ export const GatePassScanner: React.FC = () => {
                     ? 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'
                     : isExitDone
                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                    : 'bg-[#0D3833] text-white hover:bg-[#064E3B] shadow-md hover:shadow-lg cursor-pointer'
+                    : 'bg-[#0B1437] text-white hover:bg-[#111f54] shadow-md hover:shadow-lg cursor-pointer'
                 }`}
               >
                 <ArrowRight className="w-4 h-4" />
@@ -491,7 +491,7 @@ export const GatePassScanner: React.FC = () => {
                 onClick={() => setActiveTab('outside')}
                 className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'outside'
-                    ? 'bg-[#0D3833] text-white shadow-xs'
+                    ? 'bg-[#0B1437] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -501,7 +501,7 @@ export const GatePassScanner: React.FC = () => {
                 onClick={() => setActiveTab('completed')}
                 className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'completed'
-                    ? 'bg-[#0D3833] text-white shadow-xs'
+                    ? 'bg-[#0B1437] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -519,7 +519,7 @@ export const GatePassScanner: React.FC = () => {
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Search by student name or USN..."
-            className="w-full bg-slate-50 pl-10 pr-3.5 py-2 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+            className="w-full bg-slate-50 pl-10 pr-3.5 py-2 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
           />
         </div>
 
@@ -575,7 +575,7 @@ export const GatePassScanner: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Quick Action</span>
                   <button
                     onClick={() => handleSelectFromTable(pass)}
-                    className="w-full py-2.5 rounded-xl bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
+                    className="w-full py-2.5 rounded-xl bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
                   >
                     {!pass.actual_entry_time ? 'Mark Check-In' : 'View Pass'}
                   </button>
@@ -635,7 +635,7 @@ export const GatePassScanner: React.FC = () => {
                     <td className="py-3.5 text-right pr-2">
                       <button
                         onClick={() => handleSelectFromTable(pass)}
-                        className="px-3.5 py-1.5 rounded-full bg-[#0D3833] text-white text-[11px] font-semibold hover:bg-[#064E3B] transition-colors cursor-pointer shadow-2xs"
+                        className="px-3.5 py-1.5 rounded-full bg-[#0B1437] text-white text-[11px] font-semibold hover:bg-[#111f54] transition-colors cursor-pointer shadow-2xs"
                       >
                         {!pass.actual_entry_time ? 'Mark Check-In' : 'View Pass'}
                       </button>
@@ -661,7 +661,7 @@ export const GatePassScanner: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-3.5 mb-5 pr-8">
-              <div className="w-12 h-12 rounded-2xl bg-[#D1F2EA] text-teal-950 font-bold flex items-center justify-center text-lg shadow-inner shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 font-bold flex items-center justify-center text-lg shadow-inner shrink-0">
                 {viewModalPass.student_name?.[0] || 'S'}
               </div>
               <div>
@@ -669,7 +669,7 @@ export const GatePassScanner: React.FC = () => {
                 <p className="text-xs text-slate-500 font-medium">
                   {viewModalPass.enrollment_no} · {viewModalPass.hostel_name} (Room {viewModalPass.room_no || 'N/A'})
                 </p>
-                <p className="text-[11px] text-[#0D3833] font-mono mt-0.5 font-bold">
+                <p className="text-[11px] text-[#0B1437] font-mono mt-0.5 font-bold">
                   PASS: {String(viewModalPass.pass_type).replace(/_/g, ' ')}
                 </p>
               </div>
@@ -747,7 +747,7 @@ export const GatePassScanner: React.FC = () => {
                     setPendingConfirmAction('EXIT');
                     setViewModalPass(null);
                   }}
-                  className="flex-1 py-3 rounded-2xl bg-[#0D3833] hover:bg-[#064E3B] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  className="flex-1 py-3 rounded-2xl bg-[#0B1437] hover:bg-[#111f54] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
                 >
                   <ArrowRight className="w-4 h-4" />
                   <span>Mark Check Out</span>
@@ -820,7 +820,7 @@ export const GatePassScanner: React.FC = () => {
                 onClick={handleConfirmMovementExecution}
                 className={`flex-1 py-3 rounded-full text-white text-xs font-bold shadow-sm cursor-pointer transition-colors ${
                   pendingConfirmAction === 'EXIT'
-                    ? 'bg-[#0D3833] hover:bg-[#064E3B]'
+                    ? 'bg-[#0B1437] hover:bg-[#111f54]'
                     : 'bg-emerald-700 hover:bg-emerald-800'
                 }`}
               >

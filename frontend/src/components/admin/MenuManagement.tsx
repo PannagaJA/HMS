@@ -248,7 +248,7 @@ export const MenuManagement: React.FC = () => {
           <div className="shrink-0 self-start sm:self-auto">
             <button
               onClick={handleOpenAddItem}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] transition-all shadow-xs cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Food Item</span>
@@ -265,7 +265,7 @@ export const MenuManagement: React.FC = () => {
             onClick={() => setActiveTab('timetable')}
             className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'timetable'
-                ? 'bg-[#0D3833] text-white shadow-xs'
+                ? 'bg-[#0B1437] text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -275,7 +275,7 @@ export const MenuManagement: React.FC = () => {
             onClick={() => setActiveTab('catalog')}
             className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'catalog'
-                ? 'bg-[#0D3833] text-white shadow-xs'
+                ? 'bg-[#0B1437] text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -365,7 +365,7 @@ export const MenuManagement: React.FC = () => {
                     onClick={() => setActiveDay(day.id)}
                     className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                       activeDay === day.id
-                        ? 'bg-[#D1F2EA] text-teal-950 border border-teal-300 shadow-sm'
+                        ? 'bg-blue-100 text-teal-950 border border-teal-300 shadow-sm'
                         : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                     }`}
                   >
@@ -418,7 +418,7 @@ export const MenuManagement: React.FC = () => {
 
                     <button
                       onClick={() => handleOpenConfigureSlot(mealType)}
-                      className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-[#0D3833] text-slate-700 hover:text-white border border-slate-200 hover:border-transparent text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-[#0B1437] text-slate-700 hover:text-white border border-slate-200 hover:border-transparent text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
                     >
                       <Edit2 className="w-3 h-3" />
                       <span>Configure</span>
@@ -557,7 +557,7 @@ export const MenuManagement: React.FC = () => {
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
                   placeholder="e.g. Masala Dosa, Paneer Butter Masala"
-                  className="w-full bg-slate-50 px-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833]"
+                  className="w-full bg-slate-50 px-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437]"
                 />
               </div>
 
@@ -585,7 +585,7 @@ export const MenuManagement: React.FC = () => {
                   onChange={(e) => setItemDesc(e.target.value)}
                   placeholder="Ingredients or allergens notes..."
                   rows={2}
-                  className="w-full bg-slate-50 px-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20 focus:border-[#0D3833]"
+                  className="w-full bg-slate-50 px-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437]"
                 />
               </div>
 
@@ -595,7 +595,7 @@ export const MenuManagement: React.FC = () => {
                   id="isVegCheck"
                   checked={isVeg}
                   onChange={(e) => setIsVeg(e.target.checked)}
-                  className="w-4 h-4 text-[#0D3833] rounded focus:ring-0 cursor-pointer"
+                  className="w-4 h-4 text-[#0B1437] rounded focus:ring-0 cursor-pointer"
                 />
                 <label htmlFor="isVegCheck" className="text-xs font-semibold text-slate-700 cursor-pointer">
                   Vegetarian Option
@@ -612,7 +612,7 @@ export const MenuManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer"
+                  className="px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Save Item
                 </button>
@@ -657,7 +657,7 @@ export const MenuManagement: React.FC = () => {
                       value={slotStartTime}
                       onChange={(e) => setSlotStartTime(e.target.value)}
                       required
-                      className="w-full bg-white px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                      className="w-full bg-white px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                     />
                   </div>
                   <div>
@@ -667,7 +667,7 @@ export const MenuManagement: React.FC = () => {
                       value={slotEndTime}
                       onChange={(e) => setSlotEndTime(e.target.value)}
                       required
-                      className="w-full bg-white px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+                      className="w-full bg-white px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                     />
                   </div>
                 </div>
@@ -701,7 +701,7 @@ export const MenuManagement: React.FC = () => {
                       </div>
 
                       <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
-                        isSelected ? 'bg-[#0D3833] border-[#0D3833] text-white' : 'border-slate-300'
+                        isSelected ? 'bg-[#0B1437] border-[#0B1437] text-white' : 'border-slate-300'
                       }`}>
                         {isSelected && <Check className="w-3 h-3" />}
                       </div>
@@ -722,7 +722,7 @@ export const MenuManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 rounded-full bg-[#0D3833] text-white text-xs font-semibold hover:bg-[#064E3B] shadow-sm cursor-pointer disabled:opacity-60"
+                  className="px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-60"
                 >
                   {isSaving ? 'Saving...' : 'Update Timetable Slot'}
                 </button>

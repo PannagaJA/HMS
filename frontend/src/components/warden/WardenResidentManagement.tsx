@@ -115,7 +115,7 @@ export const WardenResidentManagement: React.FC = () => {
               placeholder="Search by student name, USN / ID, room number, or guardian phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0D3833]/20"
+              className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
             />
           </div>
 
@@ -199,7 +199,7 @@ export const WardenResidentManagement: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[#0D3833] text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                      <div className="w-10 h-10 rounded-full bg-[#0B1437] text-white font-bold flex items-center justify-center text-sm shadow-xs">
                         {st.student_name[0]}
                       </div>
                       <div>
@@ -253,7 +253,7 @@ export const WardenResidentManagement: React.FC = () => {
           <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#0D3833] text-white font-bold flex items-center justify-center text-lg shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-[#0B1437] text-white font-bold flex items-center justify-center text-lg shadow-xs">
                   {selectedStudent.student_name[0]}
                 </div>
                 <div>
