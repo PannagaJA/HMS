@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Login } from './components/auth/Login';
+import { CreateOrganization } from './components/auth/CreateOrganization';
 import { Announcements } from './components/shared/Announcements';
 
 // Admin Pages
@@ -40,6 +41,7 @@ function App() {
           <Routes>
             {/* Public Auth Route */}
             <Route path="/login" element={<Login />} />
+            <Route path="/create-organization" element={<CreateOrganization />} />
 
             {/* Root Redirect to Login */}
             <Route path="/" element={<Navigate to="/login" replace />} />
