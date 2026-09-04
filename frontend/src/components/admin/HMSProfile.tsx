@@ -94,7 +94,7 @@ export const HMSProfile: React.FC = () => {
     : (user?.username || name);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Account & Profile Settings</h1>
         <p className="text-sm text-slate-500 mt-0.5">Manage personal credentials, institutional contact details, and security keys</p>

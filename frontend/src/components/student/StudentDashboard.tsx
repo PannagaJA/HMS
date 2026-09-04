@@ -48,7 +48,7 @@ export const StudentDashboard: React.FC = () => {
   const openIssuesCount = issues.filter((i) => i.status !== 'completed' && i.status !== 'resolved').length;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#0B1437] to-[#082925] p-6 sm:p-8 rounded-3xl text-white shadow-lg">
         <div>
