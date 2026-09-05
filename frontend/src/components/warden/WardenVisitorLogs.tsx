@@ -3,6 +3,8 @@ import {
   Search,
   Plus,
   Building2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { apiClient } from '../../api/apiClient';
@@ -19,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { formatFloorRoom } from '../../utils/formatters';
 
 export const WardenVisitorLogs: React.FC = () => {
   const { user } = useAuth();
@@ -29,6 +32,8 @@ export const WardenVisitorLogs: React.FC = () => {
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [formData, setFormData] = useState({
     student: '',
     visitor_name: '',
@@ -40,6 +45,17 @@ export const WardenVisitorLogs: React.FC = () => {
     fetchVisitorLogs();
     fetchStudents();
     fetchHostels();
+
+    const channel = supabase
+      .channel('warden_visitor_logs_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_logs' }, () => {
+        fetchVisitorLogs();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const fetchHostels = async () => {
@@ -51,17 +67,7 @@ export const WardenVisitorLogs: React.FC = () => {
         hostList = await adminService.getHostels();
       }
       setHostels(hostList);
-
-      if (hostList.length > 0) {
-        setSelectedHostelId((prev) => {
-          if (prev && (prev === 'ALL' || hostList.some((h) => String(h.id) === prev))) {
-            return prev;
-          }
-          return String(hostList[0].id);
-        });
-      } else {
-        setSelectedHostelId('ALL');
-      }
+      setSelectedHostelId('');
     } catch (err) {
       console.error('Failed to load hostels', err);
     }
@@ -176,6 +182,12 @@ export const WardenVisitorLogs: React.FC = () => {
     return matchesHostel && matchesSearch;
   });
 
+  const totalItems = filteredLogs.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedLogs = filteredLogs.slice(startIndex, startIndex + pageSize);
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -200,9 +212,15 @@ export const WardenVisitorLogs: React.FC = () => {
             <span>Select Hostel:</span>
           </span>
           <div className="flex-1 min-w-[200px]">
-            <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
+            <Select
+              value={selectedHostelId}
+              onValueChange={(val) => {
+                setSelectedHostelId(val);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800">
-                <SelectValue placeholder="Choose hostel block" />
+                <SelectValue placeholder="-- Select Hostel Block --" />
               </SelectTrigger>
               <SelectContent>
                 {user?.role === 'ADMIN' && (
@@ -213,7 +231,7 @@ export const WardenVisitorLogs: React.FC = () => {
                 )}
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
-                    {h.name}
+                    {h.name} ({h.gender === 'M' ? 'Boys' : h.gender === 'F' ? 'Girls' : 'Co-ed'})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -228,7 +246,10 @@ export const WardenVisitorLogs: React.FC = () => {
             type="text"
             placeholder="Search by visitor name, resident student, mobile number, or purpose..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
           />
         </div>
@@ -236,12 +257,12 @@ export const WardenVisitorLogs: React.FC = () => {
 
       {/* Mobile View: Cards Grid (< md) */}
       <div className="block md:hidden space-y-3">
-        {filteredLogs.length === 0 ? (
+        {paginatedLogs.length === 0 ? (
           <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center text-slate-400 text-xs">
             No visitor logs recorded yet.
           </div>
         ) : (
-          filteredLogs.map((log: any) => {
+          paginatedLogs.map((log: any) => {
             const checkInTime = log.check_in_time || log.entry_time || '';
             const checkOutTime = log.check_out_time || log.exit_time || null;
             const isInside = !checkOutTime;
@@ -268,7 +289,14 @@ export const WardenVisitorLogs: React.FC = () => {
                 <div className="text-xs space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                   <div className="flex items-center justify-between text-slate-600">
                     <span className="text-slate-400 font-medium">Resident:</span>
-                    <span className="font-bold text-slate-800">{log.student_name}</span>
+                    <div className="text-right">
+                      <span className="font-bold text-slate-800 block">{log.student_name}</span>
+                      {(log.room_no || log.student_room) && (
+                        <span className="text-[10px] text-slate-400 block font-normal">
+                          {formatFloorRoom(log.floor, log.room_no || log.student_room)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between text-slate-600">
                     <span className="text-slate-400 font-medium">Purpose:</span>
@@ -315,14 +343,14 @@ export const WardenVisitorLogs: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredLogs.length === 0 ? (
+              {paginatedLogs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-10 text-center text-slate-400">
                     No visitor logs recorded yet.
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => {
+                paginatedLogs.map((log) => {
                   const checkInTime = log.check_in_time || log.entry_time || '';
                   const checkOutTime = log.check_out_time || log.exit_time || null;
                   const isInside = !checkOutTime;
@@ -334,7 +362,12 @@ export const WardenVisitorLogs: React.FC = () => {
                         <div className="text-[10px] text-slate-400">{log.mobile_number || log.visitor_phone}</div>
                       </td>
                       <td className="px-5 py-3.5 font-semibold text-slate-800">
-                        {log.student_name}
+                        <div>{log.student_name}</div>
+                        {(log.room_no || log.student_room) && (
+                          <div className="text-[10px] text-slate-400 font-normal">
+                            {formatFloorRoom(log.floor, log.room_no || log.student_room)}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-slate-600 italic">
                         "{log.purpose}"
@@ -377,6 +410,81 @@ export const WardenVisitorLogs: React.FC = () => {
         </div>
       </div>
 
+      {/* Pagination Controls */}
+      {filteredLogs.length > 0 && (
+        <div className="bg-white px-6 py-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-medium">
+            <span>
+              Showing <strong className="text-slate-800 font-bold">{startIndex + 1}</strong> to{' '}
+              <strong className="text-slate-800 font-bold">{endIndex}</strong> of{' '}
+              <strong className="text-slate-800 font-bold">{totalItems}</strong> visitor logs
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0B1437] cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((pageNum, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <React.Fragment key={pageNum}>
+                        {prev && pageNum - prev > 1 && (
+                          <span className="px-1 text-slate-400 font-bold">...</span>
+                        )}
+                        <button
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            currentPage === pageNum
+                              ? 'bg-[#0B1437] text-white shadow-2xs'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                title="Next Page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add Visitor Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -394,7 +502,7 @@ export const WardenVisitorLogs: React.FC = () => {
                   <SelectContent>
                     {students.map((st) => (
                       <SelectItem key={st.id} value={String(st.id)}>
-                        {st.student_name} ({st.enrollment_no}) - Room {st.room_detail?.no || st.room_no || 'N/A'}
+                        {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor ?? (st.room_detail as any)?.floor, st.room_detail?.no || st.room_no)}
                       </SelectItem>
                     ))}
                   </SelectContent>

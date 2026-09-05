@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import type { HostelStudent, GatePassRequest, IssueTicket } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { formatTime12 } from '../../lib/utils';
+import { formatFloorRoom } from '../../utils/formatters';
 
 export const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -71,7 +72,7 @@ export const StudentDashboard: React.FC = () => {
             Hi, {displayName}!
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100/70 mt-1">
-            {student?.hostel_name ? `${student.hostel_name} · Room ${student.room_detail?.no || student.room_no || 'N/A'} (Bed #${student.bed_number || 'N/A'})` : (student?.room_allotted ? 'Room Allotted' : 'No Room Allotment Active')}
+            {student?.hostel_name ? `${student.hostel_name} · ${formatFloorRoom(student.floor ?? student.room_detail?.floor, student.room_detail?.no || student.room_no)} (Bed #${student.bed_number || 'N/A'})` : (student?.room_allotted ? 'Room Allotted' : 'No Room Allotment Active')}
           </p>
         </div>
 
@@ -111,8 +112,8 @@ export const StudentDashboard: React.FC = () => {
             </div>
             {student?.room_allotted && (student.room_detail?.no || student.room_no) ? (
               <>
-                <div className="text-3xl font-bold mb-1">
-                  Room {student.room_detail?.no || student.room_no}
+                <div className="text-2xl sm:text-3xl font-bold mb-1">
+                  {formatFloorRoom(student.floor ?? student.room_detail?.floor, student.room_detail?.no || student.room_no)}
                 </div>
                 <div className="text-xs opacity-80 mb-4">
                   {student.hostel_name || 'Hostel'} · Bed #{student.bed_number || 'N/A'}
@@ -268,7 +269,7 @@ export const StudentDashboard: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-5">
           <div>
             <h3 className="text-base font-bold text-slate-900">Roommates & Shared Quarters</h3>
-            <p className="text-xs text-slate-400">{student?.room_detail?.no || student?.room_no ? `Co-residents allotted in Room ${student.room_detail?.no || student.room_no}` : 'No room allotted yet'}</p>
+            <p className="text-xs text-slate-400">{student?.room_detail?.no || student?.room_no ? `Co-residents allotted in ${formatFloorRoom(student.floor ?? student.room_detail?.floor, student.room_detail?.no || student.room_no)}` : 'No room allotted yet'}</p>
           </div>
           <span className="w-fit px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
             {profileData?.roommates?.length || 0} Roommates

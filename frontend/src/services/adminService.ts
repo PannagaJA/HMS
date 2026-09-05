@@ -268,6 +268,7 @@ export const adminService = {
         room_no: room?.no || s.room_no || s.room_number || '',
         room_number: room?.no || s.room_number || s.room_no || '',
         bed_number: bed?.bed_number || s.bed_number || null,
+        floor: room?.floor !== undefined ? room.floor : (s.floor ?? s.room_detail?.floor ?? null),
         hostel: hostel ? hostel.id : s.hostel || null,
         room_detail: room || s.room_detail || null
       };

@@ -99,23 +99,23 @@ export const Announcements: React.FC = () => {
         console.log('Realtime event received in Announcements:', payload.eventType, payload);
         
         if (payload.eventType === 'INSERT') {
-          const newAnnouncement = payload.new as Announcement;
+          const newA = payload.new as Announcement;
+          const userRole = (user.role || '').toUpperCase();
+          const targetRoles = (newA.target_roles || []).map((r: string) => r.toUpperCase());
+          const isNotExpired = !newA.expires_at || new Date(newA.expires_at).getTime() > Date.now();
           
-          if (activeTab === 'received' && newAnnouncement.target_roles?.includes(user.role)) {
-            // Check if it's not expired
-            if (!newAnnouncement.expires_at || new Date(newAnnouncement.expires_at) > new Date()) {
-              console.log('Prepending new announcement to received feed.');
+          if (activeTab === 'received' && (userRole === 'ADMIN' || targetRoles.includes(userRole))) {
+            if (isNotExpired) {
               setAnnouncements(prev => {
-                if (prev.some(a => a.id === newAnnouncement.id)) return prev;
-                return [newAnnouncement, ...prev].slice(0, limit);
+                const list = prev.filter(a => a.id !== newA.id);
+                return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, limit);
               });
               setTotalCount(prev => prev + 1);
             }
-          } else if (activeTab === 'sent' && newAnnouncement.created_by_role === user.role) {
-            console.log('Prepending new announcement to sent feed.');
+          } else if (activeTab === 'sent' && (userRole === 'ADMIN' || (newA.created_by_role || '').toUpperCase() === userRole)) {
             setAnnouncements(prev => {
-              if (prev.some(a => a.id === newAnnouncement.id)) return prev;
-              return [newAnnouncement, ...prev].slice(0, limit);
+              const list = prev.filter(a => a.id !== newA.id);
+              return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, limit);
             });
             setTotalCount(prev => prev + 1);
           }
@@ -145,8 +145,8 @@ export const Announcements: React.FC = () => {
     window.dispatchEvent(new Event('announcementRead'));
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     const isConfirmed = await confirm({
       title: 'Delete Announcement',
       message: 'Are you sure you want to delete this announcement? This action cannot be undone.',
@@ -158,8 +158,13 @@ export const Announcements: React.FC = () => {
       try {
         await announcementService.deleteAnnouncement(id);
         showSuccess('Announcement deleted successfully.');
-        // fetchAnnouncements will not be explicitly called; websocket DELETE event handles UI sync.
+        setAnnouncements(prev => prev.filter(a => a.id !== id));
+        setTotalCount(prev => Math.max(0, prev - 1));
+        if (selectedAnnouncement?.id === id) {
+          setSelectedAnnouncement(null);
+        }
       } catch (err) {
+        console.error('Failed to delete announcement:', err);
         showError('Failed to delete announcement.');
       }
     }
@@ -183,7 +188,7 @@ export const Announcements: React.FC = () => {
       };
 
       if (newAnnouncement.expires_at) {
-        payload.expires_at = new Date(newAnnouncement.expires_at).toISOString();
+        payload.expires_at = new Date(`${newAnnouncement.expires_at}T23:59:59`).toISOString();
       }
 
       await announcementService.createAnnouncement(payload);
@@ -221,10 +226,22 @@ export const Announcements: React.FC = () => {
     }
   };
 
-  const filteredAnnouncements = announcements.filter(a => 
-    a.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) || 
-    a.message.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-  );
+  const filteredAnnouncements = announcements
+    .filter(a => {
+      // In received tab, verify not expired
+      if (activeTab === 'received' && a.expires_at) {
+        if (new Date(a.expires_at).getTime() <= Date.now()) {
+          return false;
+        }
+      }
+      const query = debouncedSearchQuery.toLowerCase().trim();
+      if (!query) return true;
+      return (
+        (a.title || '').toLowerCase().includes(query) || 
+        (a.message || '').toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const totalPages = Math.ceil(totalCount / limit) || 1;
 
@@ -336,9 +353,17 @@ export const Announcements: React.FC = () => {
                 </p>
 
                 <div className="pt-4 mt-auto border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                    <Clock className="w-3.5 h-3.5" />
-                    {new Date(announcement.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Posted: {new Date(announcement.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    {announcement.expires_at && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-amber-600 font-medium">
+                        <Calendar className="w-3 h-3 text-amber-500" />
+                        <span>Expires: {new Date(announcement.expires_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                      </div>
+                    )}
                   </div>
                   
                   {activeTab === 'sent' ? (
@@ -420,9 +445,15 @@ export const Announcements: React.FC = () => {
                   <span>From: <strong className="text-slate-900">{selectedAnnouncement.created_by_name || 'Admin'}</strong></span>
                 </div>
                 <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  <span>Date: <strong className="text-slate-900">{new Date(selectedAnnouncement.created_at).toLocaleDateString()}</strong></span>
+                  <Clock className="w-4 h-4 text-slate-400" />
+                  <span>Posted: <strong className="text-slate-900">{new Date(selectedAnnouncement.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
                 </div>
+                {selectedAnnouncement.expires_at && (
+                  <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <Calendar className="w-4 h-4 text-amber-500" />
+                    <span>Expires: <strong className="text-amber-700">{new Date(selectedAnnouncement.expires_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
+                  </div>
+                )}
               </div>
 
               {selectedAnnouncement.is_circular && selectedAnnouncement.file_url && (
@@ -449,7 +480,15 @@ export const Announcements: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-end shrink-0">
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+              {(activeTab === 'sent' || selectedAnnouncement.created_by_role === user?.role || user?.role === 'ADMIN') ? (
+                <button
+                  onClick={() => handleDelete(selectedAnnouncement.id)}
+                  className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              ) : <div />}
               <button
                 onClick={() => setSelectedAnnouncement(null)}
                 className="px-5 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
@@ -542,7 +581,9 @@ export const Announcements: React.FC = () => {
                     Target Audience <span className="text-rose-500">*</span>
                   </label>
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    {['STUDENT', 'WARDEN', 'SECURITY', 'CARETAKER'].map(role => (
+                    {['STUDENT', 'WARDEN', 'SECURITY', 'CARETAKER']
+                      .filter(role => role !== user?.role)
+                      .map(role => (
                       <label key={role} className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors">
                         <input
                           type="checkbox"

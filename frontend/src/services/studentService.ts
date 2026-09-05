@@ -100,6 +100,7 @@ export const studentService = {
       hostel_name: hostel?.name || '',
       room_no: room?.no || '',
       room_number: room?.no || '',
+      floor: room?.floor !== undefined ? room?.floor : null,
       bed_number: bed?.bed_number || null,
       hostel: hostel ? hostel.id : null,
       room_detail: room || null
@@ -159,7 +160,7 @@ export const studentService = {
 
     let query = supabase
       .from('gate_passes')
-      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
+      .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no, floor)')
       .order('created_at', { ascending: false });
 
     if (resolvedStudentId) {
@@ -177,7 +178,8 @@ export const studentService = {
       student_name: gp.student?.student_name || 'Resident',
       enrollment_no: gp.student?.enrollment_no || 'N/A',
       hostel_name: gp.hostel?.name || 'Block A',
-      room_no: gp.room?.no || '101'
+      room_no: gp.room?.no || '101',
+      floor: gp.room?.floor !== undefined ? gp.room?.floor : null
     }));
   },
 

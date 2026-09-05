@@ -4,6 +4,7 @@ import { StatCard } from '../common/StatCard';
 import type { DashboardStats, GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { formatTime12 } from '../../lib/utils';
+import { formatFloorRoom } from '../../utils/formatters';
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -32,8 +33,26 @@ export const AdminDashboard: React.FC = () => {
       // Support both { statistics: {...} } and direct {...} payload
       const statData = statsRes.data.statistics || statsRes.data;
       setStats(statData);
-      const allPasses = passesRes.data || [];
-      setRecentPasses(allPasses.slice(0, 5));
+      const allPasses: GatePassRequest[] = Array.isArray(passesRes.data) ? passesRes.data : [];
+      
+      // Strictly sort gate passes by most recent first (created_at desc -> out_date/out_time desc -> id desc)
+      const sortedPasses = [...allPasses].sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (timeA && timeB && timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) {
+          return timeB - timeA;
+        }
+        if (a.out_date && b.out_date && a.out_date !== b.out_date) {
+          const dtA = new Date(`${a.out_date}T${a.out_time || '00:00:00'}`).getTime();
+          const dtB = new Date(`${b.out_date}T${b.out_time || '00:00:00'}`).getTime();
+          if (!isNaN(dtA) && !isNaN(dtB) && dtA !== dtB) {
+            return dtB - dtA;
+          }
+        }
+        return (Number(b.id) || 0) - (Number(a.id) || 0);
+      });
+
+      setRecentPasses(sortedPasses.slice(0, 5));
 
       // Calculate Weekly Trends
       const today = new Date();
@@ -252,7 +271,7 @@ export const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Hostel & Room</span>
                     <span className="font-medium text-slate-700 truncate block">
-                      {p.hostel_name ? `${p.hostel_name} ${p.room_no ? `(Rm ${p.room_no})` : ''}` : (p.room_no ? `Room ${p.room_no}` : 'N/A')}
+                      {p.hostel_name ? `${p.hostel_name} · ${formatFloorRoom(p.floor, p.room_no)}` : (p.room_no ? formatFloorRoom(p.floor, p.room_no) : 'N/A')}
                     </span>
                   </div>
                   <div>
@@ -318,7 +337,7 @@ export const AdminDashboard: React.FC = () => {
                       {p.enrollment_no}
                     </td>
                     <td className="py-4 px-4 text-xs font-medium text-slate-600">
-                      {p.hostel_name ? `${p.hostel_name} ${p.room_no ? `(Rm ${p.room_no})` : ''}` : (p.room_no ? `Room ${p.room_no}` : 'N/A')}
+                      {p.hostel_name ? `${p.hostel_name} · ${formatFloorRoom(p.floor, p.room_no)}` : (p.room_no ? formatFloorRoom(p.floor, p.room_no) : 'N/A')}
                     </td>
                     <td className="py-4 px-4 text-xs font-semibold text-slate-700 uppercase">
                       {p.pass_type}
@@ -375,7 +394,7 @@ export const AdminDashboard: React.FC = () => {
                     {selectedReasonPass.student_name || 'Student'}
                   </h3>
                   <p className="text-xs font-mono text-slate-500 mt-0.5">
-                    {selectedReasonPass.enrollment_no} · {selectedReasonPass.hostel_name ? `${selectedReasonPass.hostel_name} (Rm ${selectedReasonPass.room_no || 'N/A'})` : (selectedReasonPass.room_no ? `Room ${selectedReasonPass.room_no}` : 'N/A')}
+                    {selectedReasonPass.enrollment_no} · {selectedReasonPass.hostel_name ? `${selectedReasonPass.hostel_name} · ${formatFloorRoom(selectedReasonPass.floor, selectedReasonPass.room_no)}` : (selectedReasonPass.room_no ? formatFloorRoom(selectedReasonPass.floor, selectedReasonPass.room_no) : 'N/A')}
                   </p>
                 </div>
               </div>

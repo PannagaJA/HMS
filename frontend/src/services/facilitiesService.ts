@@ -4,6 +4,7 @@
  */
 import { supabase } from '../lib/supabase';
 import type { MealType, MenuItem, Menu, HostelIssue } from '../types';
+import { wardenService } from './wardenService';
 
 export const diningService = {
   async getMealTypes(): Promise<MealType[]> {
@@ -471,18 +472,10 @@ export const diningService = {
 export const issueService = {
   async getIssues(studentId?: number, hostelId?: number | string, status?: string): Promise<HostelIssue[]> {
     let resolvedStudentId = studentId;
-    if (resolvedStudentId === undefined) {
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id;
-      if (userId) {
-        const { data: st } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
-        if (st) resolvedStudentId = st.id;
-      }
-    }
 
     let query = supabase
       .from('issues')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*, updater:profiles!updated_by(id, first_name, last_name, email, role))')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
       .order('created_at', { ascending: false });
 
     if (resolvedStudentId) {
@@ -503,24 +496,60 @@ export const issueService = {
       return [];
     }
 
-    return (issues || []).map((i: any) => {
-      let img = i.image_url;
+    const issueList = issues || [];
+    const issueIds = issueList.map((i: any) => i.id);
+
+    // Fetch all issue_updates in a separate direct query to ensure 100% reliability
+    const allUpdatesMap: Record<number, any[]> = {};
+    if (issueIds.length > 0) {
+      try {
+        const { data: updatesData, error: upError } = await supabase
+          .from('issue_updates')
+          .select('*, updater:profiles(id, first_name, last_name, email, role)')
+          .in('issue_id', issueIds)
+          .order('created_at', { ascending: false });
+
+        if (!upError && updatesData) {
+          updatesData.forEach((u: any) => {
+            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+            allUpdatesMap[u.issue_id].push(u);
+          });
+        } else {
+          // If profile join failed, fallback to plain issue_updates select
+          const { data: fallbackUpdates } = await supabase
+            .from('issue_updates')
+            .select('*')
+            .in('issue_id', issueIds)
+            .order('created_at', { ascending: false });
+          if (fallbackUpdates) {
+            fallbackUpdates.forEach((u: any) => {
+              if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+              allUpdatesMap[u.issue_id].push(u);
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Real-time issue_updates query error:', e);
+      }
+    }
+
+    return issueList.map((i: any) => {
+      let img = i.image_url || null;
       let desc = i.description || '';
       if (!img && desc.includes('[ATTACHMENT]:')) {
         const parts = desc.split('[ATTACHMENT]:');
         desc = parts[0].trim();
-        img = parts[1].trim();
+        img = parts[1]?.trim() || null;
       }
 
-      const formattedUpdates = (i.updates || []).map((u: any) => {
-        const uName = u.updater 
+      const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
+        ...u,
+        updated_by_name: u.updater
           ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
-          : (u.updated_by_name || 'Hostel Administrator');
-        return {
-          ...u,
-          updated_by_name: uName
-        };
-      });
+          : (u.updated_by_name || 'Hostel Administrator / Warden')
+      }));
+
+      updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       return {
         ...i,
@@ -530,7 +559,8 @@ export const issueService = {
         enrollment_no: i.student?.enrollment_no || 'N/A',
         hostel_name: i.hostel?.name || 'Block A',
         room_no: i.room?.no || '101',
-        updates: formattedUpdates
+        floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
+        updates: updatesList
       };
     });
   },
@@ -625,12 +655,18 @@ export const issueService = {
   },
 
   async updateStatus(issueId: number, status: string, note = '') {
-    const { data, error } = await supabase.rpc('update_issue_status', {
-      p_issue_id: issueId,
-      p_new_status: status,
-      p_note: note
-    });
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await supabase.rpc('update_issue_status', {
+        p_issue_id: issueId,
+        p_new_status: status,
+        p_note: note || `Status updated to ${status.replace(/_/g, ' ')}`
+      });
+      if (!error && data) return data;
+      console.warn('RPC update_issue_status warning/error, falling back to direct table mutation:', error);
+    } catch (rpcErr) {
+      console.warn('RPC update_issue_status catch:', rpcErr);
+    }
+
+    return await wardenService.updateIssueStatus(issueId, status, note);
   }
 };

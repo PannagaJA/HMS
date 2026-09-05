@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Search, Download, UserPlus, UploadCloud, FileText, CheckCircle2, AlertTriangle, X, Check, Building2, Pencil, Mail, Phone, Loader2 } from 'lucide-react';
+import { Search, Download, UserPlus, UploadCloud, FileText, CheckCircle2, AlertTriangle, X, Check, Building2, Pencil, Mail, Phone, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { HostelStudent, Hostel, HostelRoom } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
@@ -37,12 +37,18 @@ export const StudentManagement: React.FC = () => {
   const [selectedHostelFilter, setSelectedHostelFilter] = useState<string>('');
   const [filterAllotted, setFilterAllotted] = useState<'ALL' | 'ALLOTTED' | 'UNALLOTTED'>('ALL');
   
+  // Pagination State (50 items per page by default)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  
   // Allocate Modal State
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<HostelStudent | null>(null);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
+  const [allocateFloor, setAllocateFloor] = useState<string>('');
+  const [allocateHostelAllRooms, setAllocateHostelAllRooms] = useState<HostelRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
-  const [bedNo, setBedNo] = useState('1');
+  const [bedNo, setBedNo] = useState('');
 
   // Edit Student Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -70,9 +76,10 @@ export const StudentManagement: React.FC = () => {
   const [addEmergencyContact, setAddEmergencyContact] = useState('');
   const [addAllotDirectly, setAddAllotDirectly] = useState(false);
   const [addHostelId, setAddHostelId] = useState('');
+  const [addFloor, setAddFloor] = useState('');
+  const [addHostelAllRooms, setAddHostelAllRooms] = useState<HostelRoom[]>([]);
   const [addRoomId, setAddRoomId] = useState('');
-  const [addBedNo, setAddBedNo] = useState('1');
-  const [addAvailableRooms, setAddAvailableRooms] = useState<HostelRoom[]>([]);
+  const [addBedNo, setAddBedNo] = useState('');
 
   // Bulk Import Modal State
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -109,14 +116,6 @@ export const StudentManagement: React.FC = () => {
 
       setStudents(sList);
       setHostels(hList);
-      if (hList.length > 0) {
-        setSelectedHostelFilter((prev) => {
-          if (!prev || prev === 'ALL' || !hList.some(h => String(h.id) === prev)) {
-            return String(hList[0].id);
-          }
-          return prev;
-        });
-      }
     } catch (err) {
       console.error('Failed to fetch data', err);
     }
@@ -124,9 +123,16 @@ export const StudentManagement: React.FC = () => {
 
   const handleOpenAllocate = async (student: HostelStudent) => {
     setSelectedStudent(student);
-    setSelectedHostelId('');
+    const initialHostel = student.hostel ? String(student.hostel) : (selectedHostelFilter && selectedHostelFilter !== 'ALL' ? selectedHostelFilter : '');
+    setSelectedHostelId(initialHostel);
+    setAllocateFloor('');
     setSelectedRoomId('');
-    setRooms([]);
+    setBedNo('');
+    if (initialHostel) {
+      handleHostelChange(initialHostel);
+    } else {
+      setAllocateHostelAllRooms([]);
+    }
     setShowAllocateModal(true);
   };
 
@@ -152,12 +158,34 @@ export const StudentManagement: React.FC = () => {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (editEmail.trim() && !emailRegex.test(editEmail.trim())) {
+      showError('Please enter a valid Email address.');
+      return;
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (editPhone.trim() && !phoneRegex.test(editPhone.trim())) {
+      showError('Please enter a valid 10-digit Student Mobile Number starting with 6-9.');
+      return;
+    }
+
+    if (editGuardianPhone.trim() && !phoneRegex.test(editGuardianPhone.trim())) {
+      showError('Please enter a valid 10-digit Guardian Contact Phone starting with 6-9.');
+      return;
+    }
+
+    if (editEmergencyContact.trim() && !phoneRegex.test(editEmergencyContact.trim())) {
+      showError('Please enter a valid 10-digit Emergency Contact number starting with 6-9.');
+      return;
+    }
+
     try {
       setIsSubmittingEdit(true);
       await apiClient.patch(`/hms/students/${editingStudentId}/`, {
         student_name: editName.trim(),
         enrollment_no: editUsn.trim().toUpperCase(),
-        email: editEmail.trim(),
+        email: editEmail.trim() || undefined,
         gender: editGender,
         phone: editPhone.trim(),
         father_name: editFatherName.trim(),
@@ -178,37 +206,95 @@ export const StudentManagement: React.FC = () => {
 
   const handleHostelChange = async (hostelId: string) => {
     setSelectedHostelId(hostelId);
+    setAllocateFloor('');
     setSelectedRoomId('');
+    setBedNo('');
     if (hostelId) {
       try {
         const res = await apiClient.get<HostelRoom[]>(`/hms/hostels/${hostelId}/rooms/`);
-        setRooms(res.data.filter((r) => r.vacant));
+        setAllocateHostelAllRooms(res.data || []);
       } catch (err) {
         console.error('Failed to fetch rooms', err);
+        setAllocateHostelAllRooms([]);
       }
     } else {
-      setRooms([]);
+      setAllocateHostelAllRooms([]);
     }
+  };
+
+  const handleAllocateFloorChange = (floor: string) => {
+    setAllocateFloor(floor);
+    setSelectedRoomId('');
+    setBedNo('');
+  };
+
+  const handleAllocateRoomChange = (roomId: string) => {
+    setSelectedRoomId(roomId);
+    const rm = allocateHostelAllRooms.find((r) => String(r.id) === String(roomId));
+    const occupied = new Set((rm?.occupants || []).map((o: any) => String(o.bed_number)));
+    const vacantBeds = rm
+      ? Array.from({ length: rm.capacity || 1 }, (_, i) => String(i + 1)).filter(
+          (b) => !occupied.has(b)
+        )
+      : [];
+    setBedNo(vacantBeds[0] || '');
   };
 
   const handleAddHostelChange = async (hostelId: string) => {
     setAddHostelId(hostelId);
+    setAddFloor('');
     setAddRoomId('');
+    setAddBedNo('');
     if (hostelId) {
       try {
         const res = await apiClient.get<HostelRoom[]>(`/hms/hostels/${hostelId}/rooms/`);
-        setAddAvailableRooms(res.data.filter((r) => r.vacant));
+        setAddHostelAllRooms(res.data || []);
       } catch (err) {
         console.error('Failed to fetch available rooms', err);
+        setAddHostelAllRooms([]);
       }
     } else {
-      setAddAvailableRooms([]);
+      setAddHostelAllRooms([]);
     }
+  };
+
+  const handleAddFloorChange = (floor: string) => {
+    setAddFloor(floor);
+    setAddRoomId('');
+    setAddBedNo('');
+  };
+
+  const handleAddRoomChange = (roomId: string) => {
+    setAddRoomId(roomId);
+    const rm = addHostelAllRooms.find((r) => String(r.id) === String(roomId));
+    const occupied = new Set((rm?.occupants || []).map((o: any) => String(o.bed_number)));
+    const vacantBeds = rm
+      ? Array.from({ length: rm.capacity || 1 }, (_, i) => String(i + 1)).filter(
+          (b) => !occupied.has(b)
+        )
+      : [];
+    setAddBedNo(vacantBeds[0] || '');
   };
 
   const handleAllocate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudent || !selectedRoomId) return;
+    if (!selectedStudent) return;
+    if (!selectedHostelId) {
+      showError('Please select a Hostel Block.');
+      return;
+    }
+    if (!allocateFloor) {
+      showError('Please select a Floor.');
+      return;
+    }
+    if (!selectedRoomId) {
+      showError('Please select an Available Room.');
+      return;
+    }
+    if (!bedNo) {
+      showError('Please select a Bed Slot.');
+      return;
+    }
 
     try {
       await apiClient.post('/hms/students/allocate_room/', {
@@ -257,9 +343,10 @@ export const StudentManagement: React.FC = () => {
     setAddEmergencyContact('');
     setAddAllotDirectly(false);
     setAddHostelId('');
+    setAddFloor('');
+    setAddHostelAllRooms([]);
     setAddRoomId('');
-    setAddBedNo('1');
-    setAddAvailableRooms([]);
+    setAddBedNo('');
     setShowAddModal(true);
   };
 
@@ -270,12 +357,53 @@ export const StudentManagement: React.FC = () => {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!addEmail.trim() || !emailRegex.test(addEmail.trim())) {
+      showError('Please enter a valid Student Email address.');
+      return;
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!addPhone.trim() || !phoneRegex.test(addPhone.trim())) {
+      showError('Please enter a valid 10-digit Student Mobile Number starting with 6-9.');
+      return;
+    }
+
+    if (!addGuardianPhone.trim() || !phoneRegex.test(addGuardianPhone.trim())) {
+      showError('Please enter a valid 10-digit Guardian Contact Phone starting with 6-9.');
+      return;
+    }
+
+    if (!addEmergencyContact.trim() || !phoneRegex.test(addEmergencyContact.trim())) {
+      showError('Please enter a valid 10-digit Emergency Contact Number starting with 6-9.');
+      return;
+    }
+
+    if (addAllotDirectly) {
+      if (!addHostelId) {
+        showError('Please select a Hostel Block for allocation.');
+        return;
+      }
+      if (!addFloor) {
+        showError('Please select a Floor.');
+        return;
+      }
+      if (!addRoomId) {
+        showError('Please select an Available Room.');
+        return;
+      }
+      if (!addBedNo) {
+        showError('Please select a Bed Slot.');
+        return;
+      }
+    }
+
     setIsSubmittingSingle(true);
     try {
       await apiClient.post('/hms/students/create/', {
         student_name: addName.trim(),
         enrollment_no: addUsn.trim().toUpperCase(),
-        email: addEmail.trim() || undefined,
+        email: addEmail.trim(),
         gender: addGender,
         phone: addPhone.trim(),
         father_name: addFatherName.trim(),
@@ -408,7 +536,11 @@ export const StudentManagement: React.FC = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const filteredStudents = students.filter((s) => {
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedHostelFilter, filterAllotted]);
+
+  const filteredStudents = !selectedHostelFilter ? [] : students.filter((s) => {
     if (selectedHostelFilter && selectedHostelFilter !== 'ALL') {
       const stHostelId = String(s.hostel || (s.room_detail as any)?.hostel_id || (s.allocations as any)?.[0]?.bed?.room?.hostel_id || '');
       if (stHostelId) {
@@ -427,6 +559,63 @@ export const StudentManagement: React.FC = () => {
     if (filterAllotted === 'UNALLOTTED') return !s.room_allotted;
     return true;
   });
+
+  // Pagination calculation (50 records per page)
+  const totalStudents = filteredStudents.length;
+  const totalPages = Math.max(1, Math.ceil(totalStudents / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalStudents);
+  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + pageSize);
+
+  const getFloorDisplay = (student: any) => {
+    const f = student.floor ?? student.room_detail?.floor ?? student.room?.floor;
+    if (f !== undefined && f !== null && f !== '') {
+      const num = Number(f);
+      return num === 0 ? 'Ground Floor' : `Floor ${num}`;
+    }
+    const rNo = String(student.room_no || student.room_number || '').trim();
+    if (rNo.toUpperCase().startsWith('G')) return 'Ground Floor';
+    if (/^\d{3,4}$/.test(rNo)) {
+      const inferred = Math.floor(Number(rNo) / 100);
+      if (inferred === 0) return 'Ground Floor';
+      return `Floor ${inferred}`;
+    }
+    return null;
+  };
+
+  // Computed helpers for Add Student modal allocation hierarchy
+  const addAvailableFloors = Array.from(
+    new Set(addHostelAllRooms.map((r) => r.floor))
+  ).sort((a, b) => Number(a) - Number(b));
+
+  const addFloorRooms = addHostelAllRooms.filter(
+    (r) => String(r.floor) === String(addFloor) && (r.occupied_count || 0) < (r.capacity || 1)
+  );
+
+  const addSelectedRoom = addHostelAllRooms.find((r) => String(r.id) === String(addRoomId));
+  const addOccupiedBeds = new Set((addSelectedRoom?.occupants || []).map((o: any) => String(o.bed_number)));
+  const addVacantBeds = addSelectedRoom
+    ? Array.from({ length: addSelectedRoom.capacity || 1 }, (_, i) => String(i + 1)).filter(
+        (b) => !addOccupiedBeds.has(b)
+      )
+    : [];
+
+  // Computed helpers for Standalone Allocate modal allocation hierarchy
+  const allocateAvailableFloors = Array.from(
+    new Set(allocateHostelAllRooms.map((r) => r.floor))
+  ).sort((a, b) => Number(a) - Number(b));
+
+  const allocateFloorRooms = allocateHostelAllRooms.filter(
+    (r) => String(r.floor) === String(allocateFloor) && (r.occupied_count || 0) < (r.capacity || 1)
+  );
+
+  const allocateSelectedRoom = allocateHostelAllRooms.find((r) => String(r.id) === String(selectedRoomId));
+  const allocateOccupiedBeds = new Set((allocateSelectedRoom?.occupants || []).map((o: any) => String(o.bed_number)));
+  const allocateVacantBeds = allocateSelectedRoom
+    ? Array.from({ length: allocateSelectedRoom.capacity || 1 }, (_, i) => String(i + 1)).filter(
+        (b) => !allocateOccupiedBeds.has(b)
+      )
+    : [];
 
   return (
     <div className="space-y-6 pb-12 sm:pb-0">
@@ -489,6 +678,7 @@ export const StudentManagement: React.FC = () => {
                 </div>
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="ALL">All Hostel Blocks</SelectItem>
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
                     {h.name} ({h.gender})
@@ -501,7 +691,9 @@ export const StudentManagement: React.FC = () => {
 
         <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
           {(['ALL', 'ALLOTTED', 'UNALLOTTED'] as const).map((tab) => {
-            const count = tab === 'ALL' 
+            const count = !selectedHostelFilter
+              ? 0
+              : tab === 'ALL' 
               ? filteredStudents.length 
               : tab === 'ALLOTTED' 
               ? filteredStudents.filter(s => s.room_allotted).length 
@@ -523,15 +715,28 @@ export const StudentManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-sm">
-        {/* Mobile View: Cards */}
-        <div className="block md:hidden divide-y divide-slate-100">
-          {filteredStudents.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 text-sm">
-              No resident students match your criteria.
-            </div>
-          ) : (
-            filteredStudents.map((s) => (
+      {!selectedHostelFilter ? (
+        <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-[#0B1437] flex items-center justify-center mx-auto shadow-inner">
+            <Building2 className="w-8 h-8 text-[#0B1437]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Select a Hostel Block</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              Please choose a hostel block (or "All Hostel Blocks") from the dropdown above to view the resident student directory and allotments.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-sm">
+          {/* Mobile View: Cards */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {paginatedStudents.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 text-sm">
+                No resident students match your criteria.
+              </div>
+            ) : (
+            paginatedStudents.map((s) => (
               <div key={s.id} className="p-4 space-y-3 hover:bg-slate-50/70 transition-colors">
                 {/* Header: Student Name, Avatar, Status Badge */}
                 <div className="flex items-start justify-between gap-2">
@@ -588,7 +793,9 @@ export const StudentManagement: React.FC = () => {
                     {s.room_allotted ? (
                       <div className="mt-0.5">
                         <span className="font-semibold text-slate-900 block">{s.hostel_name || 'Block'}</span>
-                        <span className="text-xs text-slate-500">Room {s.room_no} · Bed {s.bed_number || '1'}</span>
+                        <span className="text-xs text-slate-500">
+                          {getFloorDisplay(s) ? `${getFloorDisplay(s)} · ` : ''}Room {s.room_no} · Bed {s.bed_number || '1'}
+                        </span>
                       </div>
                     ) : (
                       <span className="text-xs text-amber-700 font-medium bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 inline-block mt-0.5">
@@ -643,14 +850,14 @@ export const StudentManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredStudents.length === 0 ? (
+              {paginatedStudents.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-slate-400">
                     No resident students match your criteria.
                   </td>
                 </tr>
               ) : (
-                filteredStudents.map((s) => (
+                paginatedStudents.map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-bold text-slate-900">{s.student_name}</div>
@@ -680,7 +887,9 @@ export const StudentManagement: React.FC = () => {
                       {s.room_allotted ? (
                         <div>
                           <span className="font-semibold text-slate-900 block">{s.hostel_name || 'Block'}</span>
-                          <span className="text-xs text-slate-500">Room {s.room_no} · Bed {s.bed_number || '1'}</span>
+                          <span className="text-xs text-slate-500">
+                            {getFloorDisplay(s) ? `${getFloorDisplay(s)} · ` : ''}Room {s.room_no} · Bed {s.bed_number || '1'}
+                          </span>
                         </div>
                       ) : (
                         <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
@@ -729,7 +938,82 @@ export const StudentManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Toolbar */}
+        {filteredStudents.length > 0 && (
+          <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="text-slate-500 font-medium flex items-center gap-2">
+              <span>
+                Showing <strong className="text-slate-800 font-semibold">{totalStudents === 0 ? 0 : startIndex + 1}</strong> to <strong className="text-slate-800 font-semibold">{endIndex}</strong> of <strong className="text-slate-800 font-semibold">{totalStudents}</strong> residents
+              </span>
+              <span className="text-slate-300">|</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0B1437] cursor-pointer"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .map((pageNum, idx, arr) => {
+                      const prev = arr[idx - 1];
+                      return (
+                        <React.Fragment key={pageNum}>
+                          {prev && pageNum - prev > 1 && (
+                            <span className="px-1 text-slate-400 font-bold">...</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              currentPage === pageNum
+                                ? 'bg-[#0B1437] text-white shadow-2xs'
+                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      )}
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -779,10 +1063,11 @@ export const StudentManagement: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Student Email (for Portal Login)
+                    Student Email <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="email"
+                    required
                     value={addEmail}
                     onChange={(e) => setAddEmail(e.target.value)}
                     placeholder="e.g. student@amc.edu"
@@ -809,6 +1094,7 @@ export const StudentManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Student Mobile Number <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
+                    required
                     pattern="^[6-9][0-9]{9}$"
                     title="Please enter a valid 10-digit Indian phone number starting with 6-9"
                     maxLength={10}
@@ -836,6 +1122,7 @@ export const StudentManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Contact Phone <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
+                    required
                     pattern="^[6-9][0-9]{9}$"
                     title="Please enter a valid 10-digit Indian phone number starting with 6-9"
                     maxLength={10}
@@ -848,12 +1135,18 @@ export const StudentManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Emergency Contact</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Emergency Contact <span className="text-rose-500">*</span>
+                </label>
                 <input
-                  type="text"
+                  type="tel"
+                  required
+                  pattern="^[6-9][0-9]{9}$"
+                  title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                  maxLength={10}
                   value={addEmergencyContact}
                   onChange={(e) => setAddEmergencyContact(e.target.value)}
-                  placeholder="e.g. 9899001122 (Local Guardian / Relative)"
+                  placeholder="e.g. 9899001122"
                   className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
@@ -874,31 +1167,19 @@ export const StudentManagement: React.FC = () => {
 
               {addAllotDirectly && (
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 animate-in fade-in duration-150">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Hostel Block</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Hostel Block <span className="text-rose-500">*</span>
+                      </label>
                       <Select value={addHostelId} onValueChange={handleAddHostelChange}>
                         <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Choose block" />
+                          <SelectValue placeholder="-- Select Hostel Block --" />
                         </SelectTrigger>
                         <SelectContent>
                           {hostels.map((h) => (
-                            <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Available Room</label>
-                      <Select value={addRoomId} onValueChange={setAddRoomId}>
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Select room" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {addAvailableRooms.map((r) => (
-                            <SelectItem key={r.id} value={String(r.id)}>
-                              {r.name} ({r.occupied_count}/{r.capacity} occ)
+                            <SelectItem key={h.id} value={String(h.id)}>
+                              {h.name} ({h.gender})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -906,16 +1187,83 @@ export const StudentManagement: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Bed Slot</label>
-                      <Select value={addBedNo} onValueChange={setAddBedNo}>
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Bed No" />
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Floor <span className="text-rose-500">*</span>
+                      </label>
+                      <Select
+                        value={addFloor}
+                        onValueChange={handleAddFloorChange}
+                        disabled={!addHostelId}
+                      >
+                        <SelectTrigger className="bg-white disabled:opacity-50">
+                          <SelectValue placeholder={!addHostelId ? 'Select hostel first' : '-- Select Floor --'} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="1">Bed 1</SelectItem>
-                          <SelectItem value="2">Bed 2</SelectItem>
-                          <SelectItem value="3">Bed 3</SelectItem>
-                          <SelectItem value="4">Bed 4</SelectItem>
+                          {addAvailableFloors.map((fl) => (
+                            <SelectItem key={fl} value={String(fl)}>
+                              {Number(fl) === 0 ? 'Ground Floor' : `Floor ${fl}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Available Room <span className="text-rose-500">*</span>
+                      </label>
+                      <Select
+                        value={addRoomId}
+                        onValueChange={handleAddRoomChange}
+                        disabled={!addFloor}
+                      >
+                        <SelectTrigger className="bg-white disabled:opacity-50">
+                          <SelectValue
+                            placeholder={
+                              !addFloor
+                                ? 'Select floor first'
+                                : addFloorRooms.length === 0
+                                ? 'No available rooms'
+                                : '-- Select Room --'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {addFloorRooms.map((r) => (
+                            <SelectItem key={r.id} value={String(r.id)}>
+                              Room {r.no || r.room_no || r.name} ({r.occupied_count || 0}/{r.capacity || 1} occ)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Bed Slot <span className="text-rose-500">*</span>
+                      </label>
+                      <Select
+                        value={addBedNo}
+                        onValueChange={setAddBedNo}
+                        disabled={!addRoomId || addVacantBeds.length === 0}
+                      >
+                        <SelectTrigger className="bg-white disabled:opacity-50">
+                          <SelectValue
+                            placeholder={
+                              !addRoomId
+                                ? 'Select room first'
+                                : addVacantBeds.length === 0
+                                ? 'No vacant beds'
+                                : '-- Select Bed --'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {addVacantBeds.map((b) => (
+                            <SelectItem key={b} value={b}>
+                              Bed {b}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1072,7 +1420,7 @@ export const StudentManagement: React.FC = () => {
 
       {showAllocateModal && selectedStudent && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">Allocate Bed to Resident</h3>
             <p className="text-xs text-slate-500 mb-5">
               Assigning room for: <strong className="text-slate-800">{selectedStudent.student_name}</strong> ({selectedStudent.enrollment_no})
@@ -1080,46 +1428,101 @@ export const StudentManagement: React.FC = () => {
 
             <form onSubmit={handleAllocate} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Hostel Block <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Select Hostel Block <span className="text-rose-500">*</span>
+                </label>
                 <Select value={selectedHostelId} onValueChange={handleHostelChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose hostel" />
+                    <SelectValue placeholder="-- Select Hostel Block --" />
                   </SelectTrigger>
                   <SelectContent>
                     {hostels.map((h) => (
-                      <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
+                      <SelectItem key={h.id} value={String(h.id)}>{h.name} ({h.gender})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Floor <span className="text-rose-500">*</span>
+                  </label>
+                  <Select
+                    value={allocateFloor}
+                    onValueChange={handleAllocateFloorChange}
+                    disabled={!selectedHostelId}
+                  >
+                    <SelectTrigger className="disabled:opacity-50">
+                      <SelectValue placeholder={!selectedHostelId ? 'Select hostel first' : '-- Select Floor --'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allocateAvailableFloors.map((fl) => (
+                        <SelectItem key={fl} value={String(fl)}>
+                          {Number(fl) === 0 ? 'Ground Floor' : `Floor ${fl}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Available Room <span className="text-rose-500">*</span>
+                  </label>
+                  <Select
+                    value={selectedRoomId}
+                    onValueChange={handleAllocateRoomChange}
+                    disabled={!allocateFloor}
+                  >
+                    <SelectTrigger className="disabled:opacity-50">
+                      <SelectValue
+                        placeholder={
+                          !allocateFloor
+                            ? 'Select floor first'
+                            : allocateFloorRooms.length === 0
+                            ? 'No available rooms on this floor'
+                            : '-- Select Room --'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allocateFloorRooms.map((r) => (
+                        <SelectItem key={r.id} value={String(r.id)}>
+                          Room {r.no || r.room_no || r.name} ({r.occupied_count || 0}/{r.capacity || 1} occ)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Vacant Room <span className="text-red-500">*</span></label>
-                <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="-- Choose Available Room --" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Bed Slot <span className="text-rose-500">*</span>
+                </label>
+                <Select
+                  value={bedNo}
+                  onValueChange={setBedNo}
+                  disabled={!selectedRoomId || allocateVacantBeds.length === 0}
+                >
+                  <SelectTrigger className="disabled:opacity-50">
+                    <SelectValue
+                      placeholder={
+                        !selectedRoomId
+                          ? 'Select room first'
+                          : allocateVacantBeds.length === 0
+                          ? 'No vacant beds'
+                          : '-- Select Bed --'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {rooms.map((r) => (
-                      <SelectItem key={r.id} value={String(r.id)}>
-                        {r.name} (Floor {r.floor} · {r.occupied_count}/{r.capacity} Occupied)
+                    {allocateVacantBeds.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        Bed {b}
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bed Number <span className="text-red-500">*</span></label>
-                <Select value={bedNo} onValueChange={setBedNo}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Bed" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Bed 1</SelectItem>
-                    <SelectItem value="2">Bed 2</SelectItem>
-                    <SelectItem value="3">Bed 3</SelectItem>
-                    <SelectItem value="4">Bed 4</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

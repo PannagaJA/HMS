@@ -45,6 +45,7 @@ export interface HostelStudent {
   no_dues: boolean;
   status: string;
   hostel_name?: string;
+  floor?: number | string;
   room_detail?: any;
   bed_number?: any;
   room_no?: string;
@@ -70,12 +71,15 @@ export interface GatePassRequest {
   student_name: string;
   enrollment_no: string;
   hostel_name: string;
+  floor?: number | string;
   room_no?: string;
   purpose?: string;
   approved_by_name?: string;
   actual_exit_time?: string;
   actual_entry_time?: string;
   return_date?: string;
+  created_at?: string;
+  updated_at?: string;
   hostel?: any;
   student?: any;
 }
@@ -91,6 +95,7 @@ export interface IssueTicket {
   hostel?: any;
   hostel_id?: number;
   hostel_name: string;
+  floor?: number | string;
   room_no?: string;
   student_name: string;
   enrollment_no: string;

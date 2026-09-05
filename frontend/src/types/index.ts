@@ -170,6 +170,8 @@ export interface VisitorLog {
   student_name?: string;
   enrollment_no?: string;
   student_room?: string;
+  room_no?: string;
+  floor?: number | string;
   status?: string;
   check_in_time: string;
   check_out_time?: string;

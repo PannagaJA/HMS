@@ -1207,10 +1207,12 @@ CREATE POLICY policy_caretakers_admin ON public.hostel_caretakers FOR ALL TO aut
 CREATE POLICY policy_security_staff_select ON public.security_staff FOR SELECT TO authenticated USING (org_id = public.user_org_id());
 CREATE POLICY policy_security_staff_admin ON public.security_staff FOR ALL TO authenticated USING (org_id = public.user_org_id() AND public.is_admin()) WITH CHECK (org_id = public.user_org_id() AND public.is_admin());
 
-CREATE POLICY policy_announcements_select ON public.announcements FOR SELECT TO authenticated USING (org_id = public.user_org_id());
-CREATE POLICY policy_announcements_insert ON public.announcements FOR INSERT TO authenticated WITH CHECK (org_id = public.user_org_id() AND (public.is_admin() OR public.is_warden()));
+CREATE POLICY policy_announcements_select ON public.announcements FOR SELECT TO authenticated USING (org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id());
+CREATE POLICY policy_announcements_insert ON public.announcements FOR INSERT TO authenticated WITH CHECK ((org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id()) AND (public.is_admin() OR public.is_warden() OR public.is_security() OR public.is_caretaker()));
+CREATE POLICY policy_announcements_update ON public.announcements FOR UPDATE TO authenticated USING ((org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id()) AND (public.is_admin() OR public.is_warden() OR public.is_security() OR public.is_caretaker())) WITH CHECK ((org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id()) AND (public.is_admin() OR public.is_warden() OR public.is_security() OR public.is_caretaker()));
+CREATE POLICY policy_announcements_delete ON public.announcements FOR DELETE TO authenticated USING ((org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id()) AND (public.is_admin() OR public.is_warden() OR public.is_security() OR public.is_caretaker()));
 
-CREATE POLICY policy_announcements_read_all ON public.announcements_read FOR ALL TO authenticated USING (org_id = public.user_org_id()) WITH CHECK (org_id = public.user_org_id());
+CREATE POLICY policy_announcements_read_all ON public.announcements_read FOR ALL TO authenticated USING (org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id()) WITH CHECK (org_id IS NULL OR public.user_org_id() IS NULL OR org_id = public.user_org_id());
 
 -- 17. Storage Bucket & Policies
 INSERT INTO storage.buckets (id, name, public)

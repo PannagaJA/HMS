@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, History, X, Clock, Image, Eye } from 'lucide-react';
+import { Building2, History, X, Clock, Image, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { HostelIssue, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { wardenService } from '../../services/wardenService';
 import { useNotification } from '../../context/NotificationContext';
+import { supabase } from '../../lib/supabase';
 import {
   Select,
   SelectContent,
@@ -10,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { formatFloorRoom } from '../../utils/formatters';
 
 export const IssueTracking: React.FC = () => {
   const { showSuccess, showError } = useNotification();
@@ -22,22 +25,44 @@ export const IssueTracking: React.FC = () => {
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string>('in_progress');
   const [updateNote, setUpdateNote] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     fetchIssuesAndHostels();
+
+    const channel = supabase
+      .channel('admin_issues_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
+        refreshIssuesOnly();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_updates' }, () => {
+        refreshIssuesOnly();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  const refreshIssuesOnly = async () => {
+    try {
+      const allIssues = await wardenService.getIssues();
+      setIssues(allIssues);
+    } catch (err) {
+      console.warn('Realtime refresh issues error:', err);
+    }
+  };
 
   const fetchIssuesAndHostels = async () => {
     try {
-      const [issuesRes, hostelsRes] = await Promise.all([
-        apiClient.get<HostelIssue[]>('/hms/issues/'),
+      const [issues, hostelsRes] = await Promise.all([
+        wardenService.getIssues(),
         apiClient.get<Hostel[]>('/hms/hostels/'),
       ]);
-      setIssues(issuesRes.data);
+      setIssues(issues);
       setHostels(hostelsRes.data);
-      if (hostelsRes.data.length > 0 && !selectedHostelId) {
-        setSelectedHostelId(String(hostelsRes.data[0].id));
-      }
     } catch (err) {
       console.error('Failed to load issues or hostels', err);
     }
@@ -48,14 +73,28 @@ export const IssueTracking: React.FC = () => {
     if (!selectedIssue) return;
 
     try {
-      await apiClient.post(`/hms/issues/${selectedIssue.id}/update_status/`, {
-        status: updateStatus,
-        note: updateNote,
-      });
-      showSuccess(`Issue #${selectedIssue.id} status updated to ${updateStatus}.`);
+      const result = await wardenService.updateIssueStatus(selectedIssue.id, updateStatus, updateNote);
+
+      if (result.rpcError) {
+        showSuccess(`Status updated to ${updateStatus.replace(/_/g, ' ')}.`);
+        console.warn('[IssueTracking] RPC error (optimistic update):', result.rpcError);
+      } else {
+        showSuccess(`Issue #${selectedIssue.id} status updated to ${updateStatus.replace(/_/g, ' ')}.`);
+      }
+
+      // Merge: if RPC succeeded DB returns full history, else prepend optimistic entry to existing
+      setIssues((prev) =>
+        prev.map((issue) => {
+          if (issue.id !== selectedIssue.id) return issue;
+          const merged = result.rpcError
+            ? [...result.updates, ...(issue.updates || [])]
+            : result.updates;
+          return { ...issue, status: updateStatus, updates: merged };
+        })
+      );
+
       setSelectedIssue(null);
       setUpdateNote('');
-      fetchIssuesAndHostels();
     } catch (err) {
       showError('Failed to update maintenance issue');
     }
@@ -80,6 +119,12 @@ export const IssueTracking: React.FC = () => {
     return matchesStatus && matchesHostel;
   });
 
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedIssues = filtered.slice(startIndex, startIndex + pageSize);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -98,15 +143,21 @@ export const IssueTracking: React.FC = () => {
             <span>Select Hostel:</span>
           </span>
           <div className="flex-1 min-w-[200px]">
-            <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
+            <Select
+              value={selectedHostelId}
+              onValueChange={(val) => {
+                setSelectedHostelId(val);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800">
-                <SelectValue placeholder="Choose hostel block" />
+                <SelectValue placeholder="-- Select Hostel Block --" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Hostel Blocks</SelectItem>
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
-                    {h.name}
+                    {h.name} ({h.gender === 'M' ? 'Boys' : h.gender === 'F' ? 'Girls' : 'Co-ed'})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -121,7 +172,10 @@ export const IssueTracking: React.FC = () => {
           </label>
           <Select
             value={activeFilter}
-            onValueChange={setActiveFilter}
+            onValueChange={(val) => {
+              setActiveFilter(val);
+              setCurrentPage(1);
+            }}
             disabled={!selectedHostelId}
           >
             <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 disabled:opacity-50">
@@ -148,7 +202,10 @@ export const IssueTracking: React.FC = () => {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
+              onClick={() => {
+                setActiveFilter(tab.id);
+                setCurrentPage(1);
+              }}
               disabled={!selectedHostelId}
               className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                 activeFilter === tab.id && selectedHostelId
@@ -176,12 +233,12 @@ export const IssueTracking: React.FC = () => {
         <>
           {/* Mobile Card View (< 768px) */}
           <div className="grid grid-cols-1 gap-4 md:hidden">
-            {filtered.length === 0 ? (
+            {paginatedIssues.length === 0 ? (
               <div className="bg-white p-10 rounded-3xl border border-slate-200 text-center text-slate-400 text-sm">
                 No maintenance tickets found for this filter.
               </div>
             ) : (
-              filtered.map((issue) => (
+              paginatedIssues.map((issue) => (
                 <div
                   key={issue.id}
                   className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4"
@@ -243,7 +300,7 @@ export const IssueTracking: React.FC = () => {
                         {issue.hostel_name || 'Block A'}
                       </span>
                       <span className="text-[10px] font-medium text-slate-500 block truncate">
-                        Room {issue.room_no}
+                        {formatFloorRoom(issue.floor, issue.room_no)}
                       </span>
                     </div>
                   </div>
@@ -286,14 +343,14 @@ export const IssueTracking: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {filtered.length === 0 ? (
+                  {paginatedIssues.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-slate-400">
                         No maintenance tickets found for this filter.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((issue) => (
+                    paginatedIssues.map((issue) => (
                       <tr key={issue.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-4 pl-6 min-w-[280px] max-w-md">
                           <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -314,7 +371,7 @@ export const IssueTracking: React.FC = () => {
                         </td>
                         <td className="py-4 px-4 text-xs">
                           <span className="font-bold text-slate-800">{issue.hostel_name || 'Block A'}</span>
-                          <div className="text-slate-500 font-medium">Room {issue.room_no}</div>
+                          <div className="text-slate-500 font-medium">{formatFloorRoom(issue.floor, issue.room_no)}</div>
                         </td>
                         <td className="py-4 px-4">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${
@@ -367,6 +424,81 @@ export const IssueTracking: React.FC = () => {
               </table>
             </div>
           </div>
+
+          {/* Pagination Controls */}
+          {filtered.length > 0 && (
+            <div className="bg-white px-6 py-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-medium">
+                <span>
+                  Showing <strong className="text-slate-800 font-bold">{startIndex + 1}</strong> to{' '}
+                  <strong className="text-slate-800 font-bold">{endIndex}</strong> of{' '}
+                  <strong className="text-slate-800 font-bold">{totalItems}</strong> tickets
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0B1437] cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                      .map((pageNum, idx, arr) => {
+                        const prev = arr[idx - 1];
+                        return (
+                          <React.Fragment key={pageNum}>
+                            {prev && pageNum - prev > 1 && (
+                              <span className="px-1 text-slate-400 font-bold">...</span>
+                            )}
+                            <button
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                currentPage === pageNum
+                                  ? 'bg-[#0B1437] text-white shadow-2xs'
+                                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -403,88 +535,125 @@ export const IssueTracking: React.FC = () => {
       )}
 
       {/* VIEW ALL UPDATES / REMARKS MODAL */}
-      {viewingUpdatesIssue && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 leading-tight">Warden & Maintenance Updates</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Ticket #{viewingUpdatesIssue.id}: <strong className="text-slate-800">{viewingUpdatesIssue.title}</strong>
-                </p>
+      {viewingUpdatesIssue && (() => {
+        const liveIssue = issues.find((i) => i.id === viewingUpdatesIssue.id) || viewingUpdatesIssue;
+        return (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight">Warden & Maintenance Updates</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ticket #{liveIssue.id}: <strong className="text-slate-800">{liveIssue.title}</strong>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setViewingUpdatesIssue(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => setViewingUpdatesIssue(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-2">
-              <div><span className="text-slate-400">Resident:</span> <strong>{viewingUpdatesIssue.student_name}</strong> ({viewingUpdatesIssue.enrollment_no})</div>
-              <div><span className="text-slate-400">Location:</span> <strong>{viewingUpdatesIssue.hostel_name} · Room {viewingUpdatesIssue.room_no}</strong></div>
-              <div><span className="text-slate-400">Issue:</span> <span className="italic">"{viewingUpdatesIssue.description}"</span></div>
-              {viewingUpdatesIssue.image_url && (
-                <div className="pt-2 border-t border-slate-200/60">
-                  <span className="text-slate-400 block mb-1">Attached Photo:</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImageModal(viewingUpdatesIssue.image_url || null)}
-                    className="relative group rounded-xl overflow-hidden border border-slate-200 inline-block"
-                  >
-                    <img
-                      src={viewingUpdatesIssue.image_url}
-                      alt="Thumbnail"
-                      className="w-24 h-24 object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Eye className="w-5 h-5 text-white" />
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-2">
+                <div><span className="text-slate-400">Resident:</span> <strong>{liveIssue.student_name}</strong> ({liveIssue.enrollment_no})</div>
+                <div><span className="text-slate-400">Location:</span> <strong>{liveIssue.hostel_name} · {formatFloorRoom(liveIssue.floor, liveIssue.room_no)}</strong></div>
+                <div><span className="text-slate-400">Issue:</span> <span className="italic">"{liveIssue.description}"</span></div>
+                {liveIssue.image_url && (
+                  <div className="pt-2 border-t border-slate-200/60">
+                    <span className="text-slate-400 block mb-1">Attached Photo:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImageModal(liveIssue.image_url || null)}
+                      className="relative group rounded-xl overflow-hidden border border-slate-200 inline-block"
+                    >
+                      <img
+                        src={liveIssue.image_url}
+                        alt="Thumbnail"
+                        className="w-24 h-24 object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="w-5 h-5 text-white" />
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-              {!viewingUpdatesIssue.updates || viewingUpdatesIssue.updates.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs rounded-2xl border border-dashed border-slate-200">
-                  No status notes or updates recorded for this ticket yet.
-                </div>
-              ) : (
-                viewingUpdatesIssue.updates.map((up) => (
-                  <div key={up.id} className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-200/80 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-teal-100/90 text-teal-950 uppercase">
-                        {up.new_status.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-700">
-                        — {up.updated_by_name || 'Hostel Administrator'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-800 italic bg-white/80 p-2.5 rounded-xl border border-teal-100/80">
-                      "{up.note || 'Status updated'}"
-                    </p>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1 justify-end font-mono">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>{new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <div className="space-y-0 max-h-[340px] overflow-y-auto pr-1">
+                {!liveIssue.updates || liveIssue.updates.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs rounded-2xl border border-dashed border-slate-200">
+                    No status updates recorded for this ticket yet.
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="absolute left-[18px] top-5 bottom-5 w-px bg-gradient-to-b from-teal-300 via-teal-200 to-slate-200" />
+                    <div className="space-y-0">
+                      {liveIssue.updates.map((up: any, idx: number) => {
+                        const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+                          pending:             { bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-400' },
+                          in_progress:         { bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500' },
+                          waiting_for_workers: { bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
+                          completed:           { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+                        };
+                        const col = statusColors[up.new_status] || { bg: 'bg-slate-50', text: 'text-slate-700', dot: 'bg-slate-400' };
+                        const oldCol = up.old_status ? (statusColors[up.old_status] || { text: 'text-slate-500' }) : null;
+                        return (
+                          <div key={up.id ?? idx} className="flex gap-3 pb-4 relative">
+                            <div className="flex-shrink-0 w-9 flex flex-col items-center pt-1 z-10">
+                              <div className={`w-4 h-4 rounded-full border-2 border-white shadow ${col.dot}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`rounded-2xl border border-slate-200/80 p-3 ${col.bg} shadow-sm`}>
+                                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                  {oldCol && up.old_status && (
+                                    <>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/70 border border-slate-200 text-slate-500 uppercase">
+                                        {up.old_status.replace(/_/g, ' ')}
+                                      </span>
+                                      <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                                    </>
+                                  )}
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/80 border ${col.text} border-current/20 uppercase`}>
+                                    {up.new_status.replace(/_/g, ' ')}
+                                  </span>
+                                </div>
+                                {up.note && (
+                                  <p className="text-xs text-slate-700 italic mb-2 bg-white/60 px-2.5 py-1.5 rounded-xl border border-slate-200/60">
+                                    "{up.note}"
+                                  </p>
+                                )}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-medium text-slate-500 truncate">
+                                    {up.updated_by_name || 'Hostel Administrator / Warden'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono flex-shrink-0 flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    {new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                )}
+              </div>
 
-            <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
-              <button
-                onClick={() => setViewingUpdatesIssue(null)}
-                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] cursor-pointer shadow-xs"
-              >
-                Close
-              </button>
+              <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
+                <button
+                  onClick={() => setViewingUpdatesIssue(null)}
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] cursor-pointer shadow-xs"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {selectedIssue && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">

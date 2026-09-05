@@ -12,7 +12,7 @@ export const securityService = {
   async getGatePasses(): Promise<GatePassRequest[]> {
     const { data, error } = await supabase
       .from('gate_passes')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(no)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(no, floor)')
       .order('created_at', { ascending: false });
     if (error) throw error;
 
@@ -22,6 +22,7 @@ export const securityService = {
       enrollment_no: gp.student?.enrollment_no || 'N/A',
       hostel_name: gp.hostel?.name || 'Aryabhata Bhavan',
       room_no: gp.room?.no || '101',
+      floor: gp.room?.floor !== undefined ? gp.room?.floor : null,
       hostel_id: gp.hostel_id || gp.hostel?.id
     }));
   },
@@ -156,7 +157,8 @@ export const securityService = {
       student_name: studentName,
       enrollment_no: enrollmentNo,
       hostel_name: activePass.hostel?.name || 'Aryabhata Bhavan',
-      room_no: activePass.room?.no || '101'
+      room_no: activePass.room?.no || '101',
+      floor: activePass.room?.floor !== undefined ? activePass.room?.floor : null
     };
 
     // Check if pass is expired: student never exited and curfew deadline has passed
@@ -281,7 +283,8 @@ export const securityService = {
       student_name: pass.student?.student_name || 'Resident',
       enrollment_no: pass.student?.enrollment_no || 'N/A',
       hostel_name: pass.hostel?.name || 'Aryabhata Bhavan',
-      room_no: pass.room?.no || '101'
+      room_no: pass.room?.no || '101',
+      floor: pass.room?.floor !== undefined ? pass.room?.floor : null
     } : resultData;
 
     return {
@@ -296,7 +299,7 @@ export const securityService = {
   async getVisitorLogs(): Promise<VisitorLog[]> {
     const { data: logs, error } = await supabase
       .from('visitor_logs')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no)')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
       .order('check_in_time', { ascending: false });
 
     let list = logs || [];
@@ -309,6 +312,8 @@ export const securityService = {
       hostel_id: v.hostel_id || v.hostel?.id,
       hostel_name: v.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
       student_room: v.room?.no || v.room_no || '101',
+      room_no: v.room?.no || v.room_no || '101',
+      floor: v.room?.floor !== undefined ? v.room?.floor : null,
       status: v.check_out_time ? 'CHECKED_OUT' : 'CHECKED_IN'
     }));
   },

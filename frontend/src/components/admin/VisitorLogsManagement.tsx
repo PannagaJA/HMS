@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Search, LogOut, Download, Building2 } from 'lucide-react';
+import { Search, LogOut, Download, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { VisitorLog, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
 import { useDebounce } from '../../hooks/useDebounce';
+import { supabase } from '../../lib/supabase';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { formatFloorRoom } from '../../utils/formatters';
 
 export const VisitorLogsManagement: React.FC = () => {
   const { showSuccess, showError, confirm } = useNotification();
@@ -20,6 +22,8 @@ export const VisitorLogsManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'CHECKED_IN' | 'CHECKED_OUT'>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form State
   const [visitorName, setVisitorName] = useState('');
@@ -33,6 +37,17 @@ export const VisitorLogsManagement: React.FC = () => {
 
   useEffect(() => {
     fetchLogsAndHostels();
+
+    const channel = supabase
+      .channel('admin_visitor_logs_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_logs' }, () => {
+        fetchLogsAndHostels();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchLogsAndHostels = async () => {
@@ -127,6 +142,12 @@ export const VisitorLogsManagement: React.FC = () => {
     return matchesSearch && l.status === filterStatus;
   });
 
+  const totalItems = filteredLogs.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedLogs = filteredLogs.slice(startIndex, startIndex + pageSize);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -160,15 +181,21 @@ export const VisitorLogsManagement: React.FC = () => {
             <span>Select Hostel:</span>
           </span>
           <div className="flex-1 min-w-[200px]">
-            <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
+            <Select
+              value={selectedHostelId}
+              onValueChange={(val) => {
+                setSelectedHostelId(val);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800">
-                <SelectValue placeholder="Choose hostel block" />
+                <SelectValue placeholder="-- Select Hostel Block --" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Hostel Blocks</SelectItem>
                 {hostels.map((h) => (
                   <SelectItem key={h.id} value={String(h.id)}>
-                    {h.name}
+                    {h.name} ({h.gender === 'M' ? 'Boys' : h.gender === 'F' ? 'Girls' : 'Co-ed'})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -182,7 +209,10 @@ export const VisitorLogsManagement: React.FC = () => {
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             disabled={!selectedHostelId}
             placeholder="Search visitor, student, or purpose..."
             className="w-full bg-slate-50 pl-10 pr-4 py-2 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 disabled:opacity-50"
@@ -194,7 +224,10 @@ export const VisitorLogsManagement: React.FC = () => {
           {(['ALL', 'CHECKED_IN', 'CHECKED_OUT'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setFilterStatus(tab)}
+              onClick={() => {
+                setFilterStatus(tab);
+                setCurrentPage(1);
+              }}
               disabled={!selectedHostelId}
               className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                 filterStatus === tab && selectedHostelId
@@ -222,12 +255,12 @@ export const VisitorLogsManagement: React.FC = () => {
         <>
           {/* Mobile Card View (< 768px) */}
           <div className="grid grid-cols-1 gap-4 md:hidden">
-            {filteredLogs.length === 0 ? (
+            {paginatedLogs.length === 0 ? (
               <div className="bg-white p-10 rounded-3xl border border-slate-200 text-center text-slate-400 text-sm">
                 No visitor records found for this hostel block.
               </div>
             ) : (
-              filteredLogs.map((log) => (
+              paginatedLogs.map((log) => (
                 <div key={log.id} className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -248,7 +281,7 @@ export const VisitorLogsManagement: React.FC = () => {
                       <span className="block text-[10px] font-semibold text-slate-400 uppercase">Visiting Student</span>
                       <strong className="text-slate-800 block truncate mt-0.5">{log.student_name}</strong>
                       <span className="text-[10px] text-slate-500 block truncate">
-                        {log.student_room ? `Room ${log.student_room}` : log.enrollment_no || ''}
+                        {log.student_room || log.room_no ? formatFloorRoom(log.floor, log.student_room || log.room_no) : log.enrollment_no || ''}
                       </span>
                     </div>
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
@@ -300,14 +333,14 @@ export const VisitorLogsManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredLogs.length === 0 ? (
+                  {paginatedLogs.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-10 text-center text-slate-400">
                         No visitor records found for this hostel block.
                       </td>
                     </tr>
                   ) : (
-                    filteredLogs.map((log) => (
+                    paginatedLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-4 pl-6 font-semibold text-slate-800">
                           <div>{log.visitor_name}</div>
@@ -318,7 +351,7 @@ export const VisitorLogsManagement: React.FC = () => {
                         </td>
                         <td className="py-4 px-4 text-xs">
                           <span className="font-bold text-slate-800">{log.student_name}</span>
-                          <div className="text-slate-400">{log.student_room ? `Room ${log.student_room}` : log.enrollment_no || ''}</div>
+                          <div className="text-slate-400">{log.student_room || log.room_no ? formatFloorRoom(log.floor, log.student_room || log.room_no) : log.enrollment_no || ''}</div>
                         </td>
                         <td className="py-4 px-4 text-xs text-slate-600">
                           {log.purpose}
@@ -357,6 +390,81 @@ export const VisitorLogsManagement: React.FC = () => {
               </table>
             </div>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredLogs.length > 0 && (
+            <div className="bg-white px-6 py-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-medium">
+                <span>
+                  Showing <strong className="text-slate-800 font-bold">{startIndex + 1}</strong> to{' '}
+                  <strong className="text-slate-800 font-bold">{endIndex}</strong> of{' '}
+                  <strong className="text-slate-800 font-bold">{totalItems}</strong> visitor logs
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0B1437] cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                      .map((pageNum, idx, arr) => {
+                        const prev = arr[idx - 1];
+                        return (
+                          <React.Fragment key={pageNum}>
+                            {prev && pageNum - prev > 1 && (
+                              <span className="px-1 text-slate-400 font-bold">...</span>
+                            )}
+                            <button
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                currentPage === pageNum
+                                  ? 'bg-[#0B1437] text-white shadow-2xs'
+                                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

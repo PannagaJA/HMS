@@ -46,6 +46,7 @@ export const RoomManagement: React.FC = () => {
   const [isSubmittingEdit, setIsSubmittingEdit] = useState<boolean>(false);
 
   // Bulk room generator state
+  const [bulkHostelId, setBulkHostelId] = useState<string>('');
   const [bulkFloor, setBulkFloor] = useState(1);
   const [bulkCount, setBulkCount] = useState(10);
   const [bulkCapacity, setBulkCapacity] = useState(2);
@@ -75,9 +76,6 @@ export const RoomManagement: React.FC = () => {
         list = res.data || [];
       }
       setHostels(list);
-      if (list.length > 0 && !selectedHostelId) {
-        setSelectedHostelId(String(list[0].id));
-      }
     } catch (err) {
       console.error('Failed to load hostels', err);
     }
@@ -136,11 +134,11 @@ export const RoomManagement: React.FC = () => {
   };
 
   const handleOpenAddSingleRoom = () => {
-    const targetHostel = selectedHostelId || (hostels[0] ? String(hostels[0].id) : '');
+    const targetHostel = selectedHostelId || '';
     setSingleHostelId(targetHostel);
-    const defaultFloor = selectedFloor && selectedFloor !== 'all' ? selectedFloor : '0';
+    const defaultFloor = selectedFloor && selectedFloor !== 'all' && selectedFloor !== 'ALL' ? selectedFloor : '';
     setSingleFloor(defaultFloor);
-    setSingleRoomNo(generateNextRoomNumber(defaultFloor, targetHostel));
+    setSingleRoomNo(targetHostel && defaultFloor !== '' ? generateNextRoomNumber(defaultFloor, targetHostel) : '');
     setSingleRoomName('');
     setSingleRoomType('S');
     setSingleCapacity(1);
@@ -157,8 +155,16 @@ export const RoomManagement: React.FC = () => {
 
   const handleCreateSingleRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!singleRoomNo.trim() || !singleHostelId) {
-      showWarning('Please fill in room number and select a hostel');
+    if (!singleHostelId) {
+      showWarning('Please select a hostel block');
+      return;
+    }
+    if (singleFloor === '') {
+      showWarning('Please select a floor');
+      return;
+    }
+    if (!singleRoomNo.trim()) {
+      showWarning('Please enter a room number');
       return;
     }
 
@@ -176,7 +182,12 @@ export const RoomManagement: React.FC = () => {
 
       showSuccess(`Room ${singleRoomNo.trim()} created successfully.`);
       setShowSingleRoomModal(false);
-      fetchRooms(singleHostelId);
+      if (selectedHostelId !== singleHostelId) {
+        setSelectedHostelId(singleHostelId);
+        setSelectedFloor(singleFloor);
+      } else {
+        fetchRooms(singleHostelId);
+      }
     } catch (err: any) {
       console.error('Failed to create room:', err);
       showError('Failed to create room: ' + (err.response?.data?.detail || err.response?.data?.no?.[0] || err.message));
@@ -253,19 +264,42 @@ export const RoomManagement: React.FC = () => {
     }
   };
 
+  const handleOpenBulkModal = () => {
+    setBulkHostelId(selectedHostelId || '');
+    setBulkFloor(selectedFloor && selectedFloor !== 'ALL' && selectedFloor !== 'all' ? Number(selectedFloor) : 1);
+    setBulkCount(10);
+    setBulkRoomType('');
+    setBulkCapacity(1);
+    setShowBulkModal(true);
+  };
+
   const handleBulkGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const targetHostel = bulkHostelId || selectedHostelId;
+    if (!targetHostel) {
+      showWarning('Please select a hostel block for bulk room generation.');
+      return;
+    }
+    if (!bulkRoomType) {
+      showWarning('Please select a room type.');
+      return;
+    }
     try {
       await apiClient.post('/hms/rooms/bulk_create_rooms/', {
-        hostel_id: Number(selectedHostelId),
-        floor: bulkFloor,
-        room_count: bulkCount,
-        capacity: bulkCapacity,
+        hostel_id: Number(targetHostel),
+        floor: Number(bulkFloor),
+        room_count: Number(bulkCount),
+        capacity: Number(bulkCapacity),
         room_type: bulkRoomType,
       });
       showSuccess(`Successfully generated ${bulkCount} rooms on Floor ${bulkFloor}.`);
       setShowBulkModal(false);
-      fetchRooms(selectedHostelId);
+      if (selectedHostelId !== targetHostel) {
+        setSelectedHostelId(targetHostel);
+        setSelectedFloor(String(bulkFloor));
+      } else {
+        fetchRooms(targetHostel);
+      }
     } catch (err: any) {
       showError(err.response?.data?.detail || 'Failed to generate rooms');
     }
@@ -298,7 +332,7 @@ export const RoomManagement: React.FC = () => {
             <span>Add Room</span>
           </button>
           <button
-            onClick={() => setShowBulkModal(true)}
+            onClick={handleOpenBulkModal}
             className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <Layers className="w-4 h-4 text-slate-500" />
@@ -315,7 +349,7 @@ export const RoomManagement: React.FC = () => {
             <div className="flex-1 min-w-[200px]">
               <Select value={selectedHostelId} onValueChange={setSelectedHostelId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose hostel block" />
+                  <SelectValue placeholder="-- Select Hostel Block --" />
                 </SelectTrigger>
                 <SelectContent>
                   {hostels.map((h) => (
@@ -404,7 +438,7 @@ export const RoomManagement: React.FC = () => {
               <span>Add Single Room</span>
             </button>
             <button
-              onClick={() => setShowBulkModal(true)}
+              onClick={handleOpenBulkModal}
               className="px-6 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
             >
               <Layers className="w-4 h-4 text-slate-500" />
@@ -609,7 +643,7 @@ export const RoomManagement: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Block <span className="text-red-500">*</span></label>
                 <Select value={editHostelId} onValueChange={setEditHostelId}>
                   <SelectTrigger className="w-full bg-slate-50">
-                    <SelectValue placeholder="Select hostel" />
+                    <SelectValue placeholder="-- Select Hostel Block --" />
                   </SelectTrigger>
                   <SelectContent>
                     {hostels.map((h) => (
@@ -668,7 +702,7 @@ export const RoomManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type <span className="text-red-500">*</span></label>
                   <Select value={editRoomType} onValueChange={handleEditRoomTypeChange}>
                     <SelectTrigger className="w-full bg-slate-50">
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue placeholder="-- Select Type --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="S">Single</SelectItem>
@@ -752,7 +786,7 @@ export const RoomManagement: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel <span className="text-red-500">*</span></label>
                 <Select value={singleHostelId} onValueChange={handleSingleHostelChange}>
                   <SelectTrigger className="w-full bg-slate-50">
-                    <SelectValue placeholder="Select hostel" />
+                    <SelectValue placeholder="-- Select Hostel Block --" />
                   </SelectTrigger>
                   <SelectContent>
                     {hostels.map((h) => (
@@ -812,7 +846,7 @@ export const RoomManagement: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type <span className="text-red-500">*</span></label>
                   <Select value={singleRoomType} onValueChange={handleSingleRoomTypeChange}>
                     <SelectTrigger className="w-full bg-slate-50">
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue placeholder="-- Select Type --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="S">Single</SelectItem>
@@ -866,6 +900,20 @@ export const RoomManagement: React.FC = () => {
             <p className="text-xs text-slate-500 mb-5">Automatically create numbered room slots on a floor.</p>
 
             <form onSubmit={handleBulkGenerate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Hostel Block <span className="text-red-500">*</span></label>
+                <Select value={bulkHostelId} onValueChange={setBulkHostelId}>
+                  <SelectTrigger className="w-full bg-slate-50">
+                    <SelectValue placeholder="-- Select Hostel Block --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hostels.map((h) => (
+                      <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor Number <span className="text-red-500">*</span></label>
@@ -908,9 +956,18 @@ export const RoomManagement: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Room Type <span className="text-red-500">*</span></label>
-                  <Select value={bulkRoomType} onValueChange={setBulkRoomType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Room Type" />
+                  <Select 
+                    value={bulkRoomType} 
+                    onValueChange={(val) => {
+                      setBulkRoomType(val);
+                      if (val === 'S') setBulkCapacity(1);
+                      else if (val === 'D') setBulkCapacity(2);
+                      else if (val === 'T') setBulkCapacity(3);
+                      else if (val === 'P') setBulkCapacity(4);
+                    }}
+                  >
+                    <SelectTrigger className="w-full bg-slate-50">
+                      <SelectValue placeholder="-- Select Room Type --" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="S">Single</SelectItem>

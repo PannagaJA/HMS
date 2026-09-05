@@ -11,14 +11,18 @@ import {
   ArrowLeft, 
   ShieldCheck, 
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import type { GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { supabase } from '../../lib/supabase';
 import { formatTime12 } from '../../lib/utils';
 import { useNotification } from '../../context/NotificationContext';
 import { useDebounce } from '../../hooks/useDebounce';
+import { formatFloorRoom } from '../../utils/formatters';
 
 export const GatePassScanner: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
@@ -34,6 +38,10 @@ export const GatePassScanner: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'outside' | 'completed'>('outside');
   const [filterQuery, setFilterQuery] = useState('');
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const limit = 8;
+
   // Confirmation Dialog State for Check Out & Check In
   const [pendingConfirmAction, setPendingConfirmAction] = useState<'EXIT' | 'ENTRY' | null>(null);
   const [viewModalPass, setViewModalPass] = useState<GatePassRequest | null>(null);
@@ -46,7 +54,17 @@ export const GatePassScanner: React.FC = () => {
 
   useEffect(() => {
     fetchGatePassRecords();
+
+    // Subscribe to realtime movements
+    const channel = supabase
+      .channel('public:gate_passes:security-scanner')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gate_passes' }, () => {
+        fetchGatePassRecords();
+      })
+      .subscribe();
+
     return () => {
+      supabase.removeChannel(channel);
       stopCameraScanner();
     };
   }, []);
@@ -58,10 +76,11 @@ export const GatePassScanner: React.FC = () => {
 
       const outside = passes.filter(
         (p: GatePassRequest) => p.actual_exit_time && !p.actual_entry_time
-      );
+      ).sort((a, b) => new Date(b.actual_exit_time || b.created_at || '').getTime() - new Date(a.actual_exit_time || a.created_at || '').getTime());
+
       const completed = passes.filter(
         (p: GatePassRequest) => p.actual_exit_time && p.actual_entry_time
-      );
+      ).sort((a, b) => new Date(b.actual_entry_time || b.actual_exit_time || b.created_at || '').getTime() - new Date(a.actual_entry_time || a.actual_exit_time || a.created_at || '').getTime());
 
       setActiveOutsidePasses(outside);
       setRecentCompletedPasses(completed);
@@ -200,11 +219,15 @@ export const GatePassScanner: React.FC = () => {
     return false;
   })();
 
+  const debouncedFilterQuery = useDebounce(filterQuery, 300);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, debouncedFilterQuery]);
+
   const displayedList = activeTab === 'outside' 
     ? activeOutsidePasses 
     : recentCompletedPasses;
-
-  const debouncedFilterQuery = useDebounce(filterQuery, 300);
 
   const filteredRecords = displayedList.filter((p) => {
     if (!debouncedFilterQuery) return true;
@@ -215,6 +238,9 @@ export const GatePassScanner: React.FC = () => {
       (p.hostel_name && p.hostel_name.toLowerCase().includes(q))
     );
   });
+
+  const totalPages = Math.ceil(filteredRecords.length / limit) || 1;
+  const paginatedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
   return (
     <div className="space-y-7 w-full">
@@ -364,7 +390,7 @@ export const GatePassScanner: React.FC = () => {
                 <div>
                   <h3 className="text-base font-bold text-slate-900">{scannedPass.student_name}</h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    {scannedPass.enrollment_no} · {scannedPass.hostel_name} (Room {scannedPass.room_no || 'N/A'})
+                    {scannedPass.enrollment_no} · {scannedPass.hostel_name} ({formatFloorRoom(scannedPass.floor, scannedPass.room_no)})
                   </p>
                   <p className="text-[11px] text-teal-900 font-mono mt-0.5 font-bold">
                     PASS: {String(scannedPass.pass_type).replace(/_/g, ' ')}
@@ -563,13 +589,13 @@ export const GatePassScanner: React.FC = () => {
                 : 'No completed return entries recorded yet today.'}
             </div>
           ) : (
-            filteredRecords.map((pass) => (
+            paginatedRecords.map((pass) => (
               <div key={pass.id} className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3 shadow-2xs">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Student & Room</span>
                     <div className="font-bold text-slate-900 text-sm">{pass.student_name}</div>
-                    <div className="text-xs text-slate-500">{pass.enrollment_no} · Room {pass.room_no || '101'}</div>
+                    <div className="text-xs text-slate-500">{pass.enrollment_no} · {formatFloorRoom(pass.floor, pass.room_no || '101')}</div>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</span>
@@ -639,11 +665,11 @@ export const GatePassScanner: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((pass) => (
+                paginatedRecords.map((pass) => (
                   <tr key={pass.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 pl-2">
                       <div className="font-bold text-slate-900 text-xs">{pass.student_name}</div>
-                      <div className="text-[11px] text-slate-400">{pass.enrollment_no} · Room {pass.room_no || '101'}</div>
+                      <div className="text-[11px] text-slate-400">{pass.enrollment_no} · {formatFloorRoom(pass.floor, pass.room_no || '101')}</div>
                     </td>
                     <td className="py-3.5 text-xs font-semibold text-slate-700">
                       {String(pass.pass_type).replace(/_/g, ' ')}
@@ -677,6 +703,36 @@ export const GatePassScanner: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+            <span className="text-xs text-slate-500 font-medium">
+              Showing {(page - 1) * limit + 1} to {Math.min(page * limit, filteredRecords.length)} of {filteredRecords.length} records
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-bold text-slate-700 px-2">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Next Page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* VIEW GATE PASS DETAILS POP-UP MODAL */}
@@ -698,7 +754,7 @@ export const GatePassScanner: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-slate-900">{viewModalPass.student_name}</h3>
                 <p className="text-xs text-slate-500 font-medium">
-                  {viewModalPass.enrollment_no} · {viewModalPass.hostel_name} (Room {viewModalPass.room_no || 'N/A'})
+                  {viewModalPass.enrollment_no} · {viewModalPass.hostel_name} ({formatFloorRoom(viewModalPass.floor, viewModalPass.room_no)})
                 </p>
                 <p className="text-[11px] text-[#0B1437] font-mono mt-0.5 font-bold">
                   PASS: {String(viewModalPass.pass_type).replace(/_/g, ' ')}
@@ -830,7 +886,7 @@ export const GatePassScanner: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Hostel & Room:</span>
-                <span className="text-slate-700">{scannedPass.hostel_name} (Rm {scannedPass.room_no || '101'})</span>
+                <span className="text-slate-700">{scannedPass.hostel_name} · {formatFloorRoom(scannedPass.floor, scannedPass.room_no || '101')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Pass Type:</span>

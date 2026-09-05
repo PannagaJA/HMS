@@ -80,12 +80,7 @@ export const MenuManagement: React.FC = () => {
       setHostels(loadedHostels);
       setMealTypes(mealTypesRes.data || []);
       setMenuItems(menuItemsRes.data || []);
-
-      const initialHostelId = loadedHostels.length > 0 ? String(loadedHostels[0].id) : '';
-      setSelectedHostelId(initialHostelId);
-      if (initialHostelId) {
-        await fetchMenus(initialHostelId);
-      }
+      setSelectedHostelId('');
     } catch (err) {
       console.error('Failed to load menu planner data', err);
     }
@@ -297,7 +292,7 @@ export const MenuManagement: React.FC = () => {
                 onValueChange={(val) => setSelectedHostelId(val)}
               >
                 <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold rounded-full h-9 px-3.5">
-                  <SelectValue placeholder="Choose Hostel Block" />
+                  <SelectValue placeholder="-- Select Hostel Block --" />
                 </SelectTrigger>
                 <SelectContent>
                   {hostels.map((hostel) => (

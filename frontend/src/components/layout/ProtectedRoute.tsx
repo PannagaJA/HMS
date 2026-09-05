@@ -20,44 +20,52 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   React.useEffect(() => {
     if (!user) return;
     
-    // Initial fetch
-    announcementService.getUnreadCount(user.role, user.id).then(setUnreadCount);
+    // Initial and dynamic fetch
+    const refreshCount = () => {
+      if (user?.role && user?.id) {
+        announcementService.getUnreadCount(user.role, user.id).then(setUnreadCount);
+      }
+    };
+
+    refreshCount();
 
     // Request Notification permissions for the OS-level ping
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
 
-    // Subscribe to new announcements
+    // Subscribe to announcements and read status changes
     const channel = supabase
-      .channel('public:announcements')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, (payload) => {
-        console.log('Realtime INSERT received in ProtectedRoute:', payload);
-        const newAnnouncement = payload.new;
-        if (newAnnouncement.target_roles && newAnnouncement.target_roles.includes(user.role)) {
-          console.log('Target role matches! Incrementing unread count.');
-          setUnreadCount(prev => prev + 1);
+      .channel('public:announcements:badge-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, (payload) => {
+        refreshCount();
+        if (payload.eventType === 'INSERT') {
+          const newAnnouncement = payload.new as any;
+          const userRole = (user.role || '').toUpperCase();
+          const targetRoles = (newAnnouncement?.target_roles || []).map((r: string) => r.toUpperCase());
+          if (targetRoles.includes(userRole)) {
+            // Play chime sound
+            const audio = new Audio('/notification.wav');
+            audio.play().catch(e => console.log('Audio autoplay blocked:', e));
 
-          // Play custom pleasant chime sound
-          const audio = new Audio('/notification.wav');
-          audio.play().catch(e => console.log('Audio autoplay blocked:', e));
-
-          // OS Notification
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('New Announcement', {
-              body: newAnnouncement.title,
-              icon: '/amc-favicon.png'
-            });
+            // OS Notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('New Announcement', {
+                body: newAnnouncement.title,
+                icon: '/amc-favicon.png'
+              });
+            }
           }
         }
       })
-      .subscribe((status) => {
-        console.log('ProtectedRoute WebSocket status:', status);
-      });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements_read' }, () => {
+        refreshCount();
+      })
+      .subscribe();
 
     // Listen for custom read event
     const handleRead = () => {
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      refreshCount();
     };
     window.addEventListener('announcementRead', handleRead);
 

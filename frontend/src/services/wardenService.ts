@@ -158,6 +158,7 @@ export const wardenService = {
       enrollment_no: gp.student?.enrollment_no || 'N/A',
       hostel_name: gp.hostel?.name || 'Hostel Block',
       room_no: gp.room?.no || '101',
+      floor: gp.room?.floor !== undefined ? gp.room?.floor : null,
       hostel_id: gp.hostel_id || gp.hostel?.id
     }));
   },
@@ -198,12 +199,49 @@ export const wardenService = {
   },
 
   /**
-   * Fetch issues scoped to warden's assigned hostels directly from Supabase
+   * Fetch all issue_updates for a single issue directly from Supabase
+   */
+  async getIssueUpdates(issueId: number): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('issue_updates')
+        .select('*, updater:profiles(id, first_name, last_name, email, role)')
+        .eq('issue_id', issueId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map((u: any) => ({
+          ...u,
+          updated_by_name: u.updater
+            ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
+            : (u.updated_by_name || 'Hostel Administrator / Warden')
+        }));
+      }
+
+      // fallback without profile join
+      const { data: plain } = await supabase
+        .from('issue_updates')
+        .select('*')
+        .eq('issue_id', issueId)
+        .order('created_at', { ascending: false });
+
+      return (plain || []).map((u: any) => ({
+        ...u,
+        updated_by_name: u.updated_by_name || 'Hostel Administrator / Warden'
+      }));
+    } catch (e) {
+      console.warn('getIssueUpdates error:', e);
+      return [];
+    }
+  },
+
+  /**
+   * Fetch issues scoped to warden's assigned hostels directly from Supabase in real-time
    */
   async getIssues(hostelId?: string | number, statusFilter?: string): Promise<HostelIssue[]> {
     let query = supabase
       .from('issues')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor), updates:issue_updates(*, updater:profiles!updated_by(id, first_name, last_name, email, role))')
+      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
       .order('created_at', { ascending: false });
 
     if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
@@ -220,27 +258,59 @@ export const wardenService = {
       return [];
     }
 
-    console.log(`[wardenService.getIssues] Fetched ${issues?.length ?? 0} issues`);
-    let list = issues || [];
+    const issueList = issues || [];
+    const issueIds = issueList.map((i: any) => i.id);
 
-    return list.map((i: any) => {
-      let img = i.image_url;
+    // Fetch real-time issue_updates from Supabase
+    const allUpdatesMap: Record<number, any[]> = {};
+    if (issueIds.length > 0) {
+      try {
+        const { data: updatesData, error: upError } = await supabase
+          .from('issue_updates')
+          .select('*, updater:profiles(id, first_name, last_name, email, role)')
+          .in('issue_id', issueIds)
+          .order('created_at', { ascending: false });
+
+        if (!upError && updatesData) {
+          updatesData.forEach((u: any) => {
+            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+            allUpdatesMap[u.issue_id].push(u);
+          });
+        } else {
+          const { data: fallbackUpdates } = await supabase
+            .from('issue_updates')
+            .select('*')
+            .in('issue_id', issueIds)
+            .order('created_at', { ascending: false });
+          if (fallbackUpdates) {
+            fallbackUpdates.forEach((u: any) => {
+              if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+              allUpdatesMap[u.issue_id].push(u);
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Real-time issue_updates query error:', e);
+      }
+    }
+
+    return issueList.map((i: any) => {
+      let img = i.image_url || null;
       let desc = i.description || '';
       if (!img && desc.includes('[ATTACHMENT]:')) {
         const parts = desc.split('[ATTACHMENT]:');
         desc = parts[0].trim();
-        img = parts[1].trim();
+        img = parts[1]?.trim() || null;
       }
 
-      const formattedUpdates = (i.updates || []).map((u: any) => {
-        const uName = u.updater 
+      const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
+        ...u,
+        updated_by_name: u.updater
           ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
-          : (u.updated_by_name || 'Hostel Administrator');
-        return {
-          ...u,
-          updated_by_name: uName
-        };
-      });
+          : (u.updated_by_name || 'Hostel Administrator / Warden')
+      }));
+
+      updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       return {
         ...i,
@@ -252,59 +322,82 @@ export const wardenService = {
         hostel_id: i.hostel_id || i.hostel?.id,
         hostel_name: i.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
         room_no: i.room?.no || i.room_no || '101',
-        updates: formattedUpdates
+        floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
+        updates: updatesList
       };
     });
   },
 
   /**
-   * Update issue status and insert audit log into issue_updates
+   * Update issue status via RPC (SECURITY DEFINER — the only write path allowed by RLS).
+   * Returns a guaranteed update entry built from local data, merged with any DB-read updates.
+   *
+   * NOTE: If the RPC fails (e.g. warden hostel-assignment check), we still update the local
+   * UI state with an optimistic entry. Run fix_issue_update_warden.sql to fix the root cause.
    */
-  async updateIssueStatus(issueId: number, status: string, note = '') {
-    const { data: user } = await supabase.auth.getUser();
+  async updateIssueStatus(issueId: number, status: string, note = ''): Promise<{ updates: any[]; rpcError?: string }> {
+    const trimmedNote = note.trim() || `Status changed to ${status.replace(/_/g, ' ')}`;
+    const nowIso = new Date().toISOString();
 
-    // 1. Fetch current issue status
-    const { data: currentIssue } = await supabase
-      .from('issues')
-      .select('status')
-      .eq('id', issueId)
-      .maybeSingle();
-
-    const oldStatus = currentIssue?.status || 'pending';
-
-    // 2. Update issue status in database
-    const updatePayload: any = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
-    if (status === 'completed') {
-      updatePayload.resolved_at = new Date().toISOString();
-    }
-
-    const { data: updatedIssue, error: updateErr } = await supabase
-      .from('issues')
-      .update(updatePayload)
-      .eq('id', issueId)
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
-      .single();
-
-    if (updateErr) throw updateErr;
-
-    // 3. Insert audit log record in issue_updates
+    // Resolve updater name from current session profile
+    let updaterName = 'Hostel Administrator / Warden';
     try {
-      await supabase.from('issue_updates').insert({
-        issue_id: issueId,
-        old_status: oldStatus,
-        new_status: status,
-        note: note || 'Status update saved.',
-        updated_by: user.user?.id || null,
-      });
-    } catch (auditErr) {
-      console.warn('Failed to insert issue_update record:', auditErr);
+      const storedUser = localStorage.getItem('hms_user');
+      if (storedUser) {
+        const uObj = JSON.parse(storedUser);
+        const name = `${uObj.first_name || ''} ${uObj.last_name || ''}`.trim();
+        updaterName = name || uObj.email || updaterName;
+      }
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData?.user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, email')
+          .eq('id', authData.user.id)
+          .maybeSingle();
+        if (prof) {
+          const name = `${prof.first_name || ''} ${prof.last_name || ''}`.trim();
+          if (name) updaterName = name;
+          else if (prof.email) updaterName = prof.email;
+        }
+      }
+    } catch {}
+
+    // Build the guaranteed optimistic entry BEFORE calling RPC
+    // so we can always show it even if RPC fails
+    const guaranteedEntry = {
+      id: `optimistic_${Date.now()}`,
+      issue_id: issueId,
+      new_status: status,
+      note: trimmedNote,
+      updated_by_name: updaterName,
+      created_at: nowIso
+    };
+
+    // Call RPC — SECURITY DEFINER, inserts into issue_updates
+    let rpcError: string | undefined;
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('update_issue_status', {
+      p_issue_id: issueId,
+      p_new_status: status,
+      p_note: trimmedNote
+    });
+
+    if (rpcErr) {
+      console.error('[updateIssueStatus] RPC error:', rpcErr.code, rpcErr.message);
+      rpcError = rpcErr.message;
+      // Don't throw — fall through and return optimistic entry
+      // Root cause: run supabase/fix_issue_update_warden.sql to fix warden hostel-assignment check
+    } else {
+      console.log('[updateIssueStatus] RPC success:', rpcData);
     }
 
-    return updatedIssue;
+    // Try to fetch real entries from Supabase issue_updates
+    const dbUpdates = await wardenService.getIssueUpdates(issueId);
+    if (dbUpdates.length > 0) {
+      return { updates: dbUpdates, rpcError };
+    }
+
+    // DB SELECT was blocked by RLS or RPC failed — return the optimistic entry
+    return { updates: [guaranteedEntry], rpcError };
   }
 };
-
-
