@@ -547,7 +547,7 @@ export const StudentManagement: React.FC = () => {
       const rawEmergency = rowObj['emergencycontact'] || rowObj['emergencyphone'] || rowObj['emergency'] || values[6] || '';
       const emergencyContact = rawEmergency.replace(/[^\d]/g, '');
 
-      const email = rowObj['email'] || rowObj['emailid'] || rowObj['mail'] || (enrollmentNo ? `${enrollmentNo.toLowerCase()}@student.amc.edu` : undefined);
+      const email = rowObj['email'] || rowObj['emailid'] || rowObj['mail'] || undefined;
 
       let isValid = true;
       let errorReason: string | undefined = undefined;

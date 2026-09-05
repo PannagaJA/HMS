@@ -259,7 +259,7 @@ export const adminService = {
       const bed = activeAlloc?.bed;
       const room = bed?.room;
       const hostel = room?.hostel;
-      const resolvedEmail = s.email || s.profile?.email || (s.enrollment_no ? `${s.enrollment_no.toLowerCase()}@amc.edu` : '');
+      const resolvedEmail = s.email || s.profile?.email || '';
       return {
         ...s,
         email: resolvedEmail,
