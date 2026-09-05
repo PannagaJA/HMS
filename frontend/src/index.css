@@ -66,3 +66,68 @@ body[data-scroll-locked] {
 #qr-reader-container div:first-child {
   display: none !important;
 }
+
+/* Global Mobile Modal Constrain: Max 80vh with Smooth Internal Scrolling */
+@media (max-width: 640px) {
+  /* Prevent double scroll by locking the backdrop on mobile */
+  .fixed.inset-0 {
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+  }
+
+  /* Any modal dialog container directly inside a fixed overlay */
+  .fixed.inset-0 > div:not([class*="toast"]):not([class*="scanner"]) {
+    max-height: 80vh !important;
+    max-height: 80dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+  }
+
+  /* Ensure modal header and action buttons stay in view while body scrolls */
+  .fixed.inset-0 > div form {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+/* Thin Elegant Scrollbar for Popups and Modals */
+.fixed.inset-0 > div,
+.fixed.inset-0 > div form,
+.fixed.inset-0 [class*="overflow-y-auto"] {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent !important; /* Slate-400 with opacity */
+}
+
+.fixed.inset-0 > div::-webkit-scrollbar,
+.fixed.inset-0 > div form::-webkit-scrollbar,
+.fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar {
+  display: block !important;
+  width: 5px !important;
+  height: 5px !important;
+}
+
+.fixed.inset-0 > div::-webkit-scrollbar-track,
+.fixed.inset-0 > div form::-webkit-scrollbar-track,
+.fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.fixed.inset-0 > div::-webkit-scrollbar-thumb,
+.fixed.inset-0 > div form::-webkit-scrollbar-thumb,
+.fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4) !important;
+  border-radius: 9999px !important;
+}
+
+.fixed.inset-0 > div::-webkit-scrollbar-thumb:hover,
+.fixed.inset-0 > div form::-webkit-scrollbar-thumb:hover,
+.fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.7) !important; /* Slate-500 hover */
+}

@@ -584,8 +584,14 @@ export const StudentManagement: React.FC = () => {
   };
 
   // Computed helpers for Add Student modal allocation hierarchy
+  const addHostelObj = hostels.find((h) => String(h.id) === String(addHostelId));
+  const addConfiguredMaxFloor = Number(addHostelObj?.floor_count ?? 3);
+  const addRoomFloors = addHostelAllRooms.map((r) => Number(r.floor)).filter((f) => !isNaN(f));
   const addAvailableFloors = Array.from(
-    new Set(addHostelAllRooms.map((r) => r.floor))
+    new Set([
+      ...Array.from({ length: Math.max(1, addConfiguredMaxFloor) + 1 }, (_, i) => i),
+      ...addRoomFloors
+    ])
   ).sort((a, b) => Number(a) - Number(b));
 
   const addFloorRooms = addHostelAllRooms.filter(
@@ -601,8 +607,14 @@ export const StudentManagement: React.FC = () => {
     : [];
 
   // Computed helpers for Standalone Allocate modal allocation hierarchy
+  const allocateHostelObj = hostels.find((h) => String(h.id) === String(selectedHostelId));
+  const allocateConfiguredMaxFloor = Number(allocateHostelObj?.floor_count ?? 3);
+  const allocateRoomFloors = allocateHostelAllRooms.map((r) => Number(r.floor)).filter((f) => !isNaN(f));
   const allocateAvailableFloors = Array.from(
-    new Set(allocateHostelAllRooms.map((r) => r.floor))
+    new Set([
+      ...Array.from({ length: Math.max(1, allocateConfiguredMaxFloor) + 1 }, (_, i) => i),
+      ...allocateRoomFloors
+    ])
   ).sort((a, b) => Number(a) - Number(b));
 
   const allocateFloorRooms = allocateHostelAllRooms.filter(
@@ -1017,10 +1029,10 @@ export const StudentManagement: React.FC = () => {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8">
+          <div className="bg-white w-full max-w-2xl sm:max-w-3xl rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Student Admission & Registration</h3>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Student Admission & Registration</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Enroll a student resident into the hostel directory</p>
               </div>
               <button
@@ -1032,7 +1044,8 @@ export const StudentManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSingleStudentSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Row 1: Name & USN */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Student Full Name <span className="text-rose-500">*</span>
@@ -1043,7 +1056,7 @@ export const StudentManagement: React.FC = () => {
                     value={addName}
                     onChange={(e) => setAddName(e.target.value)}
                     placeholder="e.g. Ramesh Kumar"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
 
@@ -1057,10 +1070,13 @@ export const StudentManagement: React.FC = () => {
                     value={addUsn}
                     onChange={(e) => setAddUsn(e.target.value)}
                     placeholder="e.g. 1AM22CS045"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
                   />
                 </div>
+              </div>
 
+              {/* Row 2: Email & Gender */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Student Email <span className="text-rose-500">*</span>
@@ -1071,16 +1087,14 @@ export const StudentManagement: React.FC = () => {
                     value={addEmail}
                     onChange={(e) => setAddEmail(e.target.value)}
                     placeholder="e.g. student@amc.edu"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Gender <span className="text-red-500">*</span></label>
                   <Select value={addGender} onValueChange={(val: 'M' | 'F') => setAddGender(val)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200">
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1089,7 +1103,10 @@ export const StudentManagement: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
+              {/* Row 3: Student Mobile & Father/Guardian Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Student Mobile Number <span className="text-red-500">*</span></label>
                   <input
@@ -1101,12 +1118,10 @@ export const StudentManagement: React.FC = () => {
                     value={addPhone}
                     onChange={(e) => setAddPhone(e.target.value)}
                     placeholder="e.g. 9876543210"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Father / Guardian Name</label>
                   <input
@@ -1114,10 +1129,13 @@ export const StudentManagement: React.FC = () => {
                     value={addFatherName}
                     onChange={(e) => setAddFatherName(e.target.value)}
                     placeholder="e.g. Suresh Kumar"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
+              </div>
 
+              {/* Row 4: Guardian Phone & Emergency Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Contact Phone <span className="text-red-500">*</span></label>
                   <input
@@ -1129,26 +1147,26 @@ export const StudentManagement: React.FC = () => {
                     value={addGuardianPhone}
                     onChange={(e) => setAddGuardianPhone(e.target.value)}
                     placeholder="e.g. 9811223344"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Emergency Contact <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  pattern="^[6-9][0-9]{9}$"
-                  title="Please enter a valid 10-digit Indian phone number starting with 6-9"
-                  maxLength={10}
-                  value={addEmergencyContact}
-                  onChange={(e) => setAddEmergencyContact(e.target.value)}
-                  placeholder="e.g. 9899001122"
-                  className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Emergency Contact <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
+                    value={addEmergencyContact}
+                    onChange={(e) => setAddEmergencyContact(e.target.value)}
+                    placeholder="e.g. 9899001122"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
               </div>
 
               <div className="pt-2 border-t border-slate-100">
@@ -1166,14 +1184,15 @@ export const StudentManagement: React.FC = () => {
               </div>
 
               {addAllotDirectly && (
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 animate-in fade-in duration-150">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                  {/* Allocation 2-in-a-row Row 1: Hostel Block & Floor */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                         Hostel Block <span className="text-rose-500">*</span>
                       </label>
                       <Select value={addHostelId} onValueChange={handleAddHostelChange}>
-                        <SelectTrigger className="bg-white">
+                        <SelectTrigger className="w-full bg-white border-slate-200">
                           <SelectValue placeholder="-- Select Hostel Block --" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1187,7 +1206,7 @@ export const StudentManagement: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                         Floor <span className="text-rose-500">*</span>
                       </label>
                       <Select
@@ -1195,7 +1214,7 @@ export const StudentManagement: React.FC = () => {
                         onValueChange={handleAddFloorChange}
                         disabled={!addHostelId}
                       >
-                        <SelectTrigger className="bg-white disabled:opacity-50">
+                        <SelectTrigger className="w-full bg-white border-slate-200 disabled:opacity-50">
                           <SelectValue placeholder={!addHostelId ? 'Select hostel first' : '-- Select Floor --'} />
                         </SelectTrigger>
                         <SelectContent>
@@ -1207,9 +1226,12 @@ export const StudentManagement: React.FC = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
 
+                  {/* Allocation 2-in-a-row Row 2: Available Room & Bed Slot */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                         Available Room <span className="text-rose-500">*</span>
                       </label>
                       <Select
@@ -1217,7 +1239,7 @@ export const StudentManagement: React.FC = () => {
                         onValueChange={handleAddRoomChange}
                         disabled={!addFloor}
                       >
-                        <SelectTrigger className="bg-white disabled:opacity-50">
+                        <SelectTrigger className="w-full bg-white border-slate-200 disabled:opacity-50">
                           <SelectValue
                             placeholder={
                               !addFloor
@@ -1239,7 +1261,7 @@ export const StudentManagement: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                         Bed Slot <span className="text-rose-500">*</span>
                       </label>
                       <Select
@@ -1247,7 +1269,7 @@ export const StudentManagement: React.FC = () => {
                         onValueChange={setAddBedNo}
                         disabled={!addRoomId || addVacantBeds.length === 0}
                       >
-                        <SelectTrigger className="bg-white disabled:opacity-50">
+                        <SelectTrigger className="w-full bg-white border-slate-200 disabled:opacity-50">
                           <SelectValue
                             placeholder={
                               !addRoomId
