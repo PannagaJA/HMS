@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, UserPlus, X } from 'lucide-react';
 import type { Hostel, HostelWarden, HostelCaretaker } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
@@ -18,6 +18,15 @@ export const HostelManagement: React.FC = () => {
   const [caretakers, setCaretakers] = useState<HostelCaretaker[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingHostel, setEditingHostel] = useState<Hostel | null>(null);
+
+  // Quick Staff Enrollment Modal States
+  const [enrollRole, setEnrollRole] = useState<'warden' | 'caretaker' | null>(null);
+  const [staffName, setStaffName] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffPhone, setStaffPhone] = useState('');
+  const [staffDesignation, setStaffDesignation] = useState('');
+  const [staffExperience, setStaffExperience] = useState(2);
+  const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
 
   const [name, setName] = useState('');
   const [gender, setGender] = useState<'M' | 'F' | 'C'>('M');
@@ -90,6 +99,88 @@ export const HostelManagement: React.FC = () => {
       fetchData();
     } catch (err: any) {
       showError(err.response?.data?.name?.[0] || err.message || 'Failed to save hostel');
+    }
+  };
+
+  const handleOpenEnrollStaff = (role: 'warden' | 'caretaker') => {
+    setEnrollRole(role);
+    setStaffName('');
+    setStaffEmail('');
+    setStaffPhone('');
+    setStaffDesignation(role === 'warden' ? 'Hostel Warden' : '');
+    setStaffExperience(2);
+  };
+
+  const handleCloseEnrollStaff = () => {
+    setEnrollRole(null);
+    setStaffName('');
+    setStaffEmail('');
+    setStaffPhone('');
+    setStaffDesignation('');
+    setStaffExperience(2);
+    setIsSubmittingStaff(false);
+  };
+
+  const handleEnrollStaffSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrollRole) return;
+    setIsSubmittingStaff(true);
+
+    try {
+      const payload: any = {
+        name: staffName.trim(),
+        email: staffEmail.trim() || undefined,
+        phone: staffPhone.trim(),
+        experience: Number(staffExperience) || 0,
+      };
+
+      if (enrollRole === 'warden') {
+        payload.designation = staffDesignation.trim() || 'Hostel Warden';
+        const res = await apiClient.post('/hms/wardens/', payload);
+        const newWarden = res.data;
+        showSuccess(`Warden "${staffName}" enrolled successfully.`);
+        
+        // Refresh wardens list and auto-select
+        const wRes = await apiClient.get<HostelWarden[]>('/hms/wardens/');
+        const updatedWardens = wRes.data || [];
+        setWardens(updatedWardens);
+
+        if (newWarden?.id) {
+          setWardenId(String(newWarden.id));
+        } else {
+          const match = updatedWardens.find((w) => w.name.toLowerCase() === staffName.trim().toLowerCase());
+          if (match) setWardenId(String(match.id));
+        }
+      } else {
+        const res = await apiClient.post('/hms/caretakers/', payload);
+        const newCaretaker = res.data;
+        showSuccess(`Caretaker "${staffName}" enrolled successfully.`);
+
+        // Refresh caretakers list and auto-select
+        const cRes = await apiClient.get<HostelCaretaker[]>('/hms/caretakers/');
+        const updatedCaretakers = cRes.data || [];
+        setCaretakers(updatedCaretakers);
+
+        if (newCaretaker?.id) {
+          setCaretakerId(String(newCaretaker.id));
+        } else {
+          const match = updatedCaretakers.find((c) => c.name.toLowerCase() === staffName.trim().toLowerCase());
+          if (match) setCaretakerId(String(match.id));
+        }
+      }
+
+      handleCloseEnrollStaff();
+    } catch (err: any) {
+      const errorMsg =
+        err.response?.data?.detail ||
+        err.response?.data?.name?.[0] ||
+        err.response?.data?.phone?.[0] ||
+        err.response?.data?.email?.[0] ||
+        err.message ||
+        `Failed to enroll ${enrollRole}`;
+      showError(errorMsg);
+    } finally {
+      setIsSubmittingStaff(false);
     }
   };
 
@@ -249,7 +340,17 @@ export const HostelManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Assign Warden</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">Assign Warden</label>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEnrollStaff('warden')}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      <span>Add Warden</span>
+                    </button>
+                  </div>
                   <Select value={wardenId} onValueChange={setWardenId}>
                     <SelectTrigger>
                       <SelectValue placeholder="-- None --" />
@@ -263,7 +364,17 @@ export const HostelManagement: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Assign Caretaker</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">Assign Caretaker</label>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEnrollStaff('caretaker')}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      <span>Add Caretaker</span>
+                    </button>
+                  </div>
                   <Select value={caretakerId} onValueChange={setCaretakerId}>
                     <SelectTrigger>
                       <SelectValue placeholder="-- None --" />
@@ -302,6 +413,124 @@ export const HostelManagement: React.FC = () => {
                   className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer"
                 >
                   Save Hostel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Staff Enrollment Popup */}
+      {enrollRole && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Enroll New {enrollRole === 'warden' ? 'Warden' : 'Caretaker'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseEnrollStaff}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-5 pl-10">
+              Provide staff contact details. The newly enrolled {enrollRole} will be saved and automatically assigned to this hostel block.
+            </p>
+
+            <form onSubmit={handleEnrollStaffSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={staffName}
+                  onChange={(e) => setStaffName(e.target.value)}
+                  placeholder={enrollRole === 'warden' ? 'e.g. Dr. Rajesh Sharma' : 'e.g. Ramesh Kumar'}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                />
+              </div>
+
+              {enrollRole === 'warden' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Designation</label>
+                  <input
+                    type="text"
+                    value={staffDesignation}
+                    onChange={(e) => setStaffDesignation(e.target.value)}
+                    placeholder="e.g. Chief Warden / Hostel Warden"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Phone (10 Digits) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
+                    value={staffPhone}
+                    onChange={(e) => setStaffPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="9876543210"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Experience (Years) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={staffExperience}
+                    onChange={(e) => setStaffExperience(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Institutional Email</label>
+                <input
+                  type="email"
+                  value={staffEmail}
+                  onChange={(e) => setStaffEmail(e.target.value)}
+                  placeholder="name@university.edu"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleCloseEnrollStaff}
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingStaff}
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmittingStaff ? 'Enrolling...' : `Save & Assign ${enrollRole === 'warden' ? 'Warden' : 'Caretaker'}`}
                 </button>
               </div>
             </form>
