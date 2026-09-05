@@ -1730,10 +1730,10 @@ export const StudentManagement: React.FC = () => {
       {/* Edit Student Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8">
+          <div className="bg-white w-full max-w-2xl sm:max-w-3xl rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Edit Student Record</h3>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Edit Student Record</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Update personal details, institutional contact, and emergency info</p>
               </div>
               <button
@@ -1745,7 +1745,8 @@ export const StudentManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleEditStudentSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Row 1: Student Full Name & USN */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Student Full Name <span className="text-rose-500">*</span>
@@ -1756,7 +1757,7 @@ export const StudentManagement: React.FC = () => {
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="e.g. Ramesh Kumar"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
 
@@ -1770,38 +1771,42 @@ export const StudentManagement: React.FC = () => {
                     value={editUsn}
                     onChange={(e) => setEditUsn(e.target.value)}
                     placeholder="e.g. 1AM22CS045"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 font-mono"
                   />
                 </div>
+              </div>
 
+              {/* Row 2: Email & Gender */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Email Address
+                    Student Email
                   </label>
                   <input
                     type="email"
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="e.g. student@amc.edu"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Gender <span className="text-red-500">*</span></label>
                   <Select value={editGender} onValueChange={(val: 'M' | 'F') => setEditGender(val)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200">
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="M">Male</SelectItem>
-                      <SelectItem value="F">Female</SelectItem>
+                      <SelectItem value="M">Male (Boys Hostel)</SelectItem>
+                      <SelectItem value="F">Female (Girls Hostel)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
+              {/* Row 3: Student Mobile & Father/Guardian Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Student Mobile Number</label>
                   <input
@@ -1812,12 +1817,10 @@ export const StudentManagement: React.FC = () => {
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
                     placeholder="e.g. 9876543210"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Father / Guardian Name</label>
                   <input
@@ -1825,10 +1828,13 @@ export const StudentManagement: React.FC = () => {
                     value={editFatherName}
                     onChange={(e) => setEditFatherName(e.target.value)}
                     placeholder="e.g. Suresh Kumar"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
+              </div>
 
+              {/* Row 4: Guardian Phone & Emergency Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Contact Phone</label>
                   <input
@@ -1839,20 +1845,25 @@ export const StudentManagement: React.FC = () => {
                     value={editGuardianPhone}
                     onChange={(e) => setEditGuardianPhone(e.target.value)}
                     placeholder="e.g. 9811223344"
-                    className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Emergency Contact</label>
-                <input
-                  type="text"
-                  value={editEmergencyContact}
-                  onChange={(e) => setEditEmergencyContact(e.target.value)}
-                  placeholder="e.g. 9899001122 (Local Guardian / Relative)"
-                  className="w-full bg-slate-50 px-3.5 py-2 rounded-2xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Emergency Contact
+                  </label>
+                  <input
+                    type="tel"
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Please enter a valid 10-digit Indian phone number starting with 6-9"
+                    maxLength={10}
+                    value={editEmergencyContact}
+                    onChange={(e) => setEditEmergencyContact(e.target.value)}
+                    placeholder="e.g. 9899001122"
+                    className="w-full bg-slate-50 px-3.5 py-2.5 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
