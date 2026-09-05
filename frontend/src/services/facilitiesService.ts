@@ -513,30 +513,40 @@ export const issueService = {
     const allUpdatesMap: Record<number, any[]> = {};
     if (issueIds.length > 0) {
       try {
-        const { data: updatesData, error: upError } = await supabase
+        const { data: rawUpdates, error: upError } = await supabase
           .from('issue_updates')
-          .select('*, updater:profiles(id, first_name, last_name, email, role)')
+          .select('*')
           .in('issue_id', issueIds)
           .order('created_at', { ascending: false });
 
-        if (!upError && updatesData) {
-          updatesData.forEach((u: any) => {
-            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
-            allUpdatesMap[u.issue_id].push(u);
-          });
-        } else {
-          // If profile join failed, fallback to plain issue_updates select
-          const { data: fallbackUpdates } = await supabase
-            .from('issue_updates')
-            .select('*')
-            .in('issue_id', issueIds)
-            .order('created_at', { ascending: false });
-          if (fallbackUpdates) {
-            fallbackUpdates.forEach((u: any) => {
-              if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
-              allUpdatesMap[u.issue_id].push(u);
-            });
+        if (!upError && rawUpdates && rawUpdates.length > 0) {
+          // Resolve updater profiles in batch
+          const updaterUuids = Array.from(new Set(rawUpdates.map((u: any) => u.updated_by).filter(Boolean)));
+          const profilesMap: Record<string, string> = {};
+          if (updaterUuids.length > 0) {
+            const { data: profs } = await supabase
+              .from('profiles')
+              .select('id, first_name, last_name, email, role')
+              .in('id', updaterUuids);
+            if (profs) {
+              profs.forEach((p: any) => {
+                const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || '');
+                const displayName = fullName || p.email || '';
+                profilesMap[p.id] = roleLabel && displayName ? `${displayName} (${roleLabel})` : displayName;
+              });
+            }
           }
+
+          rawUpdates.forEach((u: any) => {
+            const resolvedName = u.updated_by_name || (u.updated_by ? profilesMap[u.updated_by] : '') || '';
+            const formatted = {
+              ...u,
+              updated_by_name: resolvedName,
+            };
+            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+            allUpdatesMap[u.issue_id].push(formatted);
+          });
         }
       } catch (e) {
         console.warn('Real-time issue_updates query error:', e);
@@ -554,9 +564,7 @@ export const issueService = {
 
       const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
         ...u,
-        updated_by_name: u.updater
-          ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
-          : (u.updated_by_name || 'Hostel Administrator / Warden')
+        updated_by_name: u.updated_by_name || ''
       }));
 
       updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -565,10 +573,10 @@ export const issueService = {
         ...i,
         description: desc,
         image_url: img,
-        student_name: i.student?.student_name || 'Resident',
-        enrollment_no: i.student?.enrollment_no || 'N/A',
-        hostel_name: i.hostel?.name || 'Block A',
-        room_no: i.room?.no || '101',
+        student_name: i.student?.student_name || '',
+        enrollment_no: i.student?.enrollment_no || '',
+        hostel_name: i.hostel?.name || '',
+        room_no: i.room?.no || '',
         floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
         updates: updatesList
       };
@@ -670,15 +678,68 @@ export const issueService = {
       throw insertRes.error;
     }
 
-    const data = insertRes.data;
+    const createdData = insertRes.data;
+
+    // Create initial audit log in issue_updates so ticket has history (View Updates 1)
+    let initialUpdates: any[] = [];
+    try {
+      const initialEntry: {
+        issue_id: number;
+        old_status: string | null;
+        new_status: string;
+        note: string;
+        updated_by: string | null;
+        org_id: string;
+      } = {
+        issue_id: createdData.id,
+        old_status: null,
+        new_status: 'pending',
+        note: `Ticket submitted: ${payload.title}`,
+        updated_by: userId || null,
+        org_id: createdData.org_id || '00000000-0000-0000-0000-000000000001'
+      };
+      const { data: dbUp, error: dbUpErr } = await supabase
+        .from('issue_updates')
+        .insert(initialEntry)
+        .select()
+        .single();
+
+      if (!dbUpErr && dbUp) {
+        initialUpdates = [{
+          ...dbUp,
+          updated_by_name: createdData.student?.student_name || 'Resident'
+        }];
+      } else {
+        initialUpdates = [{
+          id: `initial_${Date.now()}`,
+          issue_id: createdData.id,
+          old_status: null as string | null,
+          new_status: 'pending',
+          note: `Ticket submitted: ${payload.title}`,
+          updated_by_name: createdData.student?.student_name || 'Resident',
+          created_at: new Date().toISOString()
+        }];
+      }
+    } catch {
+      initialUpdates = [{
+        id: `initial_${Date.now()}`,
+        issue_id: createdData.id,
+        old_status: null as string | null,
+        new_status: 'pending',
+        note: `Ticket submitted: ${payload.title}`,
+        updated_by_name: createdData.student?.student_name || 'Resident',
+        created_at: new Date().toISOString()
+      }];
+    }
+
     return {
-      ...data,
-      image_url: data.image_url || payload.image_url,
-      student_name: data.student?.student_name || 'Resident',
-      enrollment_no: data.student?.enrollment_no || 'N/A',
-      hostel_name: data.hostel?.name || 'Block A',
-      room_no: data.room?.no || '101',
-      updates: data.updates || []
+      ...createdData,
+      image_url: createdData.image_url || payload.image_url,
+      student_name: createdData.student?.student_name || 'Resident',
+      enrollment_no: createdData.student?.enrollment_no || 'N/A',
+      hostel_name: createdData.hostel?.name || 'Block A',
+      room_no: createdData.room?.no || '101',
+      updates: initialUpdates
     };
   },
 

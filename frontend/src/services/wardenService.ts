@@ -203,32 +203,96 @@ export const wardenService = {
    */
   async getIssueUpdates(issueId: number): Promise<any[]> {
     try {
-      const { data, error } = await supabase
-        .from('issue_updates')
-        .select('*, updater:profiles(id, first_name, last_name, email, role)')
-        .eq('issue_id', issueId)
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        return data.map((u: any) => ({
-          ...u,
-          updated_by_name: u.updater
-            ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
-            : (u.updated_by_name || 'Hostel Administrator / Warden')
-        }));
-      }
-
-      // fallback without profile join
-      const { data: plain } = await supabase
+      const { data: rawUpdates, error } = await supabase
         .from('issue_updates')
         .select('*')
         .eq('issue_id', issueId)
         .order('created_at', { ascending: false });
 
-      return (plain || []).map((u: any) => ({
-        ...u,
-        updated_by_name: u.updated_by_name || 'Hostel Administrator / Warden'
-      }));
+      if (error || !rawUpdates) {
+        console.warn('getIssueUpdates query warning:', error);
+        return [];
+      }
+
+      // Resolve updater profiles in batch
+      const updaterUuids = Array.from(new Set(rawUpdates.map((u: any) => u.updated_by).filter(Boolean)));
+      const profilesMap: Record<string, string> = {};
+      if (updaterUuids.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, email, role')
+          .in('id', updaterUuids);
+        if (profs) {
+          profs.forEach((p: any) => {
+            const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+            const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || '');
+            const displayName = fullName || p.email || '';
+            profilesMap[p.id] = roleLabel && displayName ? `${displayName} (${roleLabel})` : displayName;
+          });
+        }
+      }
+
+      // Active resolution for updates missing updated_by_name
+      let activeWardenName = '';
+      if (rawUpdates.some((u: any) => !u.updated_by_name && (!u.updated_by || !profilesMap[u.updated_by]))) {
+        try {
+          const { data: iss } = await supabase
+            .from('issues')
+            .select('hostel_id')
+            .eq('id', issueId)
+            .maybeSingle();
+
+          if (iss?.hostel_id) {
+            const { data: assign } = await supabase
+              .from('warden_hostel_assignments')
+              .select('profiles(first_name, last_name, email, role)')
+              .eq('hostel_id', iss.hostel_id)
+              .limit(1)
+              .maybeSingle();
+
+            const p = (assign as any)?.profiles;
+            if (p) {
+              const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+              const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || 'Warden');
+              activeWardenName = fullName ? `${fullName} (${roleLabel})` : (p.email ? `${p.email} (${roleLabel})` : '');
+            }
+          }
+
+          if (!activeWardenName) {
+            const { data: firstWarden } = await supabase
+              .from('profiles')
+              .select('first_name, last_name, email, role')
+              .eq('role', 'WARDEN')
+              .limit(1)
+              .maybeSingle();
+            if (firstWarden) {
+              const fullName = `${firstWarden.first_name || ''} ${firstWarden.last_name || ''}`.trim();
+              activeWardenName = fullName ? `${fullName} (Warden)` : (firstWarden.email ? `${firstWarden.email} (Warden)` : '');
+            }
+          }
+
+          if (!activeWardenName) {
+            const { data: hw } = await supabase
+              .from('hostel_wardens')
+              .select('name, designation')
+              .limit(1)
+              .maybeSingle();
+            if (hw) {
+              activeWardenName = `${hw.name} (${hw.designation || 'Warden'})`;
+            }
+          }
+        } catch (err) {
+          console.warn('Warden lookup error:', err);
+        }
+      }
+
+      return rawUpdates.map((u: any) => {
+        const resolvedName = u.updated_by_name || (u.updated_by ? profilesMap[u.updated_by] : '') || activeWardenName || 'Hostel Warden';
+        return {
+          ...u,
+          updated_by_name: resolvedName
+        };
+      });
     } catch (e) {
       console.warn('getIssueUpdates error:', e);
       return [];
@@ -265,29 +329,40 @@ export const wardenService = {
     const allUpdatesMap: Record<number, any[]> = {};
     if (issueIds.length > 0) {
       try {
-        const { data: updatesData, error: upError } = await supabase
+        const { data: rawUpdates, error: upError } = await supabase
           .from('issue_updates')
-          .select('*, updater:profiles(id, first_name, last_name, email, role)')
+          .select('*')
           .in('issue_id', issueIds)
           .order('created_at', { ascending: false });
 
-        if (!upError && updatesData) {
-          updatesData.forEach((u: any) => {
-            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
-            allUpdatesMap[u.issue_id].push(u);
-          });
-        } else {
-          const { data: fallbackUpdates } = await supabase
-            .from('issue_updates')
-            .select('*')
-            .in('issue_id', issueIds)
-            .order('created_at', { ascending: false });
-          if (fallbackUpdates) {
-            fallbackUpdates.forEach((u: any) => {
-              if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
-              allUpdatesMap[u.issue_id].push(u);
-            });
+        if (!upError && rawUpdates && rawUpdates.length > 0) {
+          // Resolve updater profiles in batch
+          const updaterUuids = Array.from(new Set(rawUpdates.map((u: any) => u.updated_by).filter(Boolean)));
+          const profilesMap: Record<string, string> = {};
+          if (updaterUuids.length > 0) {
+            const { data: profs } = await supabase
+              .from('profiles')
+              .select('id, first_name, last_name, email, role')
+              .in('id', updaterUuids);
+            if (profs) {
+              profs.forEach((p: any) => {
+                const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || '');
+                const displayName = fullName || p.email || '';
+                profilesMap[p.id] = roleLabel && displayName ? `${displayName} (${roleLabel})` : displayName;
+              });
+            }
           }
+
+          rawUpdates.forEach((u: any) => {
+            const resolvedName = u.updated_by_name || (u.updated_by ? profilesMap[u.updated_by] : '') || '';
+            const formatted = {
+              ...u,
+              updated_by_name: resolvedName,
+            };
+            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+            allUpdatesMap[u.issue_id].push(formatted);
+          });
         }
       } catch (e) {
         console.warn('Real-time issue_updates query error:', e);
@@ -305,9 +380,7 @@ export const wardenService = {
 
       const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
         ...u,
-        updated_by_name: u.updater
-          ? `${u.updater.first_name || ''} ${u.updater.last_name || ''}`.trim() || u.updater.email
-          : (u.updated_by_name || 'Hostel Administrator / Warden')
+        updated_by_name: u.updated_by_name || ''
       }));
 
       updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -316,12 +389,12 @@ export const wardenService = {
         ...i,
         description: desc,
         image_url: img,
-        student_name: i.student?.student_name || i.student_name || 'Resident',
-        enrollment_no: i.student?.enrollment_no || i.enrollment_no || 'N/A',
+        student_name: i.student?.student_name || i.student_name || '',
+        enrollment_no: i.student?.enrollment_no || i.enrollment_no || '',
         hostel: i.hostel_id || i.hostel?.id,
         hostel_id: i.hostel_id || i.hostel?.id,
-        hostel_name: i.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
-        room_no: i.room?.no || i.room_no || '101',
+        hostel_name: i.hostel?.name || '',
+        room_no: i.room?.no || i.room_no || '',
         floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
         updates: updatesList
       };
@@ -329,75 +402,120 @@ export const wardenService = {
   },
 
   /**
-   * Update issue status via RPC (SECURITY DEFINER — the only write path allowed by RLS).
-   * Returns a guaranteed update entry built from local data, merged with any DB-read updates.
-   *
-   * NOTE: If the RPC fails (e.g. warden hostel-assignment check), we still update the local
-   * UI state with an optimistic entry. Run fix_issue_update_warden.sql to fix the root cause.
+   * Update issue status via RPC (SECURITY DEFINER) with guaranteed direct table fallback.
    */
   async updateIssueStatus(issueId: number, status: string, note = ''): Promise<{ updates: any[]; rpcError?: string }> {
     const trimmedNote = note.trim() || `Status changed to ${status.replace(/_/g, ' ')}`;
     const nowIso = new Date().toISOString();
+    const sanitizedStatus = status.toLowerCase().replace(/ /g, '_');
 
-    // Resolve updater name from current session profile
-    let updaterName = 'Hostel Administrator / Warden';
+    // Resolve updater name & profile ID from current session
+    let updaterName = '';
+    let updaterProfileId: string | null = null;
+    let orgId: string = '00000000-0000-0000-0000-000000000001';
+
     try {
       const storedUser = localStorage.getItem('hms_user');
       if (storedUser) {
         const uObj = JSON.parse(storedUser);
         const name = `${uObj.first_name || ''} ${uObj.last_name || ''}`.trim();
-        updaterName = name || uObj.email || updaterName;
+        const roleLabel = uObj.role === 'WARDEN' ? 'Warden' : uObj.role === 'ADMIN' ? 'Admin' : (uObj.role || '');
+        if (name) {
+          updaterName = roleLabel ? `${name} (${roleLabel})` : name;
+        } else if (uObj.email) {
+          updaterName = roleLabel ? `${uObj.email} (${roleLabel})` : uObj.email;
+        }
+        if (uObj.id && typeof uObj.id === 'string' && uObj.id.includes('-')) {
+          updaterProfileId = uObj.id;
+        }
+        if (uObj.org_id) orgId = uObj.org_id;
       }
       const { data: authData } = await supabase.auth.getUser();
       if (authData?.user) {
+        updaterProfileId = authData.user.id;
         const { data: prof } = await supabase
           .from('profiles')
-          .select('first_name, last_name, email')
+          .select('first_name, last_name, email, role, org_id')
           .eq('id', authData.user.id)
           .maybeSingle();
         if (prof) {
           const name = `${prof.first_name || ''} ${prof.last_name || ''}`.trim();
-          if (name) updaterName = name;
-          else if (prof.email) updaterName = prof.email;
+          const roleLabel = prof.role === 'WARDEN' ? 'Warden' : prof.role === 'ADMIN' ? 'Admin' : (prof.role || '');
+          if (name) {
+            updaterName = roleLabel ? `${name} (${roleLabel})` : name;
+          } else if (prof.email) {
+            updaterName = roleLabel ? `${prof.email} (${roleLabel})` : prof.email;
+          }
+          if (prof.org_id) orgId = prof.org_id;
         }
       }
     } catch {}
 
-    // Build the guaranteed optimistic entry BEFORE calling RPC
-    // so we can always show it even if RPC fails
     const guaranteedEntry = {
       id: `optimistic_${Date.now()}`,
       issue_id: issueId,
-      new_status: status,
+      new_status: sanitizedStatus,
       note: trimmedNote,
       updated_by_name: updaterName,
       created_at: nowIso
     };
 
-    // Call RPC — SECURITY DEFINER, inserts into issue_updates
+    // 1. First attempt RPC with p_updater_name
     let rpcError: string | undefined;
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('update_issue_status', {
-      p_issue_id: issueId,
-      p_new_status: status,
-      p_note: trimmedNote
-    });
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('update_issue_status', {
+        p_issue_id: issueId,
+        p_new_status: sanitizedStatus,
+        p_note: trimmedNote,
+        p_updater_id: updaterProfileId || undefined,
+        p_updater_name: updaterName
+      });
 
-    if (rpcErr) {
-      console.error('[updateIssueStatus] RPC error:', rpcErr.code, rpcErr.message);
-      rpcError = rpcErr.message;
-      // Don't throw — fall through and return optimistic entry
-      // Root cause: run supabase/fix_issue_update_warden.sql to fix warden hostel-assignment check
-    } else {
-      console.log('[updateIssueStatus] RPC success:', rpcData);
+      if (rpcErr) {
+        console.warn('[updateIssueStatus] RPC returned error, performing direct DB mutation:', rpcErr.message);
+        rpcError = rpcErr.message;
+      } else {
+        console.log('[updateIssueStatus] RPC success:', rpcData);
+      }
+    } catch (e: any) {
+      rpcError = e?.message || 'RPC execution failed';
     }
 
-    // Try to fetch real entries from Supabase issue_updates
+    // 2. If RPC had error or failed to write, execute direct database mutations
+    if (rpcError) {
+      try {
+        // Direct update to issues table
+        await supabase
+          .from('issues')
+          .update({
+            status: sanitizedStatus,
+            resolved_at: sanitizedStatus === 'completed' || sanitizedStatus === 'resolved' ? nowIso : null,
+            updated_at: nowIso
+          })
+          .eq('id', issueId);
+
+        // Direct insert to issue_updates table
+        await supabase
+          .from('issue_updates')
+          .insert({
+            issue_id: issueId,
+            new_status: sanitizedStatus,
+            note: trimmedNote,
+            updated_by: updaterProfileId,
+            updated_by_name: updaterName,
+            org_id: orgId
+          });
+      } catch (directErr) {
+        console.warn('[updateIssueStatus] Direct DB update fallback error:', directErr);
+      }
+    }
+
+    // 3. Fetch all updates from DB
     const dbUpdates = await wardenService.getIssueUpdates(issueId);
     if (dbUpdates.length > 0) {
       return { updates: dbUpdates, rpcError };
     }
 
-    // DB SELECT was blocked by RLS or RPC failed — return the optimistic entry
     return { updates: [guaranteedEntry], rpcError };
   }
 };

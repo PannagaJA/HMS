@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, History, X, Clock, Image, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Building2, History, X, Clock, Image, Eye, ChevronLeft, ChevronRight, Loader2, UserCheck } from 'lucide-react';
 import type { HostelIssue, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { wardenService } from '../../services/wardenService';
@@ -22,6 +22,7 @@ export const IssueTracking: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const [selectedIssue, setSelectedIssue] = useState<HostelIssue | null>(null);
   const [viewingUpdatesIssue, setViewingUpdatesIssue] = useState<HostelIssue | null>(null);
+  const [loadingUpdates, setLoadingUpdates] = useState(false);
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string>('in_progress');
   const [updateNote, setUpdateNote] = useState<string>('');
@@ -65,6 +66,22 @@ export const IssueTracking: React.FC = () => {
       setHostels(hostelsRes.data);
     } catch (err) {
       console.error('Failed to load issues or hostels', err);
+    }
+  };
+
+  const handleOpenUpdatesModal = async (issue: HostelIssue) => {
+    setViewingUpdatesIssue(issue);
+    setLoadingUpdates(true);
+    try {
+      const freshUpdates = await wardenService.getIssueUpdates(issue.id);
+      if (freshUpdates && freshUpdates.length > 0) {
+        setViewingUpdatesIssue((prev) => (prev && prev.id === issue.id ? { ...prev, updates: freshUpdates } : prev));
+        setIssues((prev) => prev.map((i) => (i.id === issue.id ? { ...i, updates: freshUpdates } : i)));
+      }
+    } catch (err) {
+      console.warn('Failed to refresh updates on modal open:', err);
+    } finally {
+      setLoadingUpdates(false);
     }
   };
 
@@ -307,7 +324,7 @@ export const IssueTracking: React.FC = () => {
 
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
-                      onClick={() => setViewingUpdatesIssue(issue)}
+                      onClick={() => handleOpenUpdatesModal(issue)}
                       className="px-3.5 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer flex items-center gap-1.5"
                     >
                       <History className="w-3.5 h-3.5 text-slate-500" />
@@ -400,7 +417,7 @@ export const IssueTracking: React.FC = () => {
                         <td className="py-4 pr-6 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => setViewingUpdatesIssue(issue)}
+                              onClick={() => handleOpenUpdatesModal(issue)}
                               className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
                             >
                               <History className="w-3.5 h-3.5 text-slate-500" />
@@ -581,7 +598,12 @@ export const IssueTracking: React.FC = () => {
               </div>
 
               <div className="space-y-0 max-h-[340px] overflow-y-auto pr-1">
-                {!liveIssue.updates || liveIssue.updates.length === 0 ? (
+                {loadingUpdates ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-slate-400 text-xs gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+                    <span>Loading latest updates...</span>
+                  </div>
+                ) : !liveIssue.updates || liveIssue.updates.length === 0 ? (
                   <div className="p-8 text-center text-slate-400 text-xs rounded-2xl border border-dashed border-slate-200">
                     No status updates recorded for this ticket yet.
                   </div>
@@ -623,10 +645,13 @@ export const IssueTracking: React.FC = () => {
                                     "{up.note}"
                                   </p>
                                 )}
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-medium text-slate-500 truncate">
-                                    {up.updated_by_name || 'Hostel Administrator / Warden'}
-                                  </span>
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 text-xs">
+                                  <div className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium">
+                                    <UserCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                                    <span>
+                                      Updated by: <strong className="text-slate-900 font-semibold">{up.updated_by_name || 'Hostel Warden'}</strong>
+                                    </span>
+                                  </div>
                                   <span className="text-[10px] text-slate-400 font-mono flex-shrink-0 flex items-center gap-1">
                                     <Clock className="w-2.5 h-2.5" />
                                     {new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}

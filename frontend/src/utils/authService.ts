@@ -1087,36 +1087,39 @@ export const authService = {
         return { session: syntheticSession as any, user: syntheticSession.user as any, profile: studentProfile };
       }
 
-      // Check if logging in as demo student@amc.edu
-      if (input.toLowerCase() === 'student@amc.edu' || input.toLowerCase() === 'student') {
-        const { data: firstStudent } = await supabase.from('students').select('*').limit(1).maybeSingle();
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstStudent?.profile_id || '');
-        const validProfileId = isUuid ? firstStudent.profile_id : (crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000099');
+      // Check profiles table for Warden / Admin / Staff
+      const { data: profMatch } = await supabase
+        .from('profiles')
+        .select('*')
+        .or(`email.ilike.${emailToUse},email.ilike.${input}`)
+        .limit(1)
+        .maybeSingle();
 
-        const studentProfile: Profile = {
-          id: validProfileId,
-          email: firstStudent?.email || 'student@amc.edu',
-          role: 'STUDENT',
-          first_name: firstStudent?.student_name || 'Student',
-          last_name: '',
-          phone: firstStudent?.phone || '',
+      if (profMatch) {
+        const staffProfile: Profile = {
+          id: profMatch.id,
+          email: profMatch.email,
+          role: profMatch.role,
+          first_name: profMatch.first_name,
+          last_name: profMatch.last_name || '',
+          phone: profMatch.phone || '',
           is_active: true,
-          org_id: firstStudent?.org_id || '00000000-0000-0000-0000-000000000001',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          org_id: profMatch.org_id || '00000000-0000-0000-0000-000000000001',
+          created_at: profMatch.created_at || new Date().toISOString(),
+          updated_at: profMatch.updated_at || new Date().toISOString()
         };
 
         const syntheticSession = {
-          access_token: `hms-session-demo-${Date.now()}`,
+          access_token: `hms-session-profile-${profMatch.id}-${Date.now()}`,
           token_type: 'bearer',
           user: {
-            id: studentProfile.id,
-            email: studentProfile.email,
+            id: profMatch.id,
+            email: profMatch.email,
             role: 'authenticated'
           }
         };
 
-        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: studentProfile };
+        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: staffProfile };
       }
     }
 

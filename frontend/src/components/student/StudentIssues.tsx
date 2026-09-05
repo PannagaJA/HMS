@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X, History, Clock, Image, Paperclip, Eye } from 'lucide-react';
+import { Plus, X, History, Clock, Image, Paperclip, Eye, Loader2, UserCheck } from 'lucide-react';
 import type { IssueTicket } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import { wardenService } from '../../services/wardenService';
+import { supabase } from '../../lib/supabase';
 import {
   Select,
   SelectContent,
@@ -17,6 +19,7 @@ export const StudentIssues: React.FC = () => {
   const [issues, setIssues] = useState<IssueTicket[]>([]);
   const [showRaiseModal, setShowRaiseModal] = useState(false);
   const [selectedUpdatesIssue, setSelectedUpdatesIssue] = useState<IssueTicket | null>(null);
+  const [loadingUpdates, setLoadingUpdates] = useState(false);
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
   const [issueCategory, setIssueCategory] = useState<string>('ELECTRICAL');
   const [issueTitle, setIssueTitle] = useState('');
@@ -28,14 +31,44 @@ export const StudentIssues: React.FC = () => {
 
   useEffect(() => {
     fetchIssues();
+
+    const channel = supabase
+      .channel('student_issues_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
+        fetchIssues();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_updates' }, () => {
+        fetchIssues();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchIssues = async () => {
     try {
       const res = await apiClient.get<IssueTicket[]>('/student/issues/');
-      setIssues(res.data);
+      setIssues(res.data || []);
     } catch (err) {
       console.error('Failed to load issues', err);
+    }
+  };
+
+  const handleOpenUpdatesModal = async (issue: IssueTicket) => {
+    setSelectedUpdatesIssue(issue);
+    setLoadingUpdates(true);
+    try {
+      const freshUpdates = await wardenService.getIssueUpdates(issue.id);
+      if (freshUpdates && freshUpdates.length > 0) {
+        setSelectedUpdatesIssue((prev) => (prev && prev.id === issue.id ? { ...prev, updates: freshUpdates } : prev));
+        setIssues((prev) => prev.map((i) => (i.id === issue.id ? { ...i, updates: freshUpdates } : i)));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch fresh updates for issue:', err);
+    } finally {
+      setLoadingUpdates(false);
     }
   };
 
@@ -121,15 +154,22 @@ export const StudentIssues: React.FC = () => {
 
               {/* Staff / Warden Resolution Notes Preview */}
               {issue.updates && issue.updates.length > 0 && (
-                <div className="bg-teal-50/60 p-3 rounded-2xl border border-teal-200/70 text-xs space-y-1.5">
-                  <span className="text-[10px] font-bold text-teal-900 uppercase tracking-wider block">
-                    Latest Warden Update
-                  </span>
-                  <div className="text-slate-700">
-                    <span className="font-semibold text-teal-950">[{issue.updates[issue.updates.length - 1].new_status.replace(/_/g, ' ').toUpperCase()}]</span>
-                    {issue.updates[issue.updates.length - 1].note ? ` "${issue.updates[issue.updates.length - 1].note}"` : ' Status updated'}
-                    <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">
-                      — {issue.updates[issue.updates.length - 1].updated_by_name || 'Hostel Staff'}
+                <div className="bg-teal-50/70 p-3.5 rounded-2xl border border-teal-200/80 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-teal-900 uppercase tracking-wider">
+                      Latest Resolution Update
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-teal-200 text-teal-950 uppercase">
+                      {issue.updates[0].new_status.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p className="text-slate-800 italic bg-white/80 p-2.5 rounded-xl border border-teal-100 text-xs leading-relaxed">
+                    "{issue.updates[0].note || 'Status updated'}"
+                  </p>
+                  <div className="flex items-center justify-between text-[11px] text-teal-950 pt-0.5 font-medium">
+                    <span className="flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                      <span>Actioned by: <strong>{issue.updates[0].updated_by_name || 'Hostel Warden'}</strong></span>
                     </span>
                   </div>
                 </div>
@@ -155,7 +195,7 @@ export const StudentIssues: React.FC = () => {
                   <span className="font-mono">{new Date(issue.created_at).toLocaleDateString()}</span>
                 </div>
                 <button
-                  onClick={() => setSelectedUpdatesIssue(issue)}
+                  onClick={() => handleOpenUpdatesModal(issue)}
                   className="w-full py-2.5 rounded-xl bg-slate-50 border border-teal-200 text-teal-950 font-bold text-xs hover:bg-teal-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <History className="w-4 h-4 text-teal-800" />
@@ -191,7 +231,7 @@ export const StudentIssues: React.FC = () => {
                 </tr>
               ) : (
                 issues.map((issue) => {
-                  const latestUpdate = issue.updates && issue.updates.length > 0 ? issue.updates[issue.updates.length - 1] : null;
+                  const latestUpdate = issue.updates && issue.updates.length > 0 ? issue.updates[0] : null;
                   return (
                     <tr key={issue.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-4 pl-6 min-w-[280px] max-w-md">
@@ -232,12 +272,17 @@ export const StudentIssues: React.FC = () => {
                       </td>
                       <td className="py-4 px-4 text-xs max-w-xs">
                         {latestUpdate ? (
-                          <div>
-                            <span className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-teal-50 text-teal-950 uppercase border border-teal-200">
+                          <div className="space-y-1.5">
+                            <span className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-teal-50 text-teal-950 uppercase border border-teal-200 inline-block">
                               {latestUpdate.new_status.replace(/_/g, ' ')}
                             </span>
-                            <p className="text-slate-700 italic truncate mt-1">"{latestUpdate.note || 'Updated'}"</p>
-                            <span className="text-[10px] text-slate-400 font-medium">— {latestUpdate.updated_by_name}</span>
+                            <p className="text-slate-700 italic truncate text-xs">"{latestUpdate.note || 'Updated'}"</p>
+                            <div className="flex items-center gap-1.5 text-[11px] text-teal-950 font-medium bg-teal-50/70 px-2.5 py-1 rounded-lg border border-teal-100">
+                              <UserCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                              <span className="truncate">
+                                By: <strong className="font-bold text-teal-950">{latestUpdate.updated_by_name || 'Hostel Warden'}</strong>
+                              </span>
+                            </div>
                           </div>
                         ) : (
                           <span className="text-slate-400 italic text-[11px]">Awaiting review</span>
@@ -245,7 +290,7 @@ export const StudentIssues: React.FC = () => {
                       </td>
                       <td className="py-4 pr-6 text-right">
                         <button
-                          onClick={() => setSelectedUpdatesIssue(issue)}
+                          onClick={() => handleOpenUpdatesModal(issue)}
                           className="px-3.5 py-1.5 rounded-full bg-blue-100 text-teal-950 font-bold text-xs hover:bg-teal-200 transition-all border border-teal-300 flex items-center gap-1.5 ml-auto cursor-pointer shadow-2xs whitespace-nowrap"
                         >
                           <History className="w-3.5 h-3.5 text-teal-900" />
@@ -293,88 +338,147 @@ export const StudentIssues: React.FC = () => {
         </div>
       )}
 
-      {/* STUDENT: VIEW ALL UPDATES / REMARKS MODAL */}
-      {selectedUpdatesIssue && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 leading-tight">Warden & Maintenance Updates</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Ticket: <strong className="text-slate-800">{selectedUpdatesIssue.title}</strong>
-                </p>
+      {/* STUDENT: VIEW ALL UPDATES / REMARKS MODAL WITH ENHANCED TIMELINE */}
+      {selectedUpdatesIssue && (() => {
+        const liveIssue = issues.find((i) => i.id === selectedUpdatesIssue.id) || selectedUpdatesIssue;
+        const updates = liveIssue.updates || [];
+
+        return (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-white w-full max-w-lg rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 uppercase">
+                      Ticket #{liveIssue.id}
+                    </span>
+                    <StatusBadge status={liveIssue.status} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight">{liveIssue.title}</h3>
+                </div>
+                <button
+                  onClick={() => setSelectedUpdatesIssue(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedUpdatesIssue(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-2">
-              <div><span className="text-slate-400">Category:</span> <strong>{selectedUpdatesIssue.category}</strong></div>
-              <div><span className="text-slate-400">Description:</span> <span className="italic">"{selectedUpdatesIssue.description}"</span></div>
-              {selectedUpdatesIssue.image_url && (
-                <div className="pt-2 border-t border-slate-200/60">
-                  <span className="text-slate-400 block mb-1">Attached Photo:</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImageModal(selectedUpdatesIssue.image_url || null)}
-                    className="relative group rounded-xl overflow-hidden border border-slate-200 inline-block"
-                  >
-                    <img
-                      src={selectedUpdatesIssue.image_url}
-                      alt="Thumbnail"
-                      className="w-24 h-24 object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Eye className="w-5 h-5 text-white" />
-                    </div>
-                  </button>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 mb-4 text-xs space-y-2">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span>Category: <strong className="text-slate-800">{liveIssue.category}</strong></span>
+                  <span>Priority: <strong className="text-slate-800">{liveIssue.priority || 'Normal'}</strong></span>
                 </div>
-              )}
-            </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Description:</span>
+                  <p className="text-slate-700 italic bg-white/80 p-2 rounded-xl border border-slate-200/60">
+                    "{liveIssue.description}"
+                  </p>
+                </div>
+                {liveIssue.image_url && (
+                  <div className="pt-2 border-t border-slate-200/60">
+                    <span className="text-slate-400 block mb-1">Attached Photo:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImageModal(liveIssue.image_url || null)}
+                      className="relative group rounded-xl overflow-hidden border border-slate-200 inline-block"
+                    >
+                      <img
+                        src={liveIssue.image_url}
+                        alt="Thumbnail"
+                        className="w-24 h-24 object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="w-5 h-5 text-white" />
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-              {!selectedUpdatesIssue.updates || selectedUpdatesIssue.updates.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs rounded-2xl border border-dashed border-slate-200">
-                  No warden or maintenance updates recorded for this ticket yet.
-                </div>
-              ) : (
-                selectedUpdatesIssue.updates.map((up) => (
-                  <div key={up.id} className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-200/80 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-teal-100/90 text-teal-950 uppercase">
-                        {up.new_status.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-700">
-                        — {up.updated_by_name || 'Hostel Administrator'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-800 italic bg-white/80 p-2.5 rounded-xl border border-teal-100/80">
-                      "{up.note || 'Status updated'}"
-                    </p>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1 justify-end font-mono">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>{new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <div className="space-y-0 max-h-[340px] overflow-y-auto pr-1">
+                {loadingUpdates ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-slate-400 text-xs gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+                    <span>Loading latest updates...</span>
+                  </div>
+                ) : updates.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs rounded-2xl border border-dashed border-slate-200">
+                    No status updates recorded for this ticket yet.
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="absolute left-[18px] top-5 bottom-5 w-px bg-gradient-to-b from-teal-300 via-teal-200 to-slate-200" />
+                    <div className="space-y-0">
+                      {updates.map((up: any, idx: number) => {
+                        const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+                          pending:             { bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-400' },
+                          in_progress:         { bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500' },
+                          waiting_for_workers: { bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
+                          completed:           { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+                        };
+                        const col = statusColors[up.new_status] || { bg: 'bg-slate-50', text: 'text-slate-700', dot: 'bg-slate-400' };
+                        const oldCol = up.old_status ? (statusColors[up.old_status] || { text: 'text-slate-500' }) : null;
+
+                        return (
+                          <div key={up.id ?? idx} className="flex gap-3 pb-4 relative">
+                            <div className="flex-shrink-0 w-9 flex flex-col items-center pt-1 z-10">
+                              <div className={`w-4 h-4 rounded-full border-2 border-white shadow ${col.dot}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`rounded-2xl border border-slate-200/80 p-3 ${col.bg} shadow-sm`}>
+                                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                  {oldCol && up.old_status && (
+                                    <>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/70 border border-slate-200 text-slate-500 uppercase">
+                                        {up.old_status.replace(/_/g, ' ')}
+                                      </span>
+                                      <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                                    </>
+                                  )}
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/80 border ${col.text} border-current/20 uppercase`}>
+                                    {up.new_status.replace(/_/g, ' ')}
+                                  </span>
+                                </div>
+                                {up.note && (
+                                  <p className="text-xs text-slate-700 italic mb-2 bg-white/60 px-2.5 py-1.5 rounded-xl border border-slate-200/60">
+                                    "{up.note}"
+                                  </p>
+                                )}
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 text-xs">
+                                  <div className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium">
+                                    <UserCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                                    <span>
+                                      Updated by: <strong className="text-slate-900 font-semibold">{up.updated_by_name || 'Hostel Warden'}</strong>
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-mono flex-shrink-0 flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    {new Date(up.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                )}
+              </div>
 
-            <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
-              <button
-                onClick={() => setSelectedUpdatesIssue(null)}
-                className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] cursor-pointer shadow-xs"
-              >
-                Close
-              </button>
+              <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-end">
+                <button
+                  onClick={() => setSelectedUpdatesIssue(null)}
+                  className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] cursor-pointer shadow-xs"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* REPORT ISSUE MODAL */}
       {showRaiseModal && (
