@@ -438,34 +438,50 @@ export const adminService = {
     guardian_phone?: string;
     emergency_contact?: string;
   }>) {
-    const results: any[] = [];
+    if (!students || students.length === 0) return [];
+
     const dbPayload = students.map(s => ({
-      student_name: s.student_name,
-      enrollment_no: s.enrollment_no,
+      student_name: s.student_name.trim(),
+      enrollment_no: s.enrollment_no.trim().toUpperCase(),
       gender: s.gender || 'M',
-      phone: s.phone || '',
-      father_name: s.father_name || '',
-      guardian_phone: s.guardian_phone || '',
-      emergency_contact: s.emergency_contact || '',
+      phone: (s.phone || '').trim(),
+      father_name: (s.father_name || '').trim(),
+      guardian_phone: (s.guardian_phone || '').trim(),
+      emergency_contact: (s.emergency_contact || '').trim(),
       no_dues: true,
       status: 'ACTIVE'
     }));
 
     try {
+      // First attempt upsert based on enrollment_no
       const { data, error } = await supabase
         .from('students')
-        .insert(dbPayload)
+        .upsert(dbPayload, { onConflict: 'enrollment_no', ignoreDuplicates: false })
         .select();
       
       if (!error && data) {
         return data;
       }
-    } catch (e) {
-      console.warn('Bulk student insert failed:', e);
+
+      if (error) {
+        console.warn('Upsert failed, falling back to sequential/insert:', error.message);
+        // Fallback: standard insert
+        const { data: insertData, error: insertError } = await supabase
+          .from('students')
+          .insert(dbPayload)
+          .select();
+        
+        if (!insertError && insertData) {
+          return insertData;
+        }
+        if (insertError) throw insertError;
+      }
+    } catch (e: any) {
+      console.warn('Bulk student insertion error:', e);
       throw e;
     }
 
-    return results;
+    return [];
   },
 
   /**

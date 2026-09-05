@@ -86,6 +86,7 @@ export const StudentManagement: React.FC = () => {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedStudentRow[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -424,80 +425,191 @@ export const StudentManagement: React.FC = () => {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processCSVFile = (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.csv') && file.type && !file.type.includes('csv') && !file.type.includes('text')) {
+      showError('Please upload a valid .csv spreadsheet file.');
+      return;
+    }
 
     setBulkFile(file);
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
+      if (!text || !text.trim()) {
+        showError('The uploaded CSV file is empty.');
+        setParsedRows([]);
+        return;
+      }
       parseCSV(text);
     };
+    reader.onerror = () => {
+      showError('Failed to read the selected CSV file.');
+    };
     reader.readAsText(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processCSVFile(file);
+  };
+
+  // Robust CSV parser handling quoted fields, commas inside quotes, and spaces
+  const parseCSVLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++; // Skip escaped quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
   };
 
   const parseCSV = (csvContent: string) => {
     const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
     if (lines.length <= 1) {
+      showError('CSV file must contain a header line and at least one student data row.');
       setParsedRows([]);
       return;
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]+/g, ''));
+    const rawHeaders = parseCSVLine(lines[0]);
+    // Normalize headers: strip quotes, underscores, spaces, lowercase
+    const normalizedHeaders = rawHeaders.map(h => 
+      h.toLowerCase().replace(/['"\s_]+/g, '')
+    );
+
+    const existingUSNSet = new Set(students.map(s => (s.enrollment_no || '').trim().toUpperCase()));
+    const seenBatchUSNs = new Set<string>();
     const rows: ParsedStudentRow[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const currentLine = lines[i];
       if (!currentLine.trim()) continue;
 
-      const values = currentLine.split(',').map(v => v.trim().replace(/['"]+/g, ''));
-      const rowObj: any = {};
-      headers.forEach((h, idx) => {
-        rowObj[h] = values[idx] || '';
+      const values = parseCSVLine(currentLine);
+      const rowObj: Record<string, string> = {};
+
+      normalizedHeaders.forEach((nh, idx) => {
+        if (nh) {
+          rowObj[nh] = (values[idx] || '').trim();
+        }
       });
 
-      const studentName = rowObj.student_name || rowObj.name || values[0] || '';
-      const enrollmentNo = rowObj.enrollment_no || rowObj.usn || rowObj.roll_no || values[1] || '';
-      const email = rowObj.email || rowObj.email_id || rowObj.mail || '';
-      const rawGender = (rowObj.gender || values[2] || 'M').toUpperCase();
-      const gender: 'M' | 'F' = rawGender.startsWith('F') ? 'F' : 'M';
-      const phone = rowObj.phone || rowObj.mobile || values[3] || '';
-      const fatherName = rowObj.father_name || values[4] || '';
-      const guardianPhone = rowObj.guardian_phone || values[5] || '';
-      const emergencyContact = rowObj.emergency_contact || values[6] || '';
+      // Flexible column resolving
+      const studentName = 
+        rowObj['studentname'] || 
+        rowObj['name'] || 
+        rowObj['fullname'] || 
+        values[0] || '';
 
-      const isValid = Boolean(studentName && enrollmentNo);
-      const errorReason = !studentName ? 'Missing Name' : !enrollmentNo ? 'Missing USN' : undefined;
+      const rawEnrollment = 
+        rowObj['enrollmentno'] || 
+        rowObj['usn'] || 
+        rowObj['rollno'] || 
+        rowObj['registrationno'] || 
+        rowObj['id'] || 
+        values[1] || '';
+      
+      const enrollmentNo = rawEnrollment.trim().toUpperCase();
+
+      const rawGender = (
+        rowObj['gender'] || 
+        rowObj['sex'] || 
+        values[2] || 
+        'M'
+      ).trim().toUpperCase();
+      const gender: 'M' | 'F' = (rawGender.startsWith('F') || rawGender === 'FEMALE') ? 'F' : 'M';
+
+      const rawPhone = rowObj['phone'] || rowObj['mobile'] || rowObj['phonenumber'] || values[3] || '';
+      const phone = rawPhone.replace(/[^\d]/g, '');
+
+      const fatherName = rowObj['fathername'] || rowObj['father'] || rowObj['guardianname'] || values[4] || '';
+
+      const rawGuardianPhone = rowObj['guardianphone'] || rowObj['fatherphone'] || rowObj['parentphone'] || values[5] || '';
+      const guardianPhone = rawGuardianPhone.replace(/[^\d]/g, '');
+
+      const rawEmergency = rowObj['emergencycontact'] || rowObj['emergencyphone'] || rowObj['emergency'] || values[6] || '';
+      const emergencyContact = rawEmergency.replace(/[^\d]/g, '');
+
+      const email = rowObj['email'] || rowObj['emailid'] || rowObj['mail'] || (enrollmentNo ? `${enrollmentNo.toLowerCase()}@student.amc.edu` : undefined);
+
+      let isValid = true;
+      let errorReason: string | undefined = undefined;
+
+      if (!studentName) {
+        isValid = false;
+        errorReason = 'Missing Student Name';
+      } else if (!enrollmentNo) {
+        isValid = false;
+        errorReason = 'Missing USN / Enrollment No';
+      } else if (seenBatchUSNs.has(enrollmentNo)) {
+        isValid = false;
+        errorReason = 'Duplicate USN in CSV batch';
+      } else if (existingUSNSet.has(enrollmentNo)) {
+        // Warning / note that student already exists, but mark valid or note existing
+        // If existing, upsert will update their phone/guardian details
+      }
+
+      if (enrollmentNo) {
+        seenBatchUSNs.add(enrollmentNo);
+      }
 
       rows.push({
         student_name: studentName,
-        enrollment_no: enrollmentNo.toUpperCase(),
-        email: email || undefined,
+        enrollment_no: enrollmentNo,
+        email,
         gender,
-        phone,
-        father_name: fatherName,
-        guardian_phone: guardianPhone,
-        emergency_contact: emergencyContact,
+        phone: phone || undefined,
+        father_name: fatherName || undefined,
+        guardian_phone: guardianPhone || undefined,
+        emergency_contact: emergencyContact || undefined,
         isValid,
         errorReason
       });
     }
 
     setParsedRows(rows);
+    const validCount = rows.filter(r => r.isValid).length;
+    if (validCount === 0) {
+      showError('None of the rows in the CSV file were valid. Please verify the columns.');
+    }
   };
 
   const handleDownloadSampleCSV = () => {
-    const sampleHeaders = 'student_name,enrollment_no,gender,phone,father_name,guardian_phone,emergency_contact\n';
-    const sampleRows = 'Arjun Sharma,1AM23CS001,M,9876543210,Ramesh Sharma,9876543211,9876543212\nPriya Patel,1AM23EC042,F,9812345678,Suresh Patel,9812345679,9812345680\n';
+    const sampleHeaders = 'student_name,enrollment_no,email,gender,phone,father_name,guardian_phone,emergency_contact\n';
+    const sampleRows = [
+      'Aditya Gowda,1AM22EC007,1am22ec007@amc.edu,M,9123456798,Ramesh Gowda,9123456799,9123456790',
+      'AMC Girl 1,1AM22CV001,amcgirl1@amc.edu,F,7889839939,Reddy,7889839930,7889839931',
+      'AMC Girl 2,1AM22CV002,1am22cv002@amc.edu,F,7676728829,REDDY2,7676728820,7676728821',
+      'AMC student 1,1AM26CS001,1am26cs00333@amc.edu,M,9392929200,mahesh,9392929201,9392929202',
+      'AMC student 2,1AM22CS002,1am22cs002@amc.edu,M,9288290200,Ramesh,9288290201,9288290202'
+    ].join('\n') + '\n';
+
     const blob = new Blob([sampleHeaders + sampleRows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'hms_student_import_template.csv');
+    link.setAttribute('download', 'amc_hms_student_bulk_import_template.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleCommitBulkImport = async () => {
@@ -1336,7 +1448,9 @@ export const StudentManagement: React.FC = () => {
                   <FileText className="w-8 h-8 text-slate-400 shrink-0" />
                   <div>
                     <h4 className="text-xs font-bold text-slate-800">CSV Template Format</h4>
-                    <p className="text-[11px] text-slate-500">Columns: student_name, enrollment_no, gender, phone, father_name, guardian_phone</p>
+                    <p className="text-[11px] text-slate-500 font-mono">
+                      student_name, enrollment_no, email, gender, phone, father_name, guardian_phone, emergency_contact
+                    </p>
                   </div>
                 </div>
 
@@ -1360,13 +1474,38 @@ export const StudentManagement: React.FC = () => {
 
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="p-6 border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-center"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    processCSVFile(files[0]);
+                  }
+                }}
+                className={`p-6 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all text-center ${
+                  isDragging 
+                    ? 'border-emerald-600 bg-emerald-100/70 ring-4 ring-emerald-400/20 scale-[0.99]' 
+                    : 'border-emerald-300 hover:border-emerald-500 bg-emerald-50/40'
+                }`}
               >
-                <UploadCloud className="w-8 h-8 text-emerald-700" />
+                <UploadCloud className={`w-8 h-8 transition-colors ${isDragging ? 'text-emerald-800 animate-bounce' : 'text-emerald-700'}`} />
                 <div className="text-xs font-bold text-slate-800">
-                  {bulkFile ? bulkFile.name : 'Click to select CSV File or drag and drop here'}
+                  {bulkFile ? bulkFile.name : isDragging ? 'Drop CSV File Here' : 'Click to select CSV File or drag and drop here'}
                 </div>
-                <div className="text-[11px] text-slate-400">Supports standard UTF-8 .csv files</div>
+                <div className="text-[11px] text-slate-500">
+                  {bulkFile ? `${(bulkFile.size / 1024).toFixed(1)} KB • Click or drop another to replace` : 'Supports standard UTF-8 .csv files'}
+                </div>
               </div>
 
               {parsedRows.length > 0 && (
@@ -1383,28 +1522,47 @@ export const StudentManagement: React.FC = () => {
                         <tr>
                           <th className="px-3 py-2">Status</th>
                           <th className="px-3 py-2">Student Name</th>
-                          <th className="px-3 py-2">USN</th>
+                          <th className="px-3 py-2">USN / Enrollment</th>
                           <th className="px-3 py-2">Gender</th>
-                          <th className="px-3 py-2">Phone</th>
+                          <th className="px-3 py-2">Contact & Email</th>
+                          <th className="px-3 py-2">Guardian Details</th>
+                          <th className="px-3 py-2">Emergency</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {parsedRows.map((r, i) => (
                           <tr key={i} className={r.isValid ? 'hover:bg-slate-50' : 'bg-rose-50/50'}>
-                            <td className="px-3 py-1.5">
+                            <td className="px-3 py-1.5 whitespace-nowrap">
                               {r.isValid ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  Valid
+                                </span>
                               ) : (
-                                <span className="flex items-center gap-1 text-[10px] text-rose-600 font-semibold">
-                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                <span className="inline-flex items-center gap-1 text-[10px] text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                  <AlertTriangle className="w-3 h-3" />
                                   {r.errorReason}
                                 </span>
                               )}
                             </td>
                             <td className="px-3 py-1.5 font-medium text-slate-900">{r.student_name || '-'}</td>
-                            <td className="px-3 py-1.5 font-mono">{r.enrollment_no || '-'}</td>
-                            <td className="px-3 py-1.5">{r.gender === 'F' ? 'Female' : 'Male'}</td>
-                            <td className="px-3 py-1.5">{r.phone || '-'}</td>
+                            <td className="px-3 py-1.5 font-mono font-semibold text-slate-800">{r.enrollment_no || '-'}</td>
+                            <td className="px-3 py-1.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                r.gender === 'F' ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                              }`}>
+                                {r.gender === 'F' ? 'Female' : 'Male'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <div className="font-mono text-slate-800">{r.phone || '-'}</div>
+                              {r.email && <div className="text-[11px] text-slate-500 truncate">{r.email}</div>}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <div className="font-medium text-slate-900">{r.father_name || 'Guardian'}</div>
+                              <div className="text-[11px] font-mono text-slate-500">{r.guardian_phone || '-'}</div>
+                            </td>
+                            <td className="px-3 py-1.5 font-mono">{r.emergency_contact || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
