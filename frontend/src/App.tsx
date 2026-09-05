@@ -34,6 +34,7 @@ import { StudentDashboard } from './components/student/StudentDashboard';
 import { StudentGatePasses } from './components/student/StudentGatePasses';
 import { StudentIssues } from './components/student/StudentIssues';
 import { StudentMeals } from './components/student/StudentMeals';
+import { InstallPrompt } from './components/common/InstallPrompt';
 
 function App() {
   return (
@@ -41,7 +42,8 @@ function App() {
       <AuthProvider>
         <NotificationProvider>
           <BrowserRouter>
-          <Routes>
+            <InstallPrompt />
+            <Routes>
             {/* Public Auth Route */}
             <Route path="/login" element={<Login />} />
             <Route path="/create-organization" element={<CreateOrganization />} />
