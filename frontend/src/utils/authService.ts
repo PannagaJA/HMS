@@ -156,6 +156,49 @@ export const apiClient = {
       const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
       const hostelId = urlParams.get('hostel') || urlParams.get('hostel_id') || undefined;
       const statusParam = urlParams.get('status') || undefined;
+
+      // Student-scoped: only show this student's own issues
+      if (endpoint.includes('/student/issues/')) {
+        const { data: authUser } = await supabase.auth.getUser();
+        const userId = authUser.user?.id;
+        let resolvedStudentId: number | undefined;
+
+        // Strategy 1: profile_id
+        if (userId) {
+          const { data: st } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
+          if (st) resolvedStudentId = st.id;
+        }
+        // Strategy 2: stored email
+        if (!resolvedStudentId) {
+          const stored = getStoredUser();
+          const email = stored?.email;
+          if (email) {
+            const { data: st } = await supabase.from('students').select('id').ilike('email', email).maybeSingle();
+            if (st) resolvedStudentId = st.id;
+
+            // Strategy 3: USN prefix from email
+            if (!resolvedStudentId) {
+              const usnPrefix = email.split('@')[0];
+              const { data: st2 } = await supabase.from('students').select('id').ilike('enrollment_no', usnPrefix).maybeSingle();
+              if (st2) resolvedStudentId = st2.id;
+            }
+          }
+          // Strategy 4: phone
+          if (!resolvedStudentId) {
+            const phone = getStoredUser()?.phone;
+            if (phone) {
+              const { data: st } = await supabase.from('students').select('id').eq('phone', phone).maybeSingle();
+              if (st) resolvedStudentId = st.id;
+            }
+          }
+        }
+
+        // requireStudentFilter=true: returns [] if student can't be identified
+        const issues = await issueService.getIssues(resolvedStudentId, hostelId, statusParam, true);
+        return { data: issues as T };
+      }
+
+      // Admin/Warden: all issues (optionally filtered by hostel/status)
       const issues = await issueService.getIssues(undefined, hostelId, statusParam);
       return { data: issues as T };
     }
@@ -799,15 +842,85 @@ export const apiClient = {
         if (error) console.warn('Error updating profile in Supabase:', error);
       }
 
+      // For STUDENT role: sync updated student_name and phone to the students table
       const stored = getStoredUser();
+      const userRole = existingProfile?.role || stored?.role || '';
+      if (userRole === 'STUDENT' && (body?.first_name || body?.last_name || body?.phone)) {
+        const fullName = `${body.first_name ?? existingProfile?.first_name ?? stored?.first_name ?? ''} ${body.last_name ?? existingProfile?.last_name ?? stored?.last_name ?? ''}`.trim();
+        const studentPayload: any = {};
+        if (fullName) studentPayload.student_name = fullName;
+        if (body?.phone) studentPayload.phone = body.phone;
+
+        if (Object.keys(studentPayload).length > 0) {
+          let updated = false;
+          // Strategy 1: profile_id
+          if (userId) {
+            const { data: updatedByProfile } = await supabase
+              .from('students')
+              .update(studentPayload)
+              .eq('profile_id', userId)
+              .select('id');
+            if (updatedByProfile && updatedByProfile.length > 0) {
+              updated = true;
+            }
+          }
+
+          // Strategy 2: email
+          const targetEmail = body?.email || existingProfile?.email || stored?.email;
+          if (!updated && targetEmail) {
+            const { data: updatedByEmail } = await supabase
+              .from('students')
+              .update(studentPayload)
+              .ilike('email', targetEmail)
+              .select('id');
+            if (updatedByEmail && updatedByEmail.length > 0) {
+              updated = true;
+            }
+
+            // Strategy 3: USN prefix from email (e.g. 1AM26CS001@amc.edu)
+            if (!updated) {
+              const usnPrefix = targetEmail.split('@')[0];
+              const { data: updatedByUsn } = await supabase
+                .from('students')
+                .update(studentPayload)
+                .ilike('enrollment_no', usnPrefix)
+                .select('id');
+              if (updatedByUsn && updatedByUsn.length > 0) {
+                updated = true;
+              }
+            }
+          }
+
+          // Strategy 4: phone lookup
+          const targetPhone = stored?.phone || existingProfile?.phone;
+          if (!updated && targetPhone) {
+            await supabase
+              .from('students')
+              .update(studentPayload)
+              .eq('phone', targetPhone);
+          }
+        }
+      }
+
       const mergedProfile = {
         ...(stored || {}),
         ...(existingProfile || {}),
-        ...body,
+        ...updateData,
         id: existingProfile?.id || userId || stored?.id,
         role: existingProfile?.role || stored?.role || 'ADMIN',
-        email: body?.email || existingProfile?.email || stored?.email
+        email: body?.email || existingProfile?.email || stored?.email,
+        first_name: body?.first_name ?? existingProfile?.first_name ?? stored?.first_name,
+        last_name: body?.last_name ?? existingProfile?.last_name ?? stored?.last_name,
+        phone: body?.phone ?? existingProfile?.phone ?? stored?.phone,
       };
+
+      // Persist merged profile to localStorage immediately so all pages see fresh data
+      const currentToken = getAccessToken();
+      if (currentToken) {
+        saveAuthSession(currentToken, undefined, mergedProfile);
+      } else {
+        localStorage.setItem('hms_user', JSON.stringify(mergedProfile));
+      }
 
       return { data: mergedProfile as T };
     }

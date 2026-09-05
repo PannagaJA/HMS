@@ -150,24 +150,54 @@ export const studentService = {
     let resolvedStudentId = studentId;
 
     if (!resolvedStudentId) {
+      // Strategy 1: Supabase auth profile_id
       const { data: user } = await supabase.auth.getUser();
       const userId = user.user?.id;
       if (userId) {
         const { data: st } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
         if (st) resolvedStudentId = st.id;
       }
+
+      // Strategy 2: email match from localStorage
+      if (!resolvedStudentId) {
+        const stored = localStorage.getItem('hms_user');
+        const userObj = stored ? JSON.parse(stored) : null;
+        const email = userObj?.email;
+        if (email) {
+          const { data: st } = await supabase.from('students').select('id').ilike('email', email).maybeSingle();
+          if (st) resolvedStudentId = st.id;
+        }
+
+        // Strategy 3: USN prefix from email
+        if (!resolvedStudentId && email) {
+          const usnPrefix = email.split('@')[0];
+          const { data: st } = await supabase.from('students').select('id').ilike('enrollment_no', usnPrefix).maybeSingle();
+          if (st) resolvedStudentId = st.id;
+        }
+
+        // Strategy 4: phone match
+        if (!resolvedStudentId) {
+          const phone = userObj?.phone;
+          if (phone) {
+            const { data: st } = await supabase.from('students').select('id').eq('phone', phone).maybeSingle();
+            if (st) resolvedStudentId = st.id;
+          }
+        }
+      }
     }
 
-    let query = supabase
+    // Safety: if we still can't identify the student, return empty list
+    if (!resolvedStudentId) {
+      console.warn('[getMyGatePasses] Could not resolve student identity — returning empty list');
+      return [];
+    }
+
+    const { data: passes, error } = await supabase
       .from('gate_passes')
       .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no, floor)')
+      .eq('student_id', resolvedStudentId)
       .order('created_at', { ascending: false });
 
-    if (resolvedStudentId) {
-      query = query.eq('student_id', resolvedStudentId);
-    }
-
-    const { data: passes, error } = await query;
     if (error) {
       console.warn('Error fetching gate passes:', error);
       return [];
@@ -183,6 +213,7 @@ export const studentService = {
     }));
   },
 
+
   /**
    * Apply for a new gate pass
    */
@@ -197,49 +228,91 @@ export const studentService = {
     const { data: user } = await supabase.auth.getUser();
     const userId = user.user?.id;
 
-    // 1. Find student record
+    // 1. Find student record — try multiple strategies for students without profile_id
     let studentId: number | null = null;
     let hostelId: number = 1;
     let roomId: number = 1;
 
+    const resolveStudentWithAlloc = async (query: any) => {
+      const { data: student } = await query;
+      if (!student) return null;
+      const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
+      const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+      const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+      return { student, roomId: room?.id || null, hostelId: room?.hostel_id || null };
+    };
+
+    const allocSelect = 'id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
+
+    // Strategy 1: profile_id (Supabase auth)
     if (userId) {
-      const { data: student } = await supabase
-        .from('students')
-        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .eq('profile_id', userId)
-        .maybeSingle();
-
-      if (student) {
-        studentId = student.id;
-        const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
-        const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
-        const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
-        if (room?.id) roomId = room.id;
-        if (room?.hostel_id) hostelId = room.hostel_id;
+      const result = await resolveStudentWithAlloc(
+        supabase.from('students').select(allocSelect).eq('profile_id', userId).maybeSingle()
+      );
+      if (result?.student) {
+        studentId = result.student.id;
+        if (result.roomId) roomId = result.roomId;
+        if (result.hostelId) hostelId = result.hostelId;
       }
     }
 
-    // If not found by profile_id, fallback to first active student with room
+    // Strategy 2: email from localStorage
     if (!studentId) {
-      const { data: fallbackStudent } = await supabase
-        .from('students')
-        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .limit(1)
-        .maybeSingle();
+      const stored = localStorage.getItem('hms_user');
+      const userObj = stored ? JSON.parse(stored) : null;
+      const email = userObj?.email;
+      if (email) {
+        const result = await resolveStudentWithAlloc(
+          supabase.from('students').select(allocSelect).ilike('email', email).maybeSingle()
+        );
+        if (result?.student) {
+          studentId = result.student.id;
+          if (result.roomId) roomId = result.roomId;
+          if (result.hostelId) hostelId = result.hostelId;
+        }
 
-      if (fallbackStudent) {
-        studentId = fallbackStudent.id;
-        const activeAlloc: any = (fallbackStudent.allocations || []).find((a: any) => a.is_active) || fallbackStudent.allocations?.[0];
-        const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
-        const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
-        if (room?.id) roomId = room.id;
-        if (room?.hostel_id) hostelId = room.hostel_id;
+        // Strategy 3: USN prefix from email
+        if (!studentId) {
+          const usnPrefix = email.split('@')[0];
+          const result2 = await resolveStudentWithAlloc(
+            supabase.from('students').select(allocSelect).ilike('enrollment_no', usnPrefix).maybeSingle()
+          );
+          if (result2?.student) {
+            studentId = result2.student.id;
+            if (result2.roomId) roomId = result2.roomId;
+            if (result2.hostelId) hostelId = result2.hostelId;
+          }
+        }
+      }
+
+      // Strategy 4: phone
+      if (!studentId) {
+        const phone = userObj?.phone;
+        if (phone) {
+          const result = await resolveStudentWithAlloc(
+            supabase.from('students').select(allocSelect).eq('phone', phone).maybeSingle()
+          );
+          if (result?.student) {
+            studentId = result.student.id;
+            if (result.roomId) roomId = result.roomId;
+            if (result.hostelId) hostelId = result.hostelId;
+          }
+        }
       }
     }
 
     if (!studentId) {
-      throw new Error('Could not find resident student record for gate pass application');
+      throw new Error('Could not find your student resident record. Please ensure you are registered as a hostel resident.');
     }
+
+    // Resolve fallback hostel/room from DB if allocation wasn't found
+    if (roomId === 1 || hostelId === 1) {
+      const { data: defaultHostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      if (hostelId === 1 && defaultHostel?.id) hostelId = defaultHostel.id;
+      const { data: defaultRoom } = await supabase.from('hostel_rooms').select('id').eq('hostel_id', hostelId).limit(1).maybeSingle();
+      if (roomId === 1 && defaultRoom?.id) roomId = defaultRoom.id;
+    }
+
 
     // Format dates to YYYY-MM-DD
     const formatSqlDate = (dStr: string) => {

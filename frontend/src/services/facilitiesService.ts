@@ -470,8 +470,18 @@ export const diningService = {
 };
 
 export const issueService = {
-  async getIssues(studentId?: number, hostelId?: number | string, status?: string): Promise<HostelIssue[]> {
+  /**
+   * @param requireStudentFilter - when true (student role), returns [] if studentId can't be resolved
+   *   instead of returning all issues (prevents cross-student data leakage)
+   */
+  async getIssues(studentId?: number, hostelId?: number | string, status?: string, requireStudentFilter = false): Promise<HostelIssue[]> {
     let resolvedStudentId = studentId;
+
+    // Safety guard: if this is a student-scoped call and we have no student ID, return empty
+    if (requireStudentFilter && !resolvedStudentId) {
+      console.warn('[getIssues] Student-scoped call but no studentId resolved — returning empty list');
+      return [];
+    }
 
     let query = supabase
       .from('issues')
@@ -569,29 +579,47 @@ export const issueService = {
     const { data: user } = await supabase.auth.getUser();
     const userId = user.user?.id;
 
-    // Find student record and their active room allocation
+    // Find student record — try multiple strategies for students without profile_id
     let student: any = null;
+    const allocSelect = 'id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
+
+    // Strategy 1: profile_id
     if (userId) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .eq('profile_id', userId)
-        .maybeSingle();
+      const { data } = await supabase.from('students').select(allocSelect).eq('profile_id', userId).maybeSingle();
       if (data) student = data;
     }
 
+    // Strategy 2: email from localStorage
     if (!student) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .limit(1)
-        .maybeSingle();
-      if (data) student = data;
+      const stored = localStorage.getItem('hms_user');
+      const userObj = stored ? JSON.parse(stored) : null;
+      const email = userObj?.email;
+      if (email) {
+        const { data } = await supabase.from('students').select(allocSelect).ilike('email', email).maybeSingle();
+        if (data) student = data;
+
+        // Strategy 3: USN prefix from email
+        if (!student) {
+          const usnPrefix = email.split('@')[0];
+          const { data: d2 } = await supabase.from('students').select(allocSelect).ilike('enrollment_no', usnPrefix).maybeSingle();
+          if (d2) student = d2;
+        }
+      }
+
+      // Strategy 4: phone
+      if (!student) {
+        const phone = userObj?.phone;
+        if (phone) {
+          const { data } = await supabase.from('students').select(allocSelect).eq('phone', phone).maybeSingle();
+          if (data) student = data;
+        }
+      }
     }
 
     if (!student) {
-      throw new Error('Could not identify resident student record for issue reporting');
+      throw new Error('Could not identify your student record. Please ensure your profile is correctly linked to a resident account.');
     }
+
 
     const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
     const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;

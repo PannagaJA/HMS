@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { User, Mail, Phone, Lock, Save, KeyRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
 
 export const HMSProfile: React.FC = () => {
   const { user, updateCurrentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const queryClient = useQueryClient();
   const [name, setName] = useState(
     user?.first_name 
       ? `${user.first_name} ${user.last_name || ''}`.trim() 
@@ -42,6 +44,11 @@ export const HMSProfile: React.FC = () => {
 
       // Update global AuthContext and persistent session state immediately
       updateCurrentUser(res.data);
+
+      // Invalidate all React Query caches that display profile-based data
+      queryClient.invalidateQueries({ queryKey: ['studentProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['myIssues'] });
+      queryClient.invalidateQueries({ queryKey: ['myGatePasses'] });
 
       showSuccess('Profile updated successfully! New details are now active.');
       setSuccessMsg('Profile updated successfully! New details are now active across all screens.');

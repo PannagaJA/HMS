@@ -31,6 +31,7 @@ export const StudentDashboard: React.FC = () => {
       return res.data;
     },
     staleTime: 0,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
 
@@ -46,14 +47,21 @@ export const StudentDashboard: React.FC = () => {
   const { data: issues = [] } = useQuery<IssueTicket[]>({
     queryKey: ['myIssues'],
     queryFn: async () => {
-      const res = await apiClient.get<IssueTicket[]>('/hms/issues/');
+      const res = await apiClient.get<IssueTicket[]>('/student/issues/');
       return res.data || [];
     },
     staleTime: 1000 * 60 * 2,
   });
 
   const student = profileData?.profile;
-  const displayName = student?.student_name || user?.first_name || 'Resident';
+  // Prefer AuthContext first_name (updates instantly on profile save) over student_name from DB
+  // But skip generic placeholder names like 'Student' / 'Resident' stored in auth context
+  const genericNames = ['student', 'resident', 'user', 'admin'];
+  const authName = user?.first_name && !genericNames.includes(user.first_name.toLowerCase())
+    ? `${user.first_name} ${user.last_name || ''}`.trim()
+    : null;
+  const displayName = authName || student?.student_name || user?.first_name || 'Resident';
+
   const activeApprovedPass = passes.find((p) => p.status === 'approved');
   const pendingPassesCount = passes.filter((p) => p.status === 'pending').length;
   const openIssuesCount = issues.filter((i) => i.status !== 'completed' && i.status !== 'resolved').length;
