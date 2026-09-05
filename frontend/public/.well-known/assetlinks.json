@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.amc_hms.twa",
+      "sha256_cert_fingerprints": [
+        "AC:17:9D:A2:AF:88:6C:9A:34:71:D9:66:DB:2C:43:60:29:55:3D:3C:28:AB:AB:AB:3F:0A:BC:B6:15:58:37:C4"
+      ]
+    }
+  }
+]
