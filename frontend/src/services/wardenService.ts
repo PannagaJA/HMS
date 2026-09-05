@@ -22,7 +22,7 @@ export const wardenService = {
       id: h.id,
       name: h.name,
       gender: h.gender,
-      floors: h.floor_count || h.floors || 3
+      floors: h.floor_count !== undefined && h.floor_count !== null ? Number(h.floor_count) : (h.floors || 3)
     }));
 
     const targetHostelId = hostelId

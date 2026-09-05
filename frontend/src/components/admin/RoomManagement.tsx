@@ -310,7 +310,20 @@ export const RoomManagement: React.FC = () => {
     setShowOccupantsDrawer(true);
   };
 
-  const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort((a, b) => a - b);
+  const currentSelectedHostel = hostels.find((h) => String(h.id) === String(selectedHostelId));
+  const configuredMaxFloor = Number(currentSelectedHostel?.floor_count ?? 3);
+
+  // Combine configured hostel floors (Ground 0 .. floor_count) with any existing legacy room floors
+  const existingRoomFloors = Array.from(new Set(rooms.map((r) => Number(r.floor)))).filter((f) => !isNaN(f));
+  const configuredFloors = Array.from({ length: Math.max(1, configuredMaxFloor) + 1 }, (_, i) => i);
+  const allFloorNumbers = Array.from(new Set([...configuredFloors, ...existingRoomFloors])).sort((a, b) => a - b);
+
+  const floors = allFloorNumbers.map((f) => ({
+    value: f,
+    label: f === 0 ? 'Ground Floor' : `Floor ${f}`,
+    isExtra: f > configuredMaxFloor,
+  }));
+
   const filteredRooms = rooms.filter((r) => {
     if (!selectedFloor || selectedFloor === 'ALL') return true;
     return String(r.floor) === String(selectedFloor);
@@ -375,8 +388,8 @@ export const RoomManagement: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="ALL">All Floors</SelectItem>
                   {floors.map((f) => (
-                    <SelectItem key={f} value={String(f)}>
-                      {f === 0 ? 'Ground Floor' : `Floor ${f}`}
+                    <SelectItem key={f.value} value={String(f.value)}>
+                      {f.label}{f.isExtra ? ' (Existing Rooms)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -661,13 +674,22 @@ export const RoomManagement: React.FC = () => {
                       <SelectValue placeholder="-- Select Floor --" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Ground Floor</SelectItem>
-                      <SelectItem value="1">1st Floor</SelectItem>
-                      <SelectItem value="2">2nd Floor</SelectItem>
-                      <SelectItem value="3">3rd Floor</SelectItem>
-                      <SelectItem value="4">4th Floor</SelectItem>
-                      <SelectItem value="5">5th Floor</SelectItem>
-                      <SelectItem value="6">6th Floor</SelectItem>
+                      {(() => {
+                        const targetHostel = hostels.find((h) => String(h.id) === String(editHostelId));
+                        const maxFl = Number(targetHostel?.floor_count ?? 3);
+                        const flList = Array.from({ length: Math.max(1, maxFl) + 1 }, (_, i) => i);
+                        // Also include current room floor if higher
+                        const currentFl = Number(editFloor);
+                        if (!isNaN(currentFl) && !flList.includes(currentFl)) {
+                          flList.push(currentFl);
+                          flList.sort((a, b) => a - b);
+                        }
+                        return flList.map((fl) => (
+                          <SelectItem key={fl} value={String(fl)}>
+                            {fl === 0 ? 'Ground Floor' : `Floor ${fl}`}{fl > maxFl ? ' (Existing)' : ''}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
@@ -804,13 +826,16 @@ export const RoomManagement: React.FC = () => {
                       <SelectValue placeholder="-- Select Floor --" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Ground Floor</SelectItem>
-                      <SelectItem value="1">1st Floor</SelectItem>
-                      <SelectItem value="2">2nd Floor</SelectItem>
-                      <SelectItem value="3">3rd Floor</SelectItem>
-                      <SelectItem value="4">4th Floor</SelectItem>
-                      <SelectItem value="5">5th Floor</SelectItem>
-                      <SelectItem value="6">6th Floor</SelectItem>
+                      {(() => {
+                        const targetHostel = hostels.find((h) => String(h.id) === String(singleHostelId || selectedHostelId));
+                        const maxFl = Number(targetHostel?.floor_count ?? 3);
+                        const flList = Array.from({ length: Math.max(1, maxFl) + 1 }, (_, i) => i);
+                        return flList.map((fl) => (
+                          <SelectItem key={fl} value={String(fl)}>
+                            {fl === 0 ? 'Ground Floor' : `Floor ${fl}`}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
@@ -916,11 +941,21 @@ export const RoomManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Floor Number <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Floor Number <span className="text-red-500">*</span>
+                    {(() => {
+                      const targetHostel = hostels.find((h) => String(h.id) === String(bulkHostelId || selectedHostelId));
+                      const maxFl = Number(targetHostel?.floor_count ?? 3);
+                      return <span className="text-slate-400 font-normal ml-1">(0 - {maxFl})</span>;
+                    })()}
+                  </label>
                   <input
                     type="number"
                     min={0}
-                    max={20}
+                    max={(() => {
+                      const targetHostel = hostels.find((h) => String(h.id) === String(bulkHostelId || selectedHostelId));
+                      return Number(targetHostel?.floor_count ?? 3);
+                    })()}
                     required
                     value={bulkFloor}
                     onChange={(e) => setBulkFloor(Number(e.target.value))}

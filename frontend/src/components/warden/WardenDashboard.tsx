@@ -189,9 +189,10 @@ export const WardenDashboard: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
-                    All Floors ({currentHostel ? `${currentHostel.floors || 4} Floors` : 'All'})
+                    All Floors ({currentHostel ? `${currentHostel.floors} Floors` : 'All'})
                   </SelectItem>
-                  {Array.from({ length: currentHostel?.floors || 4 }, (_, i) => i + 1).map((fl) => (
+                  <SelectItem value="0">Ground Floor</SelectItem>
+                  {Array.from({ length: Math.max(1, currentHostel?.floors ?? 1) }, (_, i) => i + 1).map((fl) => (
                     <SelectItem key={fl} value={String(fl)}>
                       Floor {fl}
                     </SelectItem>

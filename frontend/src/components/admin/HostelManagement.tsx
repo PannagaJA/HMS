@@ -246,14 +246,18 @@ export const HostelManagement: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-900 mb-1">{h.name}</h3>
               <p className="text-xs text-slate-400 mb-4">{h.address || 'Campus Residential Zone'}</p>
 
-              <div className="grid grid-cols-2 gap-3 py-3 border-y border-slate-100 mb-4 text-xs">
+              <div className="grid grid-cols-3 gap-2 py-3 border-y border-slate-100 mb-4 text-xs">
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Floors</span>
+                  <span className="font-bold text-slate-800">{h.floor_count || 1} {h.floor_count === 1 ? 'Floor' : 'Floors'}</span>
+                </div>
                 <div>
                   <span className="text-slate-400 block mb-0.5">Total Rooms</span>
                   <span className="font-bold text-slate-800">{h.total_rooms} Rooms</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Bed Occupancy</span>
-                  <span className="font-bold text-slate-800">{h.occupied_beds} / {h.total_capacity} Beds</span>
+                  <span className="text-slate-400 block mb-0.5">Occupancy</span>
+                  <span className="font-bold text-slate-800">{h.occupied_beds} / {h.total_capacity}</span>
                 </div>
               </div>
 
