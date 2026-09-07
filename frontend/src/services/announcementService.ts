@@ -7,22 +7,40 @@ export const announcementService = {
     try {
       const userRole = (role || '').toUpperCase();
       if (userRole === 'STUDENT') {
+        let studentData: any = null;
+        const allocSelect = 'id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
+
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || '');
-        let query = supabase
-          .from('students')
-          .select('id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))');
-        
         if (isUuid) {
-          query = query.eq('profile_id', userId);
-        } else {
-          query = query.limit(1);
+          const { data } = await supabase.from('students').select(allocSelect).eq('profile_id', userId).maybeSingle();
+          if (data) studentData = data;
         }
 
-        const { data } = await query.maybeSingle();
+        if (!studentData) {
+          try {
+            const stored = localStorage.getItem('hms_user');
+            const userObj = stored ? JSON.parse(stored) : null;
+            const email = userObj?.email;
+            if (email) {
+              const { data: byEmail } = await supabase.from('students').select(allocSelect).ilike('email', email).maybeSingle();
+              if (byEmail) studentData = byEmail;
 
-        const allocations = (data as any)?.allocations || [];
-        const activeAlloc = allocations.find((a: any) => a.is_active);
-        const hostelId = activeAlloc?.bed?.room?.hostel_id || allocations[0]?.bed?.room?.hostel_id || null;
+              if (!studentData) {
+                const usnPrefix = email.split('@')[0];
+                const { data: byUsn } = await supabase.from('students').select(allocSelect).ilike('enrollment_no', usnPrefix).maybeSingle();
+                if (byUsn) studentData = byUsn;
+              }
+            }
+          } catch {
+            // ignore JSON parse errors
+          }
+        }
+
+        const allocations = studentData?.allocations || [];
+        const activeAlloc = allocations.find((a: any) => a.is_active) || allocations[0];
+        const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+        const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+        const hostelId = room?.hostel_id || null;
         return hostelId ? Number(hostelId) : null;
       }
       if (userRole === 'WARDEN' || userRole === 'CARETAKER') {
@@ -48,10 +66,6 @@ export const announcementService = {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (userRole && userRole !== 'ADMIN') {
-      query = query.contains('target_roles', [userRole]);
-    }
-
     const { data: allData, error } = await query;
 
     if (error) {
@@ -61,11 +75,17 @@ export const announcementService = {
 
     if (!allData || allData.length === 0) return { data: [], count: 0 };
 
-    // Filter non-expired and hostel-appropriate announcements
+    // Filter non-expired, role-targeted, and hostel-appropriate announcements
     const filtered = allData.filter(a => {
       if (a.expires_at) {
         const expiry = new Date(a.expires_at).getTime();
         if (expiry <= now) return false;
+      }
+      if (userRole && userRole !== 'ADMIN') {
+        const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+        if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+          return false;
+        }
       }
       if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
         if (userHostelId) {
@@ -106,29 +126,26 @@ export const announcementService = {
 
   async getSentAnnouncements(role: string, page = 1, limit = 20): Promise<{ data: Announcement[], count: number }> {
     const userRole = (role || '').toUpperCase();
-    
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
     let query = supabase
       .from('announcements')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (userRole !== 'ADMIN') {
-      query = query.ilike('created_by_role', userRole);
+      query = query.eq('created_by_role', role);
     }
 
-    const { data: allData, error } = await query;
+    const { data, count, error } = await query.range(from, to);
 
     if (error) {
       console.error('Failed to fetch sent announcements:', error);
       throw error;
     }
 
-    const list = (allData || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    const totalCount = list.length;
-    const from = (page - 1) * limit;
-    const pageData = list.slice(from, from + limit);
-
-    return { data: pageData, count: totalCount };
+    return { data: data || [], count: count || 0 };
   },
 
   async deleteAnnouncement(id: string): Promise<void> {
@@ -136,6 +153,7 @@ export const announcementService = {
       .from('announcements')
       .delete()
       .eq('id', id);
+
     if (error) {
       console.error('Failed to delete announcement in DB:', error);
       throw error;
@@ -144,15 +162,20 @@ export const announcementService = {
 
   async createAnnouncement(data: Partial<Announcement>): Promise<Announcement> {
     const newAnnouncement = {
-      ...data,
-      id: Math.random().toString(36).substring(7),
-      created_at: new Date().toISOString(),
-      is_read: false
+      title: data.title,
+      message: data.message,
+      priority: data.priority || 'low',
+      target_roles: data.target_roles || [],
+      created_by_role: data.created_by_role,
+      created_by_name: data.created_by_name,
+      is_circular: data.is_circular || false,
+      target_hostel_id: data.target_hostel_id || null,
+      expires_at: data.expires_at || null,
     } as Announcement;
 
     const { is_read, ...insertData } = newAnnouncement;
 
-    const { data: insertedData, error } = await supabase
+    const { data: created, error } = await supabase
       .from('announcements')
       .insert([insertData])
       .select()
@@ -162,8 +185,8 @@ export const announcementService = {
       console.error('Failed to create announcement in DB:', error);
       throw error;
     }
-    // Return with is_read set for client-side state
-    return { ...insertedData, is_read: false };
+
+    return created;
   },
 
   async markAsRead(announcementId: string, userId: string): Promise<void> {
@@ -191,15 +214,9 @@ export const announcementService = {
       const userRole = (role || '').toUpperCase();
       const nowIso = new Date().toISOString();
 
-      let query = supabase
+      const { data: targeted, error: targetError } = await supabase
         .from('announcements')
         .select('id, target_roles, target_hostel_id, expires_at');
-
-      if (userRole && userRole !== 'ADMIN') {
-        query = query.contains('target_roles', [userRole]);
-      }
-
-      const { data: targeted, error: targetError } = await query;
         
       if (targetError) {
         console.warn('Error querying targeted announcements for unread count:', targetError);
@@ -211,6 +228,12 @@ export const announcementService = {
       const validAnnouncements = targeted.filter(a => {
         if (a.expires_at && new Date(a.expires_at) <= new Date(nowIso)) {
           return false;
+        }
+        if (userRole && userRole !== 'ADMIN') {
+          const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+          if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+            return false;
+          }
         }
         if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
           if (userHostelId) {
