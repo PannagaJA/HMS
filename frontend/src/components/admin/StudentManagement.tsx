@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { Pagination } from '../common/Pagination';
 
 interface ParsedStudentRow {
   student_name: string;
@@ -1065,76 +1066,16 @@ export const StudentManagement: React.FC = () => {
 
         {/* Pagination Toolbar */}
         {filteredStudents.length > 0 && (
-          <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="text-slate-500 font-medium flex items-center gap-2">
-              <span>
-                Showing <strong className="text-slate-800 font-semibold">{totalStudents === 0 ? 0 : startIndex + 1}</strong> to <strong className="text-slate-800 font-semibold">{endIndex}</strong> of <strong className="text-slate-800 font-semibold">{totalStudents}</strong> residents
-              </span>
-              <span className="text-slate-300">|</span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400">Per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0B1437] cursor-pointer"
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-            </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
-                  title="Previous Page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                    .map((pageNum, idx, arr) => {
-                      const prev = arr[idx - 1];
-                      return (
-                        <React.Fragment key={pageNum}>
-                          {prev && pageNum - prev > 1 && (
-                            <span className="px-1 text-slate-400 font-bold">...</span>
-                          )}
-                          <button
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              currentPage === pageNum
-                                ? 'bg-[#0B1437] text-white shadow-2xs'
-                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        </React.Fragment>
-                      );
-                    })}
-                </div>
-
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
-                  title="Next Page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalStudents}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[25, 50, 100]}
+            itemName="residents"
+            variant="table-footer"
+          />
         )}
       </div>
       )}

@@ -23,6 +23,7 @@ import { formatTime12 } from '../../lib/utils';
 import { useNotification } from '../../context/NotificationContext';
 import { useDebounce } from '../../hooks/useDebounce';
 import { formatFloorRoom } from '../../utils/formatters';
+import { Pagination } from '../common/Pagination';
 
 export const GatePassScanner: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
@@ -40,7 +41,7 @@ export const GatePassScanner: React.FC = () => {
 
   // Pagination State
   const [page, setPage] = useState(1);
-  const limit = 8;
+  const [pageSize, setPageSize] = useState(10);
 
   // Confirmation Dialog State for Check Out & Check In
   const [pendingConfirmAction, setPendingConfirmAction] = useState<'EXIT' | 'ENTRY' | null>(null);
@@ -239,8 +240,8 @@ export const GatePassScanner: React.FC = () => {
     );
   });
 
-  const totalPages = Math.ceil(filteredRecords.length / limit) || 1;
-  const paginatedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
+  const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
+  const paginatedRecords = filteredRecords.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-7 w-full">
@@ -705,33 +706,17 @@ export const GatePassScanner: React.FC = () => {
         </div>
 
         {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
-            <span className="text-xs text-slate-500 font-medium">
-              Showing {(page - 1) * limit + 1} to {Math.min(page * limit, filteredRecords.length)} of {filteredRecords.length} records
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Previous Page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-xs font-bold text-slate-700 px-2">
-                Page {page} of {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Next Page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+        {filteredRecords.length > 0 && (
+          <Pagination
+            currentPage={page}
+            totalItems={filteredRecords.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[10, 25, 50]}
+            itemName="records"
+            variant="table-footer"
+          />
         )}
       </div>
 

@@ -20,6 +20,7 @@ import { announcementService } from '../../services/announcementService';
 import { supabase } from '../../lib/supabase';
 import type { Announcement } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
+import { Pagination } from '../common/Pagination';
 
 export const Announcements: React.FC = () => {
   const { user } = useAuth();
@@ -35,8 +36,8 @@ export const Announcements: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(9);
   const [totalCount, setTotalCount] = useState(0);
-  const limit = 9;
 
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
 
@@ -57,11 +58,11 @@ export const Announcements: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'received') {
-        const { data, count } = await announcementService.getAnnouncements(user.role, user.id, page, limit);
+        const { data, count } = await announcementService.getAnnouncements(user.role, user.id, page, pageSize);
         setAnnouncements(data);
         setTotalCount(count);
       } else {
-        const { data, count } = await announcementService.getSentAnnouncements(user.role, page, limit);
+        const { data, count } = await announcementService.getSentAnnouncements(user.role, page, pageSize);
         setAnnouncements(data);
         setTotalCount(count);
       }
@@ -87,7 +88,7 @@ export const Announcements: React.FC = () => {
     if (canCreate && hostels.length === 0) {
       fetchHostels();
     }
-  }, [user, activeTab, page]); // Re-fetch on tab or page change
+  }, [user, activeTab, page, pageSize]); // Re-fetch on tab, page or pageSize change
 
   useEffect(() => {
     if (!user) return;
@@ -108,14 +109,14 @@ export const Announcements: React.FC = () => {
             if (isNotExpired) {
               setAnnouncements(prev => {
                 const list = prev.filter(a => a.id !== newA.id);
-                return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, limit);
+                return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, pageSize);
               });
               setTotalCount(prev => prev + 1);
             }
           } else if (activeTab === 'sent' && (userRole === 'ADMIN' || (newA.created_by_role || '').toUpperCase() === userRole)) {
             setAnnouncements(prev => {
               const list = prev.filter(a => a.id !== newA.id);
-              return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, limit);
+              return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, pageSize);
             });
             setTotalCount(prev => prev + 1);
           }
@@ -243,7 +244,7 @@ export const Announcements: React.FC = () => {
     })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  const totalPages = Math.ceil(totalCount / limit) || 1;
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
   return (
     <div className="w-full space-y-6 pb-8">
@@ -384,28 +385,17 @@ export const Announcements: React.FC = () => {
           </div>
 
           {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-              <span className="text-sm text-slate-500 font-medium">
-                Showing page {page} of {totalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+          {totalCount > 0 && (
+            <Pagination
+              currentPage={page}
+              totalItems={totalCount}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[6, 9, 18, 27]}
+              itemName="announcements"
+              variant="table-footer"
+            />
           )}
         </div>
       )}

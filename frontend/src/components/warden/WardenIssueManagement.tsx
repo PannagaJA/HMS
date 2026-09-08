@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { Pagination } from '../common/Pagination';
 import { formatFloorRoom } from '../../utils/formatters';
 
 export const WardenIssueManagement: React.FC = () => {
@@ -475,77 +476,16 @@ export const WardenIssueManagement: React.FC = () => {
 
           {/* Pagination Controls */}
           {filtered.length > 0 && (
-            <div className="bg-white px-6 py-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-medium">
-                <span>
-                  Showing <strong className="text-slate-800 font-bold">{startIndex + 1}</strong> to{' '}
-                  <strong className="text-slate-800 font-bold">{endIndex}</strong> of{' '}
-                  <strong className="text-slate-800 font-bold">{totalItems}</strong> tickets
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-400">Per page:</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0B1437] cursor-pointer"
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
-                    title="Previous Page"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                      .map((pageNum, idx, arr) => {
-                        const prev = arr[idx - 1];
-                        return (
-                          <React.Fragment key={pageNum}>
-                            {prev && pageNum - prev > 1 && (
-                              <span className="px-1 text-slate-400 font-bold">...</span>
-                            )}
-                            <button
-                              onClick={() => setCurrentPage(pageNum)}
-                              className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                currentPage === pageNum
-                                  ? 'bg-[#0B1437] text-white shadow-2xs'
-                                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          </React.Fragment>
-                        );
-                      })}
-                  </div>
-
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
-                    title="Next Page"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[10, 25, 50]}
+              itemName="tickets"
+              variant="card"
+            />
           )}
         </>
       )}

@@ -14,10 +14,13 @@ import {
   SelectValue,
 } from '../ui/select';
 import { formatTime12 } from '../../lib/utils';
+import { Pagination } from '../common/Pagination';
 
 export const StudentGatePasses: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const queryClient = useQueryClient();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedQRPass, setSelectedQRPass] = useState<GatePassRequest | null>(null);
 
@@ -65,6 +68,8 @@ export const StudentGatePasses: React.FC = () => {
     });
   };
 
+  const paginatedPasses = passes.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
@@ -89,7 +94,7 @@ export const StudentGatePasses: React.FC = () => {
               No gate passes applied yet. Click "Apply New Pass" above to create one.
             </div>
           ) : (
-            passes.map((pass) => (
+            paginatedPasses.map((pass) => (
               <div key={pass.id} className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3 shadow-2xs">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -178,7 +183,7 @@ export const StudentGatePasses: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                passes.map((pass) => (
+                paginatedPasses.map((pass) => (
                   <tr key={pass.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-4 pl-2 font-bold text-slate-800 text-xs">
                       {String(pass.pass_type).replace(/_/g, ' ')}
@@ -219,6 +224,20 @@ export const StudentGatePasses: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Pagination Controls */}
+      {passes.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={passes.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[10, 25, 50]}
+          itemName="passes"
+          variant="card"
+        />
+      )}
 
       {/* DYNAMIC QR CODE MODAL FOR APPROVED GATE PASS */}
       {selectedQRPass && (

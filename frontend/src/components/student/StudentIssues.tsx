@@ -13,10 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { Pagination } from '../common/Pagination';
 
 export const StudentIssues: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const [issues, setIssues] = useState<IssueTicket[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showRaiseModal, setShowRaiseModal] = useState(false);
   const [selectedUpdatesIssue, setSelectedUpdatesIssue] = useState<IssueTicket | null>(null);
   const [loadingUpdates, setLoadingUpdates] = useState(false);
@@ -116,16 +119,18 @@ export const StudentIssues: React.FC = () => {
     }
   };
 
+  const paginatedIssues = issues.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Maintenance & Room Support</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Report room repairs, plumbing, electrical, and facility issues</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Room Issue & Maintenance Reporting</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Report room damage, electrical, plumbing, or cleaning issues</p>
         </div>
         <button
           onClick={() => setShowRaiseModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
+          className="w-full sm:w-auto justify-center px-5 py-2.5 rounded-full bg-[#0B1437] text-white text-xs sm:text-sm font-semibold hover:bg-[#111f54] transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Report New Issue</span>
@@ -139,7 +144,7 @@ export const StudentIssues: React.FC = () => {
             No issues recorded for your room. Everything is operating normally.
           </div>
         ) : (
-          issues.map((issue) => (
+          paginatedIssues.map((issue) => (
             <div key={issue.id} className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-800 uppercase tracking-wider">
@@ -230,7 +235,7 @@ export const StudentIssues: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                issues.map((issue) => {
+                paginatedIssues.map((issue) => {
                   const latestUpdate = issue.updates && issue.updates.length > 0 ? issue.updates[0] : null;
                   return (
                     <tr key={issue.id} className="hover:bg-slate-50/70 transition-colors">
@@ -305,6 +310,20 @@ export const StudentIssues: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Pagination Controls */}
+      {issues.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={issues.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[10, 25, 50]}
+          itemName="tickets"
+          variant="card"
+        />
+      )}
 
       {/* LIGHTBOX PREVIEW MODAL */}
       {selectedImageModal && (
