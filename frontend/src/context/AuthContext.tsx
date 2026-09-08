@@ -22,6 +22,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Returns true if the token is a synthetic/fallback token (not a real Supabase JWT).
+ * Synthetic tokens are created for students and staff who log in via the fallback path.
+ * Supabase has no record of these sessions, so we must NOT let Supabase auth events
+ * interfere with them.
+ */
+const isSyntheticToken = (token: string | null): boolean =>
+  typeof token === 'string' && token.startsWith('hms-session-');
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => getStoredUser());
   const [token, setToken] = useState<string | null>(() => getAccessToken());
@@ -32,6 +41,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const stored = getStoredUser();
       const storedToken = getAccessToken();
+
+      // FIX 3: Short-circuit for synthetic/fallback sessions.
+      // Supabase knows nothing about these, so querying it would fail or clear state.
+      if (isSyntheticToken(storedToken) && stored) {
+        setUser(stored);
+        setToken(storedToken);
+        return stored;
+      }
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData?.user && !stored) {
@@ -75,7 +92,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Listen to Supabase auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const currentToken = getAccessToken();
+
       if (event === 'SIGNED_OUT') {
+        // FIX 1: Do NOT clear state for synthetic/fallback sessions.
+        // Supabase fires SIGNED_OUT because it has no record of them, but
+        // the user is legitimately logged in via our fallback auth path.
+        if (isSyntheticToken(currentToken)) {
+          return;
+        }
         setUser(null);
         setToken(null);
         localStorage.removeItem('hms_user');
@@ -83,6 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session) {
           setToken(session.access_token);
+          // FIX 2: Persist the refreshed JWT to localStorage so it stays in sync.
+          // Previously only React state was updated, causing hms_token to go stale
+          // after Supabase silently auto-refreshed an expiring JWT.
+          saveAuthSession(session.access_token, undefined, undefined);
         }
       }
     });

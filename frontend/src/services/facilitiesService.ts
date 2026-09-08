@@ -139,6 +139,23 @@ export const diningService = {
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const currentDayName = dayNames[(jsDay + 6) % 7];
 
+    // Try RPC first (SECURITY DEFINER, immune to client session RLS differences)
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_today_menu', { p_day_of_week: appDayId });
+      if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
+        const meals: Menu[] = rpcData.map((m: any) => ({
+          ...m,
+          meal_type: m.meal_type || m.meal_type_id,
+          meal_type_id: m.meal_type_id || m.meal_type?.id,
+          items: m.items || [],
+          items_detail: m.items || []
+        }));
+        return { day_name: currentDayName, day_id: appDayId, meals };
+      }
+    } catch (_) {
+      // RPC may not exist in some environments, continue to direct query
+    }
+
     const { data, error } = await supabase
       .from('menus')
       .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))')
@@ -151,14 +168,15 @@ export const diningService = {
     const menuRows = data || [];
     console.log(`[diningService.getTodayMenu] day=${currentDayName}(${appDayId}), rows=${menuRows.length}`);
 
-    // Check if nested join returned empty items for any menu
-    // This happens when RLS blocks menu_item_links for students.
-    // Fallback: fetch menu items directly using menu IDs.
+    // Always attempt a direct fetch of menu_item_links as a fallback.
+    // Nested joins are frequently blocked by RLS for student roles —
+    // a direct SELECT on menu_item_links may succeed under a different policy evaluation path.
+    // NOTE: Do NOT include 'category' here — it may not exist in all production deployments.
     const menuIds = menuRows.map((m: any) => m.id);
     let directItemMap: Record<number, any[]> = {};
 
-    const someEmpty = menuRows.some((m: any) => !m.links || m.links.length === 0);
-    if (menuIds.length > 0 && someEmpty) {
+    if (menuIds.length > 0) {
+      // First attempt: direct join without category (safe for all DB versions)
       const { data: links, error: linksErr } = await supabase
         .from('menu_item_links')
         .select('menu_id, item_id, item:menu_items(id, name, description, vegetarian)')
@@ -178,23 +196,77 @@ export const diningService = {
           });
         }
       }
+
+      // Secondary fallback: if all menus still have no items, fetch menu_item_links
+      // without the item join, then fetch menu_items separately by id.
+      // This path handles cases where the nested join is blocked but the base table is readable.
+      const allStillEmpty = menuIds.every(id => !directItemMap[id] || directItemMap[id].length === 0);
+      if (allStillEmpty) {
+        console.log('[diningService.getTodayMenu] Trying secondary item fetch via item_ids...');
+        const { data: rawLinks } = await supabase
+          .from('menu_item_links')
+          .select('menu_id, item_id')
+          .in('menu_id', menuIds);
+
+        if (rawLinks && rawLinks.length > 0) {
+          const itemIds = [...new Set(rawLinks.map((l: any) => l.item_id))];
+          const { data: itemRows } = await supabase
+            .from('menu_items')
+            .select('id, name, description, vegetarian')
+            .in('id', itemIds);
+
+          const itemById: Record<number, any> = {};
+          for (const item of itemRows || []) {
+            itemById[item.id] = { ...item, is_veg: Boolean(item.vegetarian ?? true) };
+          }
+
+          for (const link of rawLinks) {
+            const item = itemById[link.item_id];
+            if (!item) continue;
+            if (!directItemMap[link.menu_id]) directItemMap[link.menu_id] = [];
+            if (!directItemMap[link.menu_id].some((i: any) => i.id === item.id)) {
+              directItemMap[link.menu_id].push(item);
+            }
+          }
+          console.log(`[diningService.getTodayMenu] secondary fetch populated ${Object.keys(directItemMap).length} menus`);
+        }
+      }
     }
 
-    const meals = menuRows.map((m: any) => {
-      // Use nested join items first; fall back to direct query results
+
+    const rawMeals = menuRows.map((m: any) => {
+      // Use nested join items if available; fall back to direct query results
       const joinedItems = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
         ...i,
         is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
       }));
       const items = joinedItems.length > 0 ? joinedItems : (directItemMap[m.id] || []);
 
+      // Always embed the full meal_type object so the student component can resolve
+      // meal name and time without needing a separate mealTypes lookup.
+      const mealTypeObj = typeof m.meal_type === 'object' && m.meal_type !== null
+        ? m.meal_type
+        : null;
+
       return {
         ...m,
-        meal_type: m.meal_type_id || m.meal_type?.id,
-        meal_type_id: m.meal_type_id || m.meal_type?.id,
+        meal_type: mealTypeObj,
+        meal_type_id: m.meal_type_id ?? mealTypeObj?.id,
         items,
         items_detail: items
       };
+    });
+
+    // Deduplicate by meal_type_id — keep only the first menu row per meal slot.
+    // Duplicate rows happen when menus are saved multiple times (e.g. admin saves a slot twice).
+    // Also filter out rows with no valid meal_type (avoids "Meal 08:00 AM" phantom cards).
+    const seenMealTypeIds = new Set<number>();
+    const meals = rawMeals.filter((m: any) => {
+      const mtId = Number(m.meal_type_id);
+      if (!mtId || !m.meal_type) return false; // skip rows without a valid meal type
+      if (seenMealTypeIds.has(mtId)) return false; // skip duplicates
+      seenMealTypeIds.add(mtId);
+      return true;
     });
 
     return {
@@ -204,14 +276,36 @@ export const diningService = {
     };
   },
 
+
   async getTodaySkips(studentId?: number): Promise<number[]> {
     let resolvedStudentId = studentId;
     if (!resolvedStudentId) {
+      // Try Supabase auth first (works for real JWT sessions)
       const { data: user } = await supabase.auth.getUser();
       const userId = user.user?.id;
       if (userId) {
         const { data: st } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
         if (st) resolvedStudentId = st.id;
+      }
+
+      // Fallback for synthetic sessions: resolve via localStorage email / enrollment no
+      if (!resolvedStudentId) {
+        try {
+          const stored = JSON.parse(localStorage.getItem('hms_user') || 'null');
+          const email = stored?.email;
+          if (email) {
+            const { data: byEmail } = await supabase.from('students').select('id').ilike('email', email).maybeSingle();
+            if (byEmail) resolvedStudentId = byEmail.id;
+
+            if (!resolvedStudentId) {
+              const usnPrefix = email.split('@')[0];
+              const { data: byUsn } = await supabase.from('students').select('id').ilike('enrollment_no', usnPrefix).maybeSingle();
+              if (byUsn) resolvedStudentId = byUsn.id;
+            }
+          }
+        } catch {
+          // ignore parse errors
+        }
       }
     }
 
@@ -231,6 +325,7 @@ export const diningService = {
 
     return (data || []).map((d: any) => Number(d.meal_type_id));
   },
+
 
   async recordMealSkip(payload: { date?: string; meal_type: number | string; skip_type?: string; reason?: string }) {
     const { data: user } = await supabase.auth.getUser();
@@ -319,15 +414,36 @@ export const diningService = {
 
     let studentId: number | null = null;
     if (userId) {
-      const { data } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
-      if (data) studentId = data.id;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      if (isUuid) {
+        const { data } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
+        if (data) studentId = data.id;
+      }
+    }
+
+    if (!studentId) {
+      try {
+        const stored = localStorage.getItem('hms_user');
+        const userObj = stored ? JSON.parse(stored) : null;
+        const email = userObj?.email;
+        if (email) {
+          const { data: byEmail } = await supabase.from('students').select('id').ilike('email', email).maybeSingle();
+          if (byEmail) studentId = byEmail.id;
+
+          if (!studentId) {
+            const usnPrefix = email.split('@')[0];
+            const { data: byUsn } = await supabase.from('students').select('id').ilike('enrollment_no', usnPrefix).maybeSingle();
+            if (byUsn) studentId = byUsn.id;
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
     }
 
     if (!studentId) {
       throw new Error('Could not find student record to cancel meal skip');
     }
-
-    if (!studentId) return { success: false };
 
     const todayStr = date || new Date().toISOString().split('T')[0];
     const mealIdNum = Number(mealTypeId);
@@ -683,21 +799,16 @@ export const issueService = {
     // Create initial audit log in issue_updates so ticket has history (View Updates 1)
     let initialUpdates: any[] = [];
     try {
-      const initialEntry: {
-        issue_id: number;
-        old_status: string | null;
-        new_status: string;
-        note: string;
-        updated_by: string | null;
-        org_id: string;
-      } = {
+      const initialEntry: any = {
         issue_id: createdData.id,
         old_status: null,
         new_status: 'pending',
         note: `Ticket submitted: ${payload.title}`,
-        updated_by: userId || null,
-        org_id: createdData.org_id || '00000000-0000-0000-0000-000000000001'
+        updated_by: userId || null
       };
+      if (createdData.org_id) {
+        initialEntry.org_id = createdData.org_id;
+      }
       const { data: dbUp, error: dbUpErr } = await supabase
         .from('issue_updates')
         .insert(initialEntry)

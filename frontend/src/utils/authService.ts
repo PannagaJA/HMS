@@ -1069,7 +1069,7 @@ export const authService = {
           last_name: '',
           phone: studentMatch.phone || '',
           is_active: true,
-          org_id: studentMatch.org_id || '00000000-0000-0000-0000-000000000001',
+          org_id: studentMatch.org_id || undefined,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1104,7 +1104,7 @@ export const authService = {
           last_name: profMatch.last_name || '',
           phone: profMatch.phone || '',
           is_active: true,
-          org_id: profMatch.org_id || '00000000-0000-0000-0000-000000000001',
+          org_id: profMatch.org_id || undefined,
           created_at: profMatch.created_at || new Date().toISOString(),
           updated_at: profMatch.updated_at || new Date().toISOString()
         };
