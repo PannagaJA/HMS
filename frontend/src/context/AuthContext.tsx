@@ -42,23 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const stored = getStoredUser();
       const storedToken = getAccessToken();
 
-      // FIX 3: Short-circuit for synthetic/fallback sessions.
-      // Supabase knows nothing about these, so querying it would fail or clear state.
-      if (isSyntheticToken(storedToken) && stored) {
-        setUser(stored);
-        setToken(storedToken);
-        return stored;
-      }
-
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData?.user && !stored) {
+      // If there's neither a stored session nor a token, user is signed out
+      if (!stored && !storedToken) {
         setUser(null);
         setToken(null);
-        localStorage.removeItem('hms_user');
-        localStorage.removeItem('hms_token');
         return null;
       }
 
+      // Query /auth/me/ to fetch fresh profile/student data from Supabase
       const res = await apiClient.get<User>('/auth/me/');
       if (res.data) {
         setUser(res.data);

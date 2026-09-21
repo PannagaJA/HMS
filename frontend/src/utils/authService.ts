@@ -11,48 +11,130 @@ export const apiClient = {
     // 1. Current user profile (/auth/me/)
     if (endpoint.includes('/auth/me/')) {
       const stored = getStoredUser();
-      if (stored && stored.role === 'STUDENT' && stored.first_name && stored.first_name !== 'Student') {
-        return { data: stored as T };
-      }
       const { data: authData } = await supabase.auth.getUser();
       const user = authData?.user;
-      if (!user && stored) {
-        return { data: stored as T };
+      
+      if (!user && !stored) {
+        return { data: null as T };
       }
-      if (!user) return { data: null as T };
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-      let firstName = profile?.first_name || stored?.first_name || '';
-      let lastName = profile?.last_name || stored?.last_name || '';
-      const userRole = profile?.role || stored?.role || 'ADMIN';
 
-      if (userRole === 'STUDENT' && (!firstName || firstName === 'Student' || firstName === 'Resident')) {
-        const { data: stData } = await supabase
-          .from('students')
-          .select('student_name')
-          .or(`email.eq.${user.email || stored?.email},profile_id.eq.${user.id}`)
-          .limit(1)
-          .maybeSingle();
-        if (stData?.student_name) {
-          firstName = stData.student_name;
+      const effectiveEmail = user?.email || stored?.email || '';
+      const effectiveUserId = user?.id || stored?.id || '';
+      let userRole = stored?.role || 'ADMIN';
+      let firstName = stored?.first_name || '';
+      let lastName = stored?.last_name || '';
+      let enrollmentNo = stored?.enrollment_no || '';
+      let userPhone = stored?.phone || '';
+      let avatarUrl = stored?.avatar_url || '';
+      let isActive = stored?.is_active ?? true;
+      let createdAt = stored?.created_at || user?.created_at || new Date().toISOString();
+      let updatedAt = stored?.updated_at || new Date().toISOString();
+
+      // Check profiles table if user ID exists
+      let profile: any = null;
+      if (effectiveUserId) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId);
+        if (isUuid) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', effectiveUserId)
+            .maybeSingle();
+          profile = data;
         }
       }
 
+      if (profile) {
+        firstName = profile.first_name || firstName;
+        lastName = profile.last_name || lastName;
+        userRole = profile.role || userRole;
+        userPhone = profile.phone || userPhone;
+        avatarUrl = profile.avatar_url || avatarUrl;
+        isActive = profile.is_active ?? true;
+        createdAt = profile.created_at || createdAt;
+        updatedAt = profile.updated_at || updatedAt;
+      }
+
+      // If user is STUDENT, students table is the primary authority for name, enrollment_no, and phone
+      if (userRole === 'STUDENT') {
+        let stData: any = null;
+
+        // Strategy 1: by profile_id / id
+        if (effectiveUserId) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId);
+          if (isUuid) {
+            const { data } = await supabase
+              .from('students')
+              .select('id, profile_id, student_name, enrollment_no, phone, email, org_id')
+              .or(`profile_id.eq.${effectiveUserId},id.eq.${effectiveUserId}`)
+              .limit(1)
+              .maybeSingle();
+            stData = data;
+          }
+        }
+
+        // Strategy 2: by email
+        if (!stData && effectiveEmail) {
+          const { data } = await supabase
+            .from('students')
+            .select('id, profile_id, student_name, enrollment_no, phone, email, org_id')
+            .ilike('email', effectiveEmail)
+            .limit(1)
+            .maybeSingle();
+          stData = data;
+        }
+
+        // Strategy 3: by enrollment_no / USN prefix
+        const targetEnrollment = stored?.enrollment_no || (effectiveEmail.includes('@') ? effectiveEmail.split('@')[0] : '');
+        if (!stData && targetEnrollment) {
+          const { data } = await supabase
+            .from('students')
+            .select('id, profile_id, student_name, enrollment_no, phone, email, org_id')
+            .ilike('enrollment_no', targetEnrollment)
+            .limit(1)
+            .maybeSingle();
+          stData = data;
+        }
+
+        if (stData) {
+          if (stData.student_name) {
+            firstName = stData.student_name;
+          }
+          if (stData.enrollment_no) {
+            enrollmentNo = stData.enrollment_no;
+          }
+          if (stData.phone) {
+            userPhone = stData.phone;
+          }
+        }
+      }
+
+      const defaultUsername = userRole === 'STUDENT'
+        ? (enrollmentNo || (effectiveEmail ? effectiveEmail.split('@')[0] : 'student'))
+        : (firstName || stored?.username || (effectiveEmail ? effectiveEmail.split('@')[0] : 'user'));
+
       const mappedUser: User = {
-        id: user.id as any,
-        email: user.email || stored?.email || '',
+        id: (user?.id || stored?.id || effectiveUserId) as any,
+        email: effectiveEmail,
         role: userRole,
         first_name: firstName,
         last_name: lastName,
-        phone: profile?.phone || stored?.phone || '',
-        avatar_url: profile?.avatar_url || stored?.avatar_url || '',
-        is_active: profile?.is_active ?? true,
-        created_at: profile?.created_at || user.created_at,
-        updated_at: profile?.updated_at || user.created_at
+        username: stored?.username || defaultUsername,
+        enrollment_no: enrollmentNo || stored?.enrollment_no || (userRole === 'STUDENT' && effectiveEmail ? effectiveEmail.split('@')[0] : undefined),
+        phone: userPhone,
+        avatar_url: avatarUrl,
+        is_active: isActive,
+        created_at: createdAt,
+        updated_at: updatedAt
       };
+
+      // Keep localStorage in sync with the fresh database state
+      try {
+        localStorage.setItem('hms_user', JSON.stringify(mappedUser));
+      } catch (storageErr) {
+        console.warn('Could not sync user to localStorage:', storageErr);
+      }
+
       return { data: mappedUser as T };
     }
 
@@ -822,101 +904,168 @@ export const apiClient = {
       const data = await adminService.updateRoom(roomId, body);
       return { data: data as T };
     }
-
     // Profile Updates
     if (endpoint.includes('/auth/profile/')) {
+      const stored = getStoredUser();
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id;
+      const userRole = stored?.role || '';
+
+      // Fetch existing profile row (for non-students and sync)
       let existingProfile: any = null;
-      if (userId) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-        existingProfile = data;
+      const profileId = userId || stored?.id;
+      if (profileId) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profileId);
+        if (isUuid) {
+          const { data } = await supabase.from('profiles').select('*').eq('id', profileId).maybeSingle();
+          existingProfile = data;
+        }
       }
 
+      let freshData: any = null;
+
+      // ── STUDENT PATH ──────────────────────────────────────────────────────────
+      // Students are stored in the `students` table, NOT profiles.
+      // For synthetic sessions (no real Supabase auth), we MUST update students directly.
+      if (userRole === 'STUDENT') {
+        const fullName = [
+          body?.first_name ?? stored?.first_name ?? '',
+          body?.last_name ?? stored?.last_name ?? ''
+        ].filter(Boolean).join(' ').trim();
+
+        const studentPayload: any = {};
+        if (fullName) studentPayload.student_name = fullName;
+        if (body?.phone !== undefined) studentPayload.phone = body.phone;
+
+        let updatedStudent: any = null;
+
+        if (Object.keys(studentPayload).length > 0) {
+          // Strategy 1: match by profile_id (real Supabase users)
+          const effectiveId = userId || (existingProfile?.id);
+          if (effectiveId) {
+            const { data } = await supabase
+              .from('students')
+              .update(studentPayload)
+              .eq('profile_id', effectiveId)
+              .select('*')
+              .maybeSingle();
+            if (data) updatedStudent = data;
+          }
+
+          // Strategy 2: match by email (most reliable for synthetic sessions)
+          const targetEmail = stored?.email || body?.email || authData?.user?.email;
+          if (!updatedStudent && targetEmail) {
+            const { data } = await supabase
+              .from('students')
+              .update(studentPayload)
+              .ilike('email', targetEmail)
+              .select('*')
+              .maybeSingle();
+            if (data) updatedStudent = data;
+          }
+
+          // Strategy 3: match by enrollment_no (USN prefix from email)
+          const enrollmentNo = stored?.enrollment_no || stored?.username;
+          if (!updatedStudent && enrollmentNo && !enrollmentNo.includes('@')) {
+            const { data } = await supabase
+              .from('students')
+              .update(studentPayload)
+              .ilike('enrollment_no', enrollmentNo)
+              .select('*')
+              .maybeSingle();
+            if (data) updatedStudent = data;
+          }
+
+          // Strategy 4: match by phone (last resort)
+          const targetPhone = stored?.phone;
+          if (!updatedStudent && targetPhone) {
+            const { data } = await supabase
+              .from('students')
+              .update(studentPayload)
+              .eq('phone', targetPhone)
+              .select('*')
+              .maybeSingle();
+            if (data) updatedStudent = data;
+          }
+        }
+
+        // Sync first_name and phone back to profiles table if the row exists
+        if (existingProfile) {
+          const profileSync: any = {};
+          if (body?.first_name !== undefined) profileSync.first_name = body.first_name;
+          if (body?.last_name !== undefined) profileSync.last_name = body.last_name;
+          if (body?.phone !== undefined) profileSync.phone = body.phone;
+          if (Object.keys(profileSync).length > 0) {
+            const { data: refreshedProfile } = await supabase
+              .from('profiles')
+              .update(profileSync)
+              .eq('id', existingProfile.id)
+              .select('*')
+              .maybeSingle();
+            if (refreshedProfile) freshData = refreshedProfile;
+          }
+        }
+
+        // Build merged profile preserving student identity fields
+        const mergedProfile = {
+          ...(stored || {}),
+          ...(freshData || existingProfile || {}),
+          id: stored?.id,
+          role: 'STUDENT',
+          email: body?.email || stored?.email || authData?.user?.email || '',
+          first_name: body?.first_name ?? updatedStudent?.student_name?.split(' ')[0] ?? stored?.first_name ?? '',
+          last_name: body?.last_name ?? (updatedStudent?.student_name?.split(' ').slice(1).join(' ') ?? stored?.last_name ?? ''),
+          phone: body?.phone ?? updatedStudent?.phone ?? stored?.phone ?? '',
+          username: stored?.username,
+          enrollment_no: stored?.enrollment_no || updatedStudent?.enrollment_no,
+        };
+
+        const currentToken = getAccessToken();
+        if (currentToken) {
+          saveAuthSession(currentToken, undefined, mergedProfile);
+        } else {
+          localStorage.setItem('hms_user', JSON.stringify(mergedProfile));
+        }
+
+        return { data: mergedProfile as T };
+      }
+
+      // ── NON-STUDENT PATH (ADMIN / WARDEN / SECURITY) ──────────────────────────
       const updateData: any = {};
       if (body?.first_name !== undefined) updateData.first_name = body.first_name;
       if (body?.last_name !== undefined) updateData.last_name = body.last_name;
       if (body?.phone !== undefined) updateData.phone = body.phone;
       if (body?.avatar_url !== undefined) updateData.avatar_url = body.avatar_url;
 
-      if (userId && Object.keys(updateData).length > 0) {
-        const { error } = await supabase.from('profiles').update(updateData).eq('id', userId);
-        if (error) console.warn('Error updating profile in Supabase:', error);
-      }
+      const effectiveUserId = userId || existingProfile?.id || stored?.id;
 
-      // For STUDENT role: sync updated student_name and phone to the students table
-      const stored = getStoredUser();
-      const userRole = existingProfile?.role || stored?.role || '';
-      if (userRole === 'STUDENT' && (body?.first_name || body?.last_name || body?.phone)) {
-        const fullName = `${body.first_name ?? existingProfile?.first_name ?? stored?.first_name ?? ''} ${body.last_name ?? existingProfile?.last_name ?? stored?.last_name ?? ''}`.trim();
-        const studentPayload: any = {};
-        if (fullName) studentPayload.student_name = fullName;
-        if (body?.phone) studentPayload.phone = body.phone;
-
-        if (Object.keys(studentPayload).length > 0) {
-          let updated = false;
-          // Strategy 1: profile_id
-          if (userId) {
-            const { data: updatedByProfile } = await supabase
-              .from('students')
-              .update(studentPayload)
-              .eq('profile_id', userId)
-              .select('id');
-            if (updatedByProfile && updatedByProfile.length > 0) {
-              updated = true;
-            }
-          }
-
-          // Strategy 2: email
-          const targetEmail = body?.email || existingProfile?.email || stored?.email;
-          if (!updated && targetEmail) {
-            const { data: updatedByEmail } = await supabase
-              .from('students')
-              .update(studentPayload)
-              .ilike('email', targetEmail)
-              .select('id');
-            if (updatedByEmail && updatedByEmail.length > 0) {
-              updated = true;
-            }
-
-            // Strategy 3: USN prefix from email (e.g. 1AM26CS001@amc.edu)
-            if (!updated) {
-              const usnPrefix = targetEmail.split('@')[0];
-              const { data: updatedByUsn } = await supabase
-                .from('students')
-                .update(studentPayload)
-                .ilike('enrollment_no', usnPrefix)
-                .select('id');
-              if (updatedByUsn && updatedByUsn.length > 0) {
-                updated = true;
-              }
-            }
-          }
-
-          // Strategy 4: phone lookup
-          const targetPhone = stored?.phone || existingProfile?.phone;
-          if (!updated && targetPhone) {
-            await supabase
-              .from('students')
-              .update(studentPayload)
-              .eq('phone', targetPhone);
-          }
+      if (effectiveUserId && Object.keys(updateData).length > 0) {
+        const { data: refreshedProfile, error } = await supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', effectiveUserId)
+          .select('*')
+          .maybeSingle();
+        if (error) {
+          console.warn('Error updating profile in Supabase:', error);
+        } else {
+          freshData = refreshedProfile;
         }
       }
 
       const mergedProfile = {
         ...(stored || {}),
-        ...(existingProfile || {}),
-        ...updateData,
-        id: existingProfile?.id || userId || stored?.id,
-        role: existingProfile?.role || stored?.role || 'ADMIN',
-        email: body?.email || existingProfile?.email || stored?.email,
-        first_name: body?.first_name ?? existingProfile?.first_name ?? stored?.first_name,
-        last_name: body?.last_name ?? existingProfile?.last_name ?? stored?.last_name,
-        phone: body?.phone ?? existingProfile?.phone ?? stored?.phone,
+        ...(freshData || existingProfile || {}),
+        id: freshData?.id || effectiveUserId || stored?.id,
+        role: freshData?.role || stored?.role || 'ADMIN',
+        email: body?.email || freshData?.email || stored?.email,
+        first_name: body?.first_name ?? freshData?.first_name ?? stored?.first_name,
+        last_name: body?.last_name ?? freshData?.last_name ?? stored?.last_name,
+        phone: body?.phone ?? freshData?.phone ?? stored?.phone,
+        username: stored?.username,
+        enrollment_no: stored?.enrollment_no,
       };
 
-      // Persist merged profile to localStorage immediately so all pages see fresh data
       const currentToken = getAccessToken();
       if (currentToken) {
         saveAuthSession(currentToken, undefined, mergedProfile);
@@ -1063,12 +1212,14 @@ export const authService = {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentMatch.profile_id || '');
         const validProfileId = isUuid ? studentMatch.profile_id : (crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000099');
 
-        const studentProfile: Profile = {
+        const studentProfile: User = {
           id: validProfileId,
           email: studentMatch.email || emailToUse,
           role: 'STUDENT',
           first_name: studentMatch.student_name,
           last_name: '',
+          username: studentMatch.enrollment_no || (studentMatch.email ? studentMatch.email.split('@')[0] : 'student'),
+          enrollment_no: studentMatch.enrollment_no,
           phone: studentMatch.phone || '',
           is_active: true,
           org_id: studentMatch.org_id || undefined,

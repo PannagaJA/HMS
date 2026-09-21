@@ -2,6 +2,7 @@ import type { Profile, UserRole } from '../types';
 
 export interface User extends Profile {
   username?: string;
+  enrollment_no?: string;
 }
 
 export type Role = UserRole;

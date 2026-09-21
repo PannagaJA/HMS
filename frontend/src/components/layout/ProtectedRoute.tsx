@@ -43,6 +43,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
           const newAnnouncement = payload.new as any;
           const userRole = (user.role || '').toUpperCase();
           const createdByRole = (newAnnouncement?.created_by_role || '').toUpperCase();
+          const targetRoles = (newAnnouncement?.target_roles || []).map((r: string) => r.toUpperCase());
           if ((targetRoles.includes(userRole) || targetRoles.includes('ALL')) && createdByRole !== userRole) {
             // Play chime sound
             const audio = new Audio('/notification.wav');

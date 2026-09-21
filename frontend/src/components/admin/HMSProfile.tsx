@@ -1,23 +1,71 @@
-import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, Lock, Save, KeyRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
+import type { HostelStudent } from '../../types';
 
 export const HMSProfile: React.FC = () => {
   const { user, updateCurrentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const queryClient = useQueryClient();
-  const [name, setName] = useState(
-    user?.first_name 
-      ? `${user.first_name} ${user.last_name || ''}`.trim() 
-      : (user?.username || 'Administrator')
-  );
-  const [email, setEmail] = useState(user?.email || 'admin@hms.local');
-  const [phone, setPhone] = useState(user?.phone || '9876543210');
+
+  const isStudent = user?.role === 'STUDENT';
+
+  const { data: studentData } = useQuery<{ profile: HostelStudent; roommates: HostelStudent[] }>({
+    queryKey: ['studentProfile'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ profile: HostelStudent; roommates: HostelStudent[] }>('/student/students/my_profile/');
+      return res.data;
+    },
+    enabled: isStudent,
+    staleTime: 0,
+  });
+
+  // Resolve best USN from context or student record
+  const studentUsn = user?.enrollment_no 
+    || studentData?.profile?.enrollment_no 
+    || (user?.username && !user.username.includes('@') ? user.username : null)
+    || (user?.email?.includes('@') ? user.email.split('@')[0] : 'N/A');
+
+  // Resolve phone with fallback to students table
+  const resolvedPhone = user?.phone || studentData?.profile?.phone || '';
+
+  // Resolve the best display name for the initial form state
+  const resolveInitialName = () => {
+    const fn = user?.first_name || '';
+    const ln = user?.last_name || '';
+    const genericNames = ['student', 'resident', 'user', 'admin', ''];
+    if (fn && !genericNames.includes(fn.toLowerCase())) {
+      return `${fn} ${ln}`.trim();
+    }
+    // For student, fallback to student_name from studentData if already loaded
+    return user?.username || '';
+  };
+
+  const [name, setName] = useState(resolveInitialName);
+  const [email, setEmail] = useState(user?.email || '');
+  // For students: pre-fill phone from resolved source (students table > profiles)
+  const [phone, setPhone] = useState(resolvedPhone || user?.phone || '');
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    // Sync form inputs when student profile data loads from DB
+    if (isStudent && studentData?.profile) {
+      if (studentData.profile.student_name) {
+        setName(studentData.profile.student_name);
+      }
+      if (studentData.profile.phone !== undefined && studentData.profile.phone !== null) {
+        setPhone(studentData.profile.phone || '');
+      }
+      if (studentData.profile.email) {
+        setEmail(studentData.profile.email);
+      }
+    }
+  }, [studentData, isStudent]);
+
 
   // Password Change State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -44,6 +92,11 @@ export const HMSProfile: React.FC = () => {
 
       // Update global AuthContext and persistent session state immediately
       updateCurrentUser(res.data);
+
+      // Sync form inputs with saved values
+      setName(`${firstName} ${lastName}`.trim());
+      setEmail(email);
+      setPhone(phone);
 
       // Invalidate all React Query caches that display profile-based data
       queryClient.invalidateQueries({ queryKey: ['studentProfile'] });
@@ -96,9 +149,9 @@ export const HMSProfile: React.FC = () => {
     }
   };
 
-  const displayName = user?.first_name 
+  const displayName = user?.first_name && !['student', 'resident', 'user', 'admin'].includes(user.first_name.toLowerCase())
     ? `${user.first_name} ${user.last_name || ''}`.trim() 
-    : (user?.username || name);
+    : (studentData?.profile?.student_name || user?.username || name);
 
   return (
     <div className="w-full space-y-6">
@@ -120,8 +173,10 @@ export const HMSProfile: React.FC = () => {
 
           <div className="w-full border-t border-slate-100 pt-4 space-y-2.5 text-xs text-left text-slate-600">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Username:</span>
-              <span className="font-mono font-semibold text-slate-800">{user?.username}</span>
+              <span className="text-slate-400">{isStudent ? 'USN / Enrollment:' : 'Username:'}</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {isStudent ? studentUsn : (user?.username || (user?.email?.includes('@') ? user.email.split('@')[0] : 'N/A'))}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Role:</span>
@@ -133,8 +188,20 @@ export const HMSProfile: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Phone:</span>
-              <span className="font-mono text-slate-700">{user?.phone || 'Not set'}</span>
+              <span className="font-mono text-slate-700">{resolvedPhone || 'Not set'}</span>
             </div>
+            {isStudent && studentData?.profile?.hostel_name && (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Hostel:</span>
+                <span className="font-semibold text-slate-800">{studentData.profile.hostel_name}</span>
+              </div>
+            )}
+            {isStudent && studentData?.profile?.room_no && (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Room:</span>
+                <span className="font-semibold text-slate-800">Room {studentData.profile.room_no}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -155,62 +222,80 @@ export const HMSProfile: React.FC = () => {
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Full Name {isStudent ? <span className="text-slate-400 font-normal">(read-only)</span> : <span className="text-red-500">*</span>}
+                </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     required
+                    readOnly={isStudent}
+                    disabled={isStudent}
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    onChange={(e) => !isStudent && setName(e.target.value)}
+                    className={`w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 ${isStudent ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional Email <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Institutional Email {isStudent ? <span className="text-slate-400 font-normal">(read-only)</span> : <span className="text-red-500">*</span>}
+                  </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="email"
                       required
+                      readOnly={isStudent}
+                      disabled={isStudent}
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      onChange={(e) => !isStudent && setEmail(e.target.value)}
+                      className={`w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 ${isStudent ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Official Phone (10 Digits) <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Official Phone (10 Digits) {isStudent ? <span className="text-slate-400 font-normal">(read-only)</span> : <span className="text-red-500">*</span>}
+                  </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="tel"
                       required
+                      readOnly={isStudent}
+                      disabled={isStudent}
                       maxLength={10}
                       pattern="^[6-9][0-9]{9}$"
                       title="Please enter a valid 10-digit Indian phone number starting with 6-9"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => !isStudent && setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder="9876543210"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      className={`w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 ${isStudent ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-3">
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>{isSaving ? 'Saving Changes...' : 'Save Profile'}</span>
-                </button>
-              </div>
+              {isStudent ? (
+                <div className="pt-2 text-xs text-slate-500 flex items-center justify-between">
+                  <span className="italic text-slate-400">Student profile details are managed by Hostel Administration / Warden.</span>
+                </div>
+              ) : (
+                <div className="flex justify-end pt-3">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaving ? 'Saving Changes...' : 'Save Profile'}</span>
+                  </button>
+                </div>
+              )}
             </form>
           </div>
 

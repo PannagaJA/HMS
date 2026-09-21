@@ -60,7 +60,7 @@ export const StudentDashboard: React.FC = () => {
   const authName = user?.first_name && !genericNames.includes(user.first_name.toLowerCase())
     ? `${user.first_name} ${user.last_name || ''}`.trim()
     : null;
-  const displayName = authName || student?.student_name || user?.first_name || 'Resident';
+  const displayName = student?.student_name || authName || user?.first_name || 'Resident';
 
   const activeApprovedPass = passes.find((p) => p.status === 'approved');
   const pendingPassesCount = passes.filter((p) => p.status === 'pending').length;
