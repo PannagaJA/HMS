@@ -99,20 +99,17 @@ export const WardenVisitorLogs: React.FC = () => {
       const studentId = Number(formData.student);
       const hostelId = st?.hostel || (st?.room_detail as any)?.hostel_id || (st as any)?.hostel_id || 1;
       const roomId = st?.room_detail?.id || (st as any)?.room_id || 1;
-      const { data: userData } = await supabase.auth.getUser();
 
-      const { error } = await supabase.from('visitor_logs').insert({
+      await apiClient.post('/hms/visitor-logs/', {
         student_id: studentId,
+        student_name: st?.student_name,
+        enrollment_no: st?.enrollment_no,
+        student_room: st?.room_no || st?.room_number,
         hostel_id: hostelId,
-        room_id: roomId,
         visitor_name: formData.visitor_name,
         mobile_number: formData.mobile_number,
         purpose: formData.purpose,
-        check_in_time: new Date().toISOString(),
-        recorded_by: userData.user?.id || null
       });
-
-      if (error) throw error;
 
       showSuccess(`Visitor ${formData.visitor_name} check-in registered.`);
       setShowAddModal(false);

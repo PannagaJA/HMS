@@ -546,7 +546,19 @@ export const adminService = {
 
   async updateWarden(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
     if (typeof id === 'string' && id.includes('-')) {
-      throw new Error("Cannot edit a registered system user from this dashboard.");
+      const profileUpdate: any = {};
+      if (payload.name) {
+        const parts = payload.name.trim().split(' ');
+        profileUpdate.first_name = parts[0] || '';
+        profileUpdate.last_name = parts.slice(1).join(' ') || '';
+      }
+      if (payload.phone !== undefined) profileUpdate.phone = payload.phone;
+      if (Object.keys(profileUpdate).length > 0) {
+        const { data, error } = await supabase.from('profiles').update(profileUpdate).eq('id', id).select().maybeSingle();
+        if (error) throw error;
+        return { id, ...payload, ...data };
+      }
+      return { id, ...payload };
     }
     const { data, error } = await supabase.from('hostel_wardens').update(payload).eq('id', id).select().single();
     if (error) throw error;
@@ -666,7 +678,19 @@ export const adminService = {
 
   async updateSecurityStaff(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
     if (typeof id === 'string' && id.includes('-')) {
-      throw new Error("Cannot edit a registered system user from this dashboard.");
+      const profileUpdate: any = {};
+      if (payload.name) {
+        const parts = payload.name.trim().split(' ');
+        profileUpdate.first_name = parts[0] || '';
+        profileUpdate.last_name = parts.slice(1).join(' ') || '';
+      }
+      if (payload.phone !== undefined) profileUpdate.phone = payload.phone;
+      if (Object.keys(profileUpdate).length > 0) {
+        const { data, error } = await supabase.from('profiles').update(profileUpdate).eq('id', id).select().maybeSingle();
+        if (error) throw error;
+        return { id, ...payload, ...data };
+      }
+      return { id, ...payload };
     }
     const { data, error } = await supabase.from('security_staff').update(payload).eq('id', id).select().single();
     if (error) throw error;

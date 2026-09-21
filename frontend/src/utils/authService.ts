@@ -692,6 +692,19 @@ export const apiClient = {
       return { data: data as T };
     }
 
+    // Password Change Handler for /auth/profile/ & /auth/change-password/
+    if (endpoint.includes('/auth/profile/') || endpoint.includes('/auth/change-password/')) {
+      const newPassword = body?.new_password || body?.password;
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+        throw new Error('New password must be at least 6 characters long.');
+      }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        throw new Error(error.message || 'Failed to update password in authentication service.');
+      }
+      return { data: { success: true, message: 'Password changed successfully!' } as T };
+    }
+
     return { data: {} as T };
   },
 
@@ -788,30 +801,37 @@ export const apiClient = {
       return { data: data as T };
     }
 
-    // Room Resizing via RPC with direct table fallback
+    // Room Resizing & Details Update via RPC with direct table fallback
     if (endpoint.includes('/hms/rooms/')) {
       const parts = endpoint.split('/');
       const roomId = parseInt(parts[parts.indexOf('rooms') + 1] || '0', 10);
+      
       if (body?.capacity) {
         try {
           const { data, error } = await supabase.rpc('resize_room_capacity', {
             p_room_id: roomId,
             p_new_capacity: body.capacity
           });
-          if (!error && data) {
+          if (!error && data && !body.no && !body.floor && !body.room_no) {
             return { data: data as T };
           }
         } catch (e) {
           console.warn('RPC resize_room_capacity failed, attempting direct table update:', e);
         }
+      }
 
+      const updatePayload: any = {};
+      if (body?.capacity !== undefined) updatePayload.capacity = Number(body.capacity);
+      if (body?.name !== undefined) updatePayload.name = body.name;
+      if (body?.no !== undefined || body?.room_no !== undefined) updatePayload.no = String(body.no || body.room_no).trim();
+      if (body?.floor !== undefined) updatePayload.floor = Number(body.floor);
+      if (body?.room_type !== undefined) updatePayload.room_type = body.room_type;
+      if (body?.hostel !== undefined || body?.hostel_id !== undefined) updatePayload.hostel_id = Number(body.hostel || body.hostel_id);
+
+      if (Object.keys(updatePayload).length > 0) {
         const { data: updated, error } = await supabase
           .from('hostel_rooms')
-          .update({
-            capacity: body.capacity,
-            ...(body.name ? { name: body.name } : {}),
-            ...(body.room_type ? { room_type: body.room_type } : {})
-          })
+          .update(updatePayload)
           .eq('id', roomId)
           .select()
           .single();
@@ -819,6 +839,7 @@ export const apiClient = {
         if (error) throw error;
         return { data: updated as T };
       }
+      return { data: { id: roomId, ...body } as T };
     }
 
     // Profile Updates
