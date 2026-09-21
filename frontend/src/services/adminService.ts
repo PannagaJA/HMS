@@ -230,9 +230,87 @@ export const adminService = {
         occupied_count: occCount,
         current_occupancy: occCount,
         occupants: activeOccupants,
-        room_type_display: r.room_type === 'S' ? 'Single' : r.room_type === 'D' ? 'Double' : r.room_type === 'T' ? 'Triple' : 'Multi-Bed'
+        room_type_display: r.room_type === 'S' ? 'Single' : r.room_type === 'D' ? 'Double' : r.room_type === 'T' ? 'Triple' : r.room_type === 'P' ? 'Scholar' : r.room_type === 'B' ? 'Dormitory' : 'Multi-Bed'
       };
     });
+  },
+
+  /**
+   * Update room configuration, floor, bed capacity, and room type
+   */
+  async updateRoom(roomId: string | number, payload: Partial<{ no: string; room_no?: string; name?: string; floor: number; capacity: number; room_type: string; hostel: number | string; hostel_id?: number | string }>) {
+    const numId = Number(roomId);
+    const capacity = payload.capacity !== undefined ? Number(payload.capacity) : undefined;
+    const floor = payload.floor !== undefined ? Number(payload.floor) : undefined;
+    const roomNo = payload.no !== undefined || payload.room_no !== undefined ? String(payload.no || payload.room_no).trim() : undefined;
+    const roomType = payload.room_type;
+    const rawHostel = payload.hostel || payload.hostel_id;
+    const hostelId = rawHostel !== undefined && !isNaN(Number(rawHostel)) ? Number(rawHostel) : undefined;
+
+    // 1. Try RPC resize_room_capacity if capacity is changing
+    if (capacity !== undefined) {
+      try {
+        await supabase.rpc('resize_room_capacity', {
+          p_room_id: numId,
+          p_new_capacity: capacity
+        });
+      } catch (e) {
+        console.warn('RPC resize_room_capacity skipped/fallback:', e);
+      }
+    }
+
+    // 2. Direct update on hostel_rooms
+    const updateData: any = {};
+    if (capacity !== undefined) updateData.capacity = capacity;
+    if (roomNo !== undefined) updateData.no = roomNo;
+    if (floor !== undefined) updateData.floor = floor;
+    if (roomType !== undefined) updateData.room_type = roomType;
+    if (hostelId !== undefined && hostelId > 0) updateData.hostel_id = hostelId;
+
+    let updatedRoom: any = null;
+    if (Object.keys(updateData).length > 0) {
+      const { data, error } = await supabase
+        .from('hostel_rooms')
+        .update(updateData)
+        .eq('id', numId)
+        .select('*, hostel:hostels(name)')
+        .maybeSingle();
+      if (error) throw error;
+      updatedRoom = data;
+    }
+
+    // 3. Ensure beds table matches new capacity
+    if (capacity !== undefined) {
+      try {
+        const { data: existingBeds } = await supabase
+          .from('beds')
+          .select('id, bed_number')
+          .eq('room_id', numId)
+          .order('bed_number', { ascending: true });
+
+        const currentCount = existingBeds?.length || 0;
+        if (capacity > currentCount) {
+          const newBeds = [];
+          for (let b = currentCount + 1; b <= capacity; b++) {
+            newBeds.push({ room_id: numId, bed_number: b });
+          }
+          if (newBeds.length > 0) {
+            await supabase.from('beds').insert(newBeds);
+          }
+        }
+      } catch (be) {
+        console.warn('Bed sync warning:', be);
+      }
+    }
+
+    return updatedRoom ? {
+      ...updatedRoom,
+      name: payload.name || `Room ${updatedRoom.no || ''}`,
+      room_no: updatedRoom.no,
+      hostel: updatedRoom.hostel_id,
+      hostel_name: updatedRoom.hostel?.name || '',
+      room_type_display: updatedRoom.room_type === 'S' ? 'Single' : updatedRoom.room_type === 'D' ? 'Double' : updatedRoom.room_type === 'T' ? 'Triple' : updatedRoom.room_type === 'P' ? 'Scholar' : updatedRoom.room_type === 'B' ? 'Dormitory' : 'Multi-Bed'
+    } : { id: numId, ...payload };
   },
 
   /**

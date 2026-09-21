@@ -97,6 +97,10 @@ describe('CRUD Remediation 2: Room Number & Floor Persistence in Room Patch', ()
             data: { id: 42, no: '205-B', floor: 2, capacity: 3, room_type: 'T' },
             error: null,
           }),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 42, no: '205-B', floor: 2, capacity: 3, room_type: 'T' },
+            error: null,
+          }),
         }),
       }),
     });
@@ -104,6 +108,19 @@ describe('CRUD Remediation 2: Room Number & Floor Persistence in Room Patch', ()
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'hostel_rooms') {
         return { update: mockUpdate };
+      }
+      if (table === 'beds') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({
+                data: [{ id: 1, bed_number: 1 }, { id: 2, bed_number: 2 }, { id: 3, bed_number: 3 }],
+                error: null,
+              }),
+            }),
+          }),
+          insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
       }
       return {};
     });

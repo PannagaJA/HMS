@@ -232,10 +232,20 @@ export const RoomManagement: React.FC = () => {
         room_type: editRoomType,
       });
 
-      showSuccess(`Room ${editingRoom.no} updated successfully.`);
+      showSuccess(`Room ${editRoomNo.trim()} updated successfully.`);
       setShowEditRoomModal(false);
       setEditingRoom(null);
-      fetchRooms(selectedHostelId);
+
+      // If hostel block or floor changed, sync selected state
+      if (selectedHostelId !== editHostelId) {
+        setSelectedHostelId(editHostelId);
+        setSelectedFloor(editFloor);
+      } else {
+        if (selectedFloor !== 'ALL' && selectedFloor !== editFloor) {
+          setSelectedFloor(editFloor);
+        }
+        await fetchRooms(editHostelId);
+      }
     } catch (err: any) {
       console.error('Failed to update room:', err);
       showError('Failed to update room: ' + (err.response?.data?.detail || err.message));
