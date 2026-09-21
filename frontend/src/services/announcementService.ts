@@ -1,6 +1,25 @@
 import { supabase } from '../lib/supabase';
 import type { Announcement } from '../types';
 
+let inFlightUnreadCountPromise: Promise<number> | null = null;
+
+function getLocalReadIds(userId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(`hms_read_announcements_${userId}`);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLocalReadId(userId: string, announcementId: string) {
+  try {
+    const set = getLocalReadIds(userId);
+    set.add(announcementId);
+    localStorage.setItem(`hms_read_announcements_${userId}`, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
 export const announcementService = {
 
   async getUserHostelId(role: string, userId: string): Promise<number | null> {
@@ -115,15 +134,8 @@ export const announcementService = {
 
     if (pageData.length === 0) return { data: [], count: totalCount };
 
-    // Fetch read status for these specific announcements for the current user
-    const announcementIds = pageData.map(a => a.id);
-    const { data: readData } = await supabase
-      .from('announcements_read')
-      .select('announcement_id')
-      .eq('user_id', userId)
-      .in('announcement_id', announcementIds);
-
-    const readIds = new Set(readData?.map(r => r.announcement_id) || []);
+    // Read status from cached user reads (avoids network GET announcements_read calls)
+    const readIds = getLocalReadIds(userId);
 
     const dataWithReadStatus = pageData.map(a => ({
       ...a,
@@ -202,85 +214,79 @@ export const announcementService = {
   },
 
   async markAsRead(announcementId: string, userId: string): Promise<void> {
+    saveLocalReadId(userId, announcementId);
     try {
-      // Check if already marked to avoid duplicates
-      const { data: existing } = await supabase
+      // Async sync to DB without blocking or querying
+      supabase
         .from('announcements_read')
-        .select('id')
-        .eq('announcement_id', announcementId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (!existing) {
-        await supabase
-          .from('announcements_read')
-          .insert([{ announcement_id: announcementId, user_id: userId }]);
-      }
+        .insert([{ announcement_id: announcementId, user_id: userId }])
+        .then(() => {});
     } catch (error) {
       console.warn('Failed to mark announcement as read:', error);
     }
   },
 
   async getUnreadCount(role: string, userId: string): Promise<number> {
-    try {
-      const userRole = (role || '').toUpperCase();
-      const nowIso = new Date().toISOString();
-
-      const { data: targeted, error: targetError } = await supabase
-        .from('announcements')
-        .select('id, target_roles, target_hostel_id, expires_at, created_by_role');
-        
-      if (targetError) {
-        console.warn('Error querying targeted announcements for unread count:', targetError);
-        return 0;
-      }
-      if (!targeted || targeted.length === 0) return 0;
-
-      const userHostelId = await this.getUserHostelId(role, userId);
-      const validAnnouncements = targeted.filter(a => {
-        if (a.expires_at && new Date(a.expires_at) <= new Date(nowIso)) {
-          return false;
-        }
-        const createdByRole = (a.created_by_role || '').toUpperCase();
-        if (createdByRole && createdByRole === userRole) {
-          return false;
-        }
-        const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
-        if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
-          return false;
-        }
-        if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
-          if (userHostelId) {
-            return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
-          } else {
-            return a.target_hostel_id === null;
-          }
-        }
-        return true;
-      });
-
-      if (validAnnouncements.length === 0) return 0;
-
-      const targetedIds = validAnnouncements.map(t => t.id);
-
-      // Get read announcements for this user
-      const { data: readRows, error: readError } = await supabase
-        .from('announcements_read')
-        .select('announcement_id')
-        .eq('user_id', userId)
-        .in('announcement_id', targetedIds);
-        
-      if (readError) {
-        console.warn('Error checking read rows for unread count:', readError);
-        return targetedIds.length;
-      }
-
-      const readIds = new Set(readRows?.map(r => r.announcement_id) || []);
-      const unreadCount = targetedIds.filter(id => !readIds.has(id)).length;
-      return Math.max(0, unreadCount);
-    } catch (err) {
-      console.error('Failed to get unread count:', err);
-      return 0;
+    if (inFlightUnreadCountPromise) {
+      return inFlightUnreadCountPromise;
     }
+
+    inFlightUnreadCountPromise = (async () => {
+      try {
+        const userRole = (role || '').toUpperCase();
+        const nowIso = new Date().toISOString();
+
+        const { data: targeted, error: targetError } = await supabase
+          .from('announcements')
+          .select('id, target_roles, target_hostel_id, expires_at, created_by_role');
+          
+        if (targetError) {
+          console.warn('Error querying targeted announcements for unread count:', targetError);
+          return 0;
+        }
+        if (!targeted || targeted.length === 0) return 0;
+
+        const userHostelId = await this.getUserHostelId(role, userId);
+        const validAnnouncements = targeted.filter(a => {
+          if (a.expires_at && new Date(a.expires_at) <= new Date(nowIso)) {
+            return false;
+          }
+          const createdByRole = (a.created_by_role || '').toUpperCase();
+          if (createdByRole && createdByRole === userRole) {
+            return false;
+          }
+          const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+          if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+            return false;
+          }
+          if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
+            if (userHostelId) {
+              return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
+            } else {
+              return a.target_hostel_id === null;
+            }
+          }
+          return true;
+        });
+
+        if (validAnnouncements.length === 0) return 0;
+
+        const targetedIds = validAnnouncements.map(t => t.id);
+
+        // Get read announcements for this user from local storage
+        const readIds = getLocalReadIds(userId);
+        const unreadCount = targetedIds.filter(id => !readIds.has(id)).length;
+        return Math.max(0, unreadCount);
+      } catch (err) {
+        console.error('Failed to get unread count:', err);
+        return 0;
+      } finally {
+        setTimeout(() => {
+          inFlightUnreadCountPromise = null;
+        }, 1000);
+      }
+    })();
+
+    return inFlightUnreadCountPromise;
   }
 };

@@ -26,74 +26,25 @@ export const AdminDashboard: React.FC = () => {
   const fetchDashboardData = async (isBackground = false) => {
     try {
       if (!isBackground) setIsLoading(true);
-      const [statsRes, passesRes] = await Promise.all([
-        apiClient.get<any>('/hms/dashboard/stats/'),
-        apiClient.get<GatePassRequest[]>('/hms/gate-passes/'),
-      ]);
-      // Support both { statistics: {...} } and direct {...} payload
-      const statData = statsRes.data.statistics || statsRes.data;
-      setStats(statData);
-      const allPasses: GatePassRequest[] = Array.isArray(passesRes.data) ? passesRes.data : [];
+      const res = await apiClient.get<any>('/hms/dashboard/stats/');
+      const data = res.data || {};
       
-      // Strictly sort gate passes by most recent first (created_at desc -> out_date/out_time desc -> id desc)
-      const sortedPasses = [...allPasses].sort((a, b) => {
-        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
-        if (timeA && timeB && timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) {
-          return timeB - timeA;
-        }
-        if (a.out_date && b.out_date && a.out_date !== b.out_date) {
-          const dtA = new Date(`${a.out_date}T${a.out_time || '00:00:00'}`).getTime();
-          const dtB = new Date(`${b.out_date}T${b.out_time || '00:00:00'}`).getTime();
-          if (!isNaN(dtA) && !isNaN(dtB) && dtA !== dtB) {
-            return dtB - dtA;
-          }
-        }
-        return (Number(b.id) || 0) - (Number(a.id) || 0);
-      });
+      // Telemetry statistics
+      const statData = data.statistics || data;
+      setStats(statData);
 
-      setRecentPasses(sortedPasses.slice(0, 5));
-
-      // Calculate Weekly Trends
-      const today = new Date();
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const trendArray: { day: string; count: number; height: string }[] = [];
-      let totalPasses = 0;
-      let peakCount = 0;
-      let peakDay = 'N/A';
-
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const dayStr = days[d.getDay()];
-        const dateStr = d.toISOString().split('T')[0];
-
-        const dayCount = allPasses.filter(p => p.out_date === dateStr).length;
-        totalPasses += dayCount;
-        if (dayCount > peakCount) {
-          peakCount = dayCount;
-          peakDay = dayStr;
-        }
-
-        trendArray.push({
-          day: dayStr,
-          count: dayCount,
-          height: '0%' // calculated later
-        });
+      // Recent gate pass requests (Top 5)
+      if (Array.isArray(data.recent_passes)) {
+        setRecentPasses(data.recent_passes.slice(0, 5));
       }
 
-      // Calculate heights relative to peak
-      trendArray.forEach(item => {
-        item.height = peakCount > 0 ? `${Math.max(10, Math.round((item.count / peakCount) * 100))}%` : '10%';
-      });
-
-      setWeeklyTrends(trendArray);
-      setTrendStats({
-        peakDay: peakCount > 0 ? `${peakDay} (${peakCount} Outpasses)` : 'N/A',
-        peakCount,
-        average: Number((totalPasses / 7).toFixed(1)),
-        trendPercent: totalPasses > 0 ? '+Active Movements' : 'No Movements'
-      });
+      // 7-day movement trend analytics
+      if (Array.isArray(data.weekly_trends)) {
+        setWeeklyTrends(data.weekly_trends);
+      }
+      if (data.trend_stats) {
+        setTrendStats(data.trend_stats);
+      }
     } catch (err) {
       console.error('Failed to load dashboard data', err);
     } finally {

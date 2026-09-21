@@ -85,9 +85,6 @@ export const Announcements: React.FC = () => {
 
   useEffect(() => {
     fetchAnnouncements();
-    if (canCreate && hostels.length === 0) {
-      fetchHostels();
-    }
   }, [user, activeTab, page, pageSize]); // Re-fetch on tab, page or pageSize change
 
   useEffect(() => {
@@ -273,7 +270,10 @@ export const Announcements: React.FC = () => {
           
           {canCreate && (
             <button 
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                if (hostels.length === 0) fetchHostels();
+                setShowCreateModal(true);
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-[#0B1437] hover:bg-[#111f54] text-white rounded-xl text-sm font-bold shadow-sm transition-colors shrink-0"
             >
               <Plus className="w-4 h-4" />

@@ -42,6 +42,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         if (payload.eventType === 'INSERT') {
           const newAnnouncement = payload.new as any;
           const userRole = (user.role || '').toUpperCase();
+          const targetRoles = (newAnnouncement?.target_roles || []).map((r: string) => r.toUpperCase());
           const createdByRole = (newAnnouncement?.created_by_role || '').toUpperCase();
           const targetRoles = (newAnnouncement?.target_roles || []).map((r: string) => r.toUpperCase());
           if ((targetRoles.includes(userRole) || targetRoles.includes('ALL')) && createdByRole !== userRole) {
@@ -74,7 +75,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
       supabase.removeChannel(channel);
       window.removeEventListener('announcementRead', handleRead);
     };
-  }, [user]);
+  }, [user?.id, user?.role]);
 
   if (isLoading) {
     return (
