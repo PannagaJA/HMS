@@ -124,13 +124,13 @@ describe('CRUD Remediation 2: Room Number & Floor Persistence in Room Patch', ()
         no: '205-B',
         floor: 2,
         capacity: 3,
-        name: 'Room 205-B Deluxe',
         room_type: 'T',
         hostel_id: 1,
       })
     );
     expect(res.data.no).toBe('205-B');
     expect(res.data.floor).toBe(2);
+    expect(res.data.name).toBe('Room 205-B Deluxe');
   });
 });
 
@@ -139,70 +139,128 @@ describe('CRUD Remediation 3: Direct Profile Editing for Registered UUID Staff',
     vi.clearAllMocks();
   });
 
-  it('updates profiles table directly for registered UUID Wardens without throwing restrictions', async () => {
+  it('updates profiles table and syncs hostel_wardens for registered UUID Wardens', async () => {
     const uuidId = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
-    const mockUpdate = vi.fn().mockReturnValue({
+    const mockProfileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: uuidId, first_name: 'John', last_name: 'Doe', phone: '9876543210' },
+            data: { id: uuidId, email: 'warden@amc.edu', first_name: 'John', last_name: 'Doe', phone: '9876543210' },
             error: null,
           }),
         }),
       }),
     });
 
+    const mockWardenSelect = vi.fn().mockReturnValue({
+      ilike: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: 1, email: 'warden@amc.edu', designation: 'Hostel Warden', experience: 5 },
+          error: null,
+        }),
+      }),
+    });
+
+    const mockWardenUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'profiles') {
-        return { update: mockUpdate };
+        return { update: mockProfileUpdate };
+      }
+      if (table === 'hostel_wardens') {
+        return { select: mockWardenSelect, update: mockWardenUpdate };
       }
       return {};
     });
 
-    const res = await adminService.updateWarden(uuidId, {
-      name: 'John Doe',
-      phone: '9876543210',
+    const res = await apiClient.put(`/hms/wardens/${uuidId}/`, {
+      name: 'Dr. Robert Mukherjee',
+      email: 'warden@amc.edu',
+      phone: '9811223344',
+      designation: 'Senior Chief Warden',
+      experience: 10,
     });
 
-    expect(mockUpdate).toHaveBeenCalledWith({
-      first_name: 'John',
-      last_name: 'Doe',
-      phone: '9876543210',
-    });
-    expect(res.first_name).toBe('John');
+    expect(mockProfileUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        first_name: 'Dr.',
+        last_name: 'Robert Mukherjee',
+        phone: '9811223344',
+      })
+    );
+    expect(mockWardenUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Dr. Robert Mukherjee',
+        phone: '9811223344',
+        designation: 'Senior Chief Warden',
+        experience: 10,
+      })
+    );
+    expect(res.data.designation).toBe('Senior Chief Warden');
   });
 
-  it('updates profiles table directly for registered UUID Security Guards without throwing restrictions', async () => {
+  it('updates profiles table and syncs security_staff for registered UUID Security Guards', async () => {
     const uuidId = 'f1e2d3c4-b5a6-7890-1234-56789abcdef0';
-    const mockUpdate = vi.fn().mockReturnValue({
+    const mockProfileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: uuidId, first_name: 'Ramesh', last_name: 'Kumar', phone: '9123456780' },
+            data: { id: uuidId, email: 'security@amc.edu', first_name: 'Rajesh', last_name: 'Singh', phone: '9899001122' },
             error: null,
           }),
         }),
       }),
     });
 
+    const mockSecuritySelect = vi.fn().mockReturnValue({
+      ilike: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: 1, email: 'security@amc.edu', designation: 'Security Guard', experience: 5 },
+          error: null,
+        }),
+      }),
+    });
+
+    const mockSecurityUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'profiles') {
-        return { update: mockUpdate };
+        return { update: mockProfileUpdate };
+      }
+      if (table === 'security_staff') {
+        return { select: mockSecuritySelect, update: mockSecurityUpdate };
       }
       return {};
     });
 
-    const res = await adminService.updateSecurityStaff(uuidId, {
-      name: 'Ramesh Kumar',
-      phone: '9123456780',
+    const res = await apiClient.put(`/hms/security/${uuidId}/`, {
+      name: 'Rajesh Singh',
+      email: 'security@amc.edu',
+      phone: '9899001122',
+      designation: 'Head Security Officer',
+      experience: 8,
     });
 
-    expect(mockUpdate).toHaveBeenCalledWith({
-      first_name: 'Ramesh',
-      last_name: 'Kumar',
-      phone: '9123456780',
-    });
-    expect(res.first_name).toBe('Ramesh');
+    expect(mockProfileUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        first_name: 'Rajesh',
+        last_name: 'Singh',
+        phone: '9899001122',
+      })
+    );
+    expect(mockSecurityUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Rajesh Singh',
+        phone: '9899001122',
+        designation: 'Head Security Officer',
+        experience: 8,
+      })
+    );
+    expect(res.data.designation).toBe('Head Security Officer');
   });
 });
 

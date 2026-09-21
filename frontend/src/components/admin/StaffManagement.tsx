@@ -53,7 +53,10 @@ export const StaffManagement: React.FC = () => {
     setEditingStaffId(staff.id);
     setName(staff.name || '');
     setEmail(staff.email || '');
-    setPhone(staff.phone || '');
+    const rawPhone = staff.phone || '';
+    const digitsOnly = rawPhone.replace(/\D/g, '');
+    const cleanedPhone = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : rawPhone;
+    setPhone(cleanedPhone);
     setDesignation(staff.designation || '');
     setExperience(Number(staff.experience) || 2);
     setShowModal(true);

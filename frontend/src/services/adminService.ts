@@ -489,26 +489,32 @@ export const adminService = {
    */
   async getWardens() {
     // Fetch manually added wardens
-    const { data: customWardens, error } = await supabase
+    const { data: customWardens } = await supabase
       .from('hostel_wardens')
       .select('*')
       .eq('is_active', true)
       .order('id', { ascending: true });
     
-    let combined = customWardens || [];
+    let combined: any[] = customWardens || [];
 
     // Fetch registered warden profiles
     try {
       const { data: profileWardens } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
       if (profileWardens && profileWardens.length > 0) {
-        const mapped = profileWardens.map((w: any) => ({
-          id: w.id,
-          name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
-          email: w.email,
-          phone: w.phone || '',
-          designation: 'Hostel Warden',
-          experience: 5
-        }));
+        const mapped = profileWardens.map((w: any) => {
+          const matchedCustom = (customWardens || []).find((cw: any) => 
+            (cw.email && w.email && cw.email.toLowerCase() === w.email.toLowerCase()) ||
+            cw.id === w.id
+          );
+          return {
+            id: w.id,
+            name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matchedCustom?.name || w.email,
+            email: w.email,
+            phone: w.phone || matchedCustom?.phone || '',
+            designation: matchedCustom?.designation || 'Hostel Warden',
+            experience: matchedCustom?.experience !== undefined ? Number(matchedCustom.experience) : 5
+          };
+        });
 
         const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
         const nonDuplicateCustom = (customWardens || []).filter((cw: any) => !profileEmails.includes((cw.email || '').toLowerCase()));
@@ -545,7 +551,10 @@ export const adminService = {
   },
 
   async updateWarden(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
-    if (typeof id === 'string' && id.includes('-')) {
+    const isUuid = typeof id === 'string' && id.includes('-');
+    let targetEmail = payload.email;
+
+    if (isUuid) {
       const profileUpdate: any = {};
       if (payload.name) {
         const parts = payload.name.trim().split(' ');
@@ -553,20 +562,92 @@ export const adminService = {
         profileUpdate.last_name = parts.slice(1).join(' ') || '';
       }
       if (payload.phone !== undefined) profileUpdate.phone = payload.phone;
+      if (payload.email !== undefined) profileUpdate.email = payload.email;
+
+      let profileResult: any = null;
       if (Object.keys(profileUpdate).length > 0) {
-        const { data, error } = await supabase.from('profiles').update(profileUpdate).eq('id', id).select().maybeSingle();
-        if (error) throw error;
-        return { id, ...payload, ...data };
+        const { data: profData, error: profError } = await supabase
+          .from('profiles')
+          .update(profileUpdate)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+        if (profError) throw profError;
+        profileResult = profData;
+        if (profData?.email) targetEmail = profData.email;
       }
-      return { id, ...payload };
+
+      if (!targetEmail) {
+        const { data: prof } = await supabase.from('profiles').select('email').eq('id', id).maybeSingle();
+        if (prof?.email) targetEmail = prof.email;
+      }
+
+      if (targetEmail) {
+        try {
+          const { data: existingWarden } = await supabase
+            .from('hostel_wardens')
+            .select('id')
+            .ilike('email', targetEmail)
+            .maybeSingle();
+
+          if (existingWarden) {
+            await supabase.from('hostel_wardens').update({
+              ...(payload.name ? { name: payload.name } : {}),
+              ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+              ...(payload.designation ? { designation: payload.designation } : {}),
+              ...(payload.experience !== undefined ? { experience: Number(payload.experience) } : {})
+            }).eq('id', existingWarden.id);
+          } else {
+            await supabase.from('hostel_wardens').insert({
+              name: payload.name || targetEmail,
+              email: targetEmail,
+              phone: payload.phone || '',
+              designation: payload.designation || 'Hostel Warden',
+              experience: Number(payload.experience) || 5,
+              is_active: true
+            });
+          }
+        } catch (we) {
+          console.warn('Sync to hostel_wardens failed:', we);
+        }
+      }
+
+      return { id, ...payload, ...(profileResult || {}), email: targetEmail };
     }
+
     const { data, error } = await supabase.from('hostel_wardens').update(payload).eq('id', id).select().single();
     if (error) throw error;
+
+    if (data?.email) {
+      try {
+        const profSync: any = {};
+        if (payload.name) {
+          const parts = payload.name.trim().split(' ');
+          profSync.first_name = parts[0] || '';
+          profSync.last_name = parts.slice(1).join(' ') || '';
+        }
+        if (payload.phone !== undefined) profSync.phone = payload.phone;
+        if (Object.keys(profSync).length > 0) {
+          await supabase.from('profiles').update(profSync).ilike('email', data.email);
+        }
+      } catch (pe) {
+        console.warn('Profile sync from hostel_wardens update failed:', pe);
+      }
+    }
+
     return data;
   },
 
   async deleteWarden(id: string | number) {
     if (typeof id === 'string' && id.includes('-')) {
+      try {
+        const { data: prof } = await supabase.from('profiles').select('email').eq('id', id).maybeSingle();
+        if (prof?.email) {
+          await supabase.from('hostel_wardens').update({ is_active: false }).ilike('email', prof.email);
+        }
+      } catch (e) {
+        console.warn('Hostel wardens deactivate error:', e);
+      }
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -580,13 +661,38 @@ export const adminService = {
    * Staff: Caretakers - Directly backed by Supabase hostel_caretakers table
    */
   async getCaretakers() {
-    const { data, error } = await supabase
+    const { data: customCaretakers } = await supabase
       .from('hostel_caretakers')
       .select('*')
       .eq('is_active', true)
       .order('id', { ascending: true });
-    if (error) throw error;
-    return data || [];
+    
+    let combined: any[] = customCaretakers || [];
+
+    try {
+      const { data: profileCaretakers } = await supabase.from('profiles').select('*').eq('role', 'CARETAKER');
+      if (profileCaretakers && profileCaretakers.length > 0) {
+        const mapped = profileCaretakers.map((c: any) => {
+          const matched = (customCaretakers || []).find((cd: any) => 
+            (cd.email && c.email && cd.email.toLowerCase() === c.email.toLowerCase()) ||
+            cd.id === c.id
+          );
+          return {
+            id: c.id,
+            name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || matched?.name || c.email,
+            email: c.email,
+            phone: c.phone || matched?.phone || '',
+            experience: matched?.experience !== undefined ? Number(matched.experience) : 3
+          };
+        });
+        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+        const nonDup = (customCaretakers || []).filter((cd: any) => !profileEmails.includes((cd.email || '').toLowerCase()));
+        combined = [...mapped, ...nonDup];
+      }
+    } catch (err) {
+      console.warn('Could not fetch CARETAKER profiles:', err);
+    }
+    return combined;
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
@@ -608,13 +714,101 @@ export const adminService = {
   },
 
   async updateCaretaker(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; experience?: number }>) {
+    const isUuid = typeof id === 'string' && id.includes('-');
+    let targetEmail = payload.email;
+
+    if (isUuid) {
+      const profileUpdate: any = {};
+      if (payload.name) {
+        const parts = payload.name.trim().split(' ');
+        profileUpdate.first_name = parts[0] || '';
+        profileUpdate.last_name = parts.slice(1).join(' ') || '';
+      }
+      if (payload.phone !== undefined) profileUpdate.phone = payload.phone;
+      if (payload.email !== undefined) profileUpdate.email = payload.email;
+
+      let profileResult: any = null;
+      if (Object.keys(profileUpdate).length > 0) {
+        const { data: profData, error: profError } = await supabase
+          .from('profiles')
+          .update(profileUpdate)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+        if (profError) throw profError;
+        profileResult = profData;
+        if (profData?.email) targetEmail = profData.email;
+      }
+
+      if (!targetEmail) {
+        const { data: prof } = await supabase.from('profiles').select('email').eq('id', id).maybeSingle();
+        if (prof?.email) targetEmail = prof.email;
+      }
+
+      if (targetEmail) {
+        try {
+          const { data: existingCaretaker } = await supabase
+            .from('hostel_caretakers')
+            .select('id')
+            .ilike('email', targetEmail)
+            .maybeSingle();
+
+          if (existingCaretaker) {
+            await supabase.from('hostel_caretakers').update({
+              ...(payload.name ? { name: payload.name } : {}),
+              ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+              ...(payload.experience !== undefined ? { experience: Number(payload.experience) } : {})
+            }).eq('id', existingCaretaker.id);
+          } else {
+            await supabase.from('hostel_caretakers').insert({
+              name: payload.name || targetEmail,
+              email: targetEmail,
+              phone: payload.phone || '',
+              experience: Number(payload.experience) || 3,
+              is_active: true
+            });
+          }
+        } catch (ce) {
+          console.warn('Sync to hostel_caretakers failed:', ce);
+        }
+      }
+
+      return { id, ...payload, ...(profileResult || {}), email: targetEmail };
+    }
+
     const { data, error } = await supabase.from('hostel_caretakers').update(payload).eq('id', id).select().single();
     if (error) throw error;
+
+    if (data?.email) {
+      try {
+        const profSync: any = {};
+        if (payload.name) {
+          const parts = payload.name.trim().split(' ');
+          profSync.first_name = parts[0] || '';
+          profSync.last_name = parts.slice(1).join(' ') || '';
+        }
+        if (payload.phone !== undefined) profSync.phone = payload.phone;
+        if (Object.keys(profSync).length > 0) {
+          await supabase.from('profiles').update(profSync).ilike('email', data.email);
+        }
+      } catch (pe) {
+        console.warn('Profile sync from hostel_caretakers update failed:', pe);
+      }
+    }
+
     return data;
   },
 
   async deleteCaretaker(id: string | number) {
     if (typeof id === 'string' && id.includes('-')) {
+      try {
+        const { data: prof } = await supabase.from('profiles').select('email').eq('id', id).maybeSingle();
+        if (prof?.email) {
+          await supabase.from('hostel_caretakers').update({ is_active: false }).ilike('email', prof.email);
+        }
+      } catch (e) {
+        console.warn('Hostel caretakers deactivate error:', e);
+      }
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -629,27 +823,35 @@ export const adminService = {
    */
   async getSecurityStaff() {
     // Fetch manually added security staff
-    const { data: customSecurity, error } = await supabase
+    const { data: customSecurity } = await supabase
       .from('security_staff')
       .select('*')
       .eq('is_active', true)
       .order('id', { ascending: true });
     
-    let combined = customSecurity || [];
+    let combined: any[] = customSecurity || [];
 
     // Fetch registered security profiles
     try {
       const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
-      if (profileSecurity) {
-        const mapped = profileSecurity.map((w: any) => ({
-          id: w.id,
-          name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || w.email,
-          email: w.email,
-          phone: w.phone || '',
-          designation: 'Security Guard',
-          experience: 5
-        }));
-        combined = [...mapped, ...combined];
+      if (profileSecurity && profileSecurity.length > 0) {
+        const mapped = profileSecurity.map((w: any) => {
+          const matched = (customSecurity || []).find((cs: any) => 
+            (cs.email && w.email && cs.email.toLowerCase() === w.email.toLowerCase()) ||
+            cs.id === w.id
+          );
+          return {
+            id: w.id,
+            name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matched?.name || w.email,
+            email: w.email,
+            phone: w.phone || matched?.phone || '',
+            designation: matched?.designation || 'Security Guard',
+            experience: matched?.experience !== undefined ? Number(matched?.experience) : 5
+          };
+        });
+        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+        const nonDuplicateCustom = (customSecurity || []).filter((cs: any) => !profileEmails.includes((cs.email || '').toLowerCase()));
+        combined = [...mapped, ...nonDuplicateCustom];
       }
     } catch (err) {
       console.warn('Could not fetch SECURITY profiles:', err);
@@ -677,7 +879,10 @@ export const adminService = {
   },
 
   async updateSecurityStaff(id: string | number, payload: Partial<{ name: string; email?: string; phone: string; designation?: string; experience?: number }>) {
-    if (typeof id === 'string' && id.includes('-')) {
+    const isUuid = typeof id === 'string' && id.includes('-');
+    let targetEmail = payload.email;
+
+    if (isUuid) {
       const profileUpdate: any = {};
       if (payload.name) {
         const parts = payload.name.trim().split(' ');
@@ -685,20 +890,92 @@ export const adminService = {
         profileUpdate.last_name = parts.slice(1).join(' ') || '';
       }
       if (payload.phone !== undefined) profileUpdate.phone = payload.phone;
+      if (payload.email !== undefined) profileUpdate.email = payload.email;
+
+      let profileResult: any = null;
       if (Object.keys(profileUpdate).length > 0) {
-        const { data, error } = await supabase.from('profiles').update(profileUpdate).eq('id', id).select().maybeSingle();
-        if (error) throw error;
-        return { id, ...payload, ...data };
+        const { data: profData, error: profError } = await supabase
+          .from('profiles')
+          .update(profileUpdate)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+        if (profError) throw profError;
+        profileResult = profData;
+        if (profData?.email) targetEmail = profData.email;
       }
-      return { id, ...payload };
+
+      if (!targetEmail) {
+        const { data: prof } = await supabase.from('profiles').select('email').eq('id', id).maybeSingle();
+        if (prof?.email) targetEmail = prof.email;
+      }
+
+      if (targetEmail) {
+        try {
+          const { data: existingSecurity } = await supabase
+            .from('security_staff')
+            .select('id')
+            .ilike('email', targetEmail)
+            .maybeSingle();
+
+          if (existingSecurity) {
+            await supabase.from('security_staff').update({
+              ...(payload.name ? { name: payload.name } : {}),
+              ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+              ...(payload.designation ? { designation: payload.designation } : {}),
+              ...(payload.experience !== undefined ? { experience: Number(payload.experience) } : {})
+            }).eq('id', existingSecurity.id);
+          } else {
+            await supabase.from('security_staff').insert({
+              name: payload.name || targetEmail,
+              email: targetEmail,
+              phone: payload.phone || '',
+              designation: payload.designation || 'Security Guard',
+              experience: Number(payload.experience) || 5,
+              is_active: true
+            });
+          }
+        } catch (se) {
+          console.warn('Sync to security_staff failed:', se);
+        }
+      }
+
+      return { id, ...payload, ...(profileResult || {}), email: targetEmail };
     }
+
     const { data, error } = await supabase.from('security_staff').update(payload).eq('id', id).select().single();
     if (error) throw error;
+
+    if (data?.email) {
+      try {
+        const profSync: any = {};
+        if (payload.name) {
+          const parts = payload.name.trim().split(' ');
+          profSync.first_name = parts[0] || '';
+          profSync.last_name = parts.slice(1).join(' ') || '';
+        }
+        if (payload.phone !== undefined) profSync.phone = payload.phone;
+        if (Object.keys(profSync).length > 0) {
+          await supabase.from('profiles').update(profSync).ilike('email', data.email);
+        }
+      } catch (pe) {
+        console.warn('Profile sync from security_staff update failed:', pe);
+      }
+    }
+
     return data;
   },
 
   async deleteSecurityStaff(id: string | number) {
     if (typeof id === 'string' && id.includes('-')) {
+      try {
+        const { data: prof } = await supabase.from('profiles').select('email').eq('id', id).maybeSingle();
+        if (prof?.email) {
+          await supabase.from('security_staff').update({ is_active: false }).ilike('email', prof.email);
+        }
+      } catch (e) {
+        console.warn('Security staff deactivate error:', e);
+      }
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
       return { success: true };

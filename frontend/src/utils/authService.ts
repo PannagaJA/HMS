@@ -754,6 +754,13 @@ export const apiClient = {
       const data = await adminService.updateCaretaker(caretakerId, body);
       return { data: data as T };
     }
+    // Update Security
+    if (endpoint.includes('/hms/security/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const securityId = parts[parts.indexOf('security') + 1] || body?.id;
+      const data = await adminService.updateSecurityStaff(securityId, body);
+      return { data: data as T };
+    }
     return { data: body as T };
   },
 
@@ -822,7 +829,6 @@ export const apiClient = {
 
       const updatePayload: any = {};
       if (body?.capacity !== undefined) updatePayload.capacity = Number(body.capacity);
-      if (body?.name !== undefined) updatePayload.name = body.name;
       if (body?.no !== undefined || body?.room_no !== undefined) updatePayload.no = String(body.no || body.room_no).trim();
       if (body?.floor !== undefined) updatePayload.floor = Number(body.floor);
       if (body?.room_type !== undefined) updatePayload.room_type = body.room_type;
@@ -837,7 +843,7 @@ export const apiClient = {
           .single();
 
         if (error) throw error;
-        return { data: updated as T };
+        return { data: { ...updated, name: body?.name || `Room ${updated?.no || ''}` } as T };
       }
       return { data: { id: roomId, ...body } as T };
     }
