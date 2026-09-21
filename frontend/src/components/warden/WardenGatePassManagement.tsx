@@ -95,7 +95,13 @@ export const WardenGatePassManagement: React.FC = () => {
 
       setPasses(scopedPasses);
       setHostels(hostList);
-      setSelectedHostelId('');
+      // Preserve existing selected hostel, or default to ALL/first assigned hostel
+      setSelectedHostelId((prev) => {
+        if (prev) return prev;
+        if (user?.role === 'ADMIN') return 'ALL';
+        if (user?.role === 'WARDEN') return hostList.length === 1 ? String(hostList[0].id) : 'ALL';
+        return hostList.length > 0 ? String(hostList[0].id) : 'ALL';
+      });
     } catch (err) {
       console.error('Failed to load gate passes or hostels', err);
     } finally {
@@ -112,7 +118,7 @@ export const WardenGatePassManagement: React.FC = () => {
       showSuccess(`Gate pass for ${actionModalPass.student_name} ${actionType === 'approve' ? 'approved' : 'rejected'}.`);
       setActionModalPass(null);
       setActionNote('');
-      fetchGatePassesAndHostels();
+      await refreshGatePassesOnly();
     } catch (err: any) {
       showError(err.message || err.response?.data?.error || 'Action failed');
     }
@@ -144,6 +150,13 @@ export const WardenGatePassManagement: React.FC = () => {
 
   const totalItems = filteredPasses.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
   const paginatedPasses = filteredPasses.slice(startIndex, startIndex + pageSize);

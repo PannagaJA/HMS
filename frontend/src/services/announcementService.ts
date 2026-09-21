@@ -75,18 +75,27 @@ export const announcementService = {
 
     if (!allData || allData.length === 0) return { data: [], count: 0 };
 
-    // Filter non-expired, role-targeted, and hostel-appropriate announcements
+    // Filter non-expired, role-targeted, not self-sent, and hostel-appropriate announcements
     const filtered = allData.filter(a => {
+      // 1. Expiry check
       if (a.expires_at) {
         const expiry = new Date(a.expires_at).getTime();
         if (expiry <= now) return false;
       }
-      if (userRole && userRole !== 'ADMIN') {
-        const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
-        if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
-          return false;
-        }
+
+      // 2. Exclude announcements created by this user's role (they belong in "Sent")
+      const createdByRole = (a.created_by_role || '').toUpperCase();
+      if (createdByRole && createdByRole === userRole) {
+        return false;
       }
+
+      // 3. Target role check - must be addressed to userRole or ALL
+      const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+      if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+        return false;
+      }
+
+      // 4. Hostel scoping check
       if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
         if (userHostelId) {
           return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
@@ -125,7 +134,6 @@ export const announcementService = {
   },
 
   async getSentAnnouncements(role: string, page = 1, limit = 20): Promise<{ data: Announcement[], count: number }> {
-    const userRole = (role || '').toUpperCase();
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -134,7 +142,7 @@ export const announcementService = {
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false });
 
-    if (userRole !== 'ADMIN') {
+    if (role) {
       query = query.eq('created_by_role', role);
     }
 
@@ -161,19 +169,23 @@ export const announcementService = {
   },
 
   async createAnnouncement(data: Partial<Announcement>): Promise<Announcement> {
-    const newAnnouncement = {
+    const id = data.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+    const insertData: any = {
+      id,
       title: data.title,
       message: data.message,
       priority: data.priority || 'low',
       target_roles: data.target_roles || [],
-      created_by_role: data.created_by_role,
-      created_by_name: data.created_by_name,
+      created_by_role: data.created_by_role || null,
+      created_by_name: data.created_by_name || null,
       is_circular: data.is_circular || false,
       target_hostel_id: data.target_hostel_id || null,
       expires_at: data.expires_at || null,
-    } as Announcement;
+    };
 
-    const { is_read, ...insertData } = newAnnouncement;
+    if (data.circular_number) insertData.circular_number = data.circular_number;
+    if (data.file_url) insertData.file_url = data.file_url;
+    if (data.file_name) insertData.file_name = data.file_name;
 
     const { data: created, error } = await supabase
       .from('announcements')
@@ -216,7 +228,7 @@ export const announcementService = {
 
       const { data: targeted, error: targetError } = await supabase
         .from('announcements')
-        .select('id, target_roles, target_hostel_id, expires_at');
+        .select('id, target_roles, target_hostel_id, expires_at, created_by_role');
         
       if (targetError) {
         console.warn('Error querying targeted announcements for unread count:', targetError);
@@ -229,11 +241,13 @@ export const announcementService = {
         if (a.expires_at && new Date(a.expires_at) <= new Date(nowIso)) {
           return false;
         }
-        if (userRole && userRole !== 'ADMIN') {
-          const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
-          if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
-            return false;
-          }
+        const createdByRole = (a.created_by_role || '').toUpperCase();
+        if (createdByRole && createdByRole === userRole) {
+          return false;
+        }
+        const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+        if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+          return false;
         }
         if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
           if (userHostelId) {

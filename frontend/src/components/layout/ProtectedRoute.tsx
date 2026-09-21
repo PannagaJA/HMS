@@ -42,8 +42,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         if (payload.eventType === 'INSERT') {
           const newAnnouncement = payload.new as any;
           const userRole = (user.role || '').toUpperCase();
-          const targetRoles = (newAnnouncement?.target_roles || []).map((r: string) => r.toUpperCase());
-          if (targetRoles.includes(userRole)) {
+          const createdByRole = (newAnnouncement?.created_by_role || '').toUpperCase();
+          if ((targetRoles.includes(userRole) || targetRoles.includes('ALL')) && createdByRole !== userRole) {
             // Play chime sound
             const audio = new Audio('/notification.wav');
             audio.play().catch(e => console.log('Audio autoplay blocked:', e));

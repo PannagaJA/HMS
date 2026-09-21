@@ -103,9 +103,12 @@ export const Announcements: React.FC = () => {
           const newA = payload.new as Announcement;
           const userRole = (user.role || '').toUpperCase();
           const targetRoles = (newA.target_roles || []).map((r: string) => r.toUpperCase());
+          const createdByRole = (newA.created_by_role || '').toUpperCase();
           const isNotExpired = !newA.expires_at || new Date(newA.expires_at).getTime() > Date.now();
+          const isTargeted = targetRoles.includes(userRole) || targetRoles.includes('ALL');
+          const isSender = createdByRole === userRole;
           
-          if (activeTab === 'received' && (userRole === 'ADMIN' || targetRoles.includes(userRole))) {
+          if (activeTab === 'received' && isTargeted && !isSender) {
             if (isNotExpired) {
               setAnnouncements(prev => {
                 const list = prev.filter(a => a.id !== newA.id);
@@ -113,7 +116,7 @@ export const Announcements: React.FC = () => {
               });
               setTotalCount(prev => prev + 1);
             }
-          } else if (activeTab === 'sent' && (userRole === 'ADMIN' || (newA.created_by_role || '').toUpperCase() === userRole)) {
+          } else if (activeTab === 'sent' && isSender) {
             setAnnouncements(prev => {
               const list = prev.filter(a => a.id !== newA.id);
               return [newA, ...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, pageSize);
