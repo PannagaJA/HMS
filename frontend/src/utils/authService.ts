@@ -59,14 +59,22 @@ export const apiClient = {
       if (userRole === 'STUDENT') {
         let stData: any = null;
 
-        // Strategy 1: by profile_id / id
+        // Strategy 1: by profile_id (UUID) or id (integer)
         if (effectiveUserId) {
           const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId);
           if (isUuid) {
             const { data } = await supabase
               .from('students')
               .select('id, profile_id, student_name, enrollment_no, phone, email, org_id')
-              .or(`profile_id.eq.${effectiveUserId},id.eq.${effectiveUserId}`)
+              .eq('profile_id', effectiveUserId)
+              .limit(1)
+              .maybeSingle();
+            stData = data;
+          } else if (!isNaN(Number(effectiveUserId))) {
+            const { data } = await supabase
+              .from('students')
+              .select('id, profile_id, student_name, enrollment_no, phone, email, org_id')
+              .eq('id', Number(effectiveUserId))
               .limit(1)
               .maybeSingle();
             stData = data;
@@ -711,6 +719,7 @@ export const apiClient = {
       return { data: data as T };
     }
 
+
     // Apply Gate Pass (Student)
     if (endpoint.includes('/gate-passes/') || endpoint.includes('/gatepass/')) {
       const data = await studentService.applyGatePass(body);
@@ -780,10 +789,40 @@ export const apiClient = {
       if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
         throw new Error('New password must be at least 6 characters long.');
       }
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        throw new Error(error.message || 'Failed to update password in authentication service.');
+
+      const stored = getStoredUser();
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user;
+      const effectiveEmail = user?.email || stored?.email || '';
+      const effectiveUsername = stored?.username || (effectiveEmail ? effectiveEmail.split('@')[0] : '');
+
+      // If user has an active Supabase Auth session, update Supabase Auth
+      if (user) {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+          throw new Error(error.message || 'Failed to update password in authentication service.');
+        }
       }
+
+      // Save updated password in custom passwords map for directory/fallback sessions
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
+          if (effectiveEmail) {
+            customPasswords[effectiveEmail.toLowerCase()] = newPassword;
+            const emailPrefix = effectiveEmail.split('@')[0].toLowerCase();
+            customPasswords[emailPrefix] = newPassword;
+          }
+          if (effectiveUsername) customPasswords[effectiveUsername.toLowerCase()] = newPassword;
+          if (stored?.enrollment_no) customPasswords[stored.enrollment_no.toLowerCase()] = newPassword;
+          if (stored?.username) customPasswords[stored.username.toLowerCase()] = newPassword;
+          if (stored?.id) customPasswords[String(stored.id).toLowerCase()] = newPassword;
+          localStorage.setItem('hms_custom_passwords', JSON.stringify(customPasswords));
+        } catch (storageErr) {
+          console.warn('Could not save custom password to localStorage:', storageErr);
+        }
+      }
+
       return { data: { success: true, message: 'Password changed successfully!' } as T };
     }
 
@@ -1198,8 +1237,23 @@ export const authService = {
       console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
     }
 
-    // 2. If password matches default and user is a student in public.students directory
-    if (password === 'amc@2026') {
+    // 2. If password matches default (amc@2026) or user-updated custom password
+    let customPass: string | undefined;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
+        customPass = customPasswords[emailToUse.toLowerCase()] 
+          || customPasswords[input.toLowerCase()] 
+          || (input.includes('@') ? customPasswords[input.split('@')[0].toLowerCase()] : undefined);
+      } catch (e) {
+        console.warn('Could not read custom passwords:', e);
+      }
+    }
+
+    // Once a custom password is set, ONLY the new password is accepted (old default amc@2026 is invalidated)
+    const isPasswordValid = customPass ? password === customPass : password === 'amc@2026';
+
+    if (isPasswordValid) {
       const { data: studentMatch } = await supabase
         .from('students')
         .select('*')
