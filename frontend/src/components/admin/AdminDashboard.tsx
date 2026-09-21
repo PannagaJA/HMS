@@ -16,11 +16,6 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
-    // Auto-refresh telemetry every 30 seconds dynamically
-    const interval = setInterval(() => {
-      fetchDashboardData(true);
-    }, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async (isBackground = false) => {

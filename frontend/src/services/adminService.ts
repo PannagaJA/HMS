@@ -7,6 +7,8 @@ import type { Hostel, HostelRoom, HostelStudent } from '../types';
 
 let inFlightDashboardStatsPromise: Promise<any> | null = null;
 
+let inFlightWardensPromise: Promise<any[]> | null = null;
+
 export const adminService = {
 
   /**
@@ -19,10 +21,10 @@ export const adminService = {
 
     inFlightDashboardStatsPromise = (async () => {
       try {
-        // Fetch only recent gate passes in a single efficient query (no separate HEAD table scans)
+        // Fetch only the 10 recent gate passes with exact columns needed (no select(*))
         const { data: recentPassesData } = await supabase
           .from('gate_passes')
-          .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(no, floor)')
+          .select('id, pass_type, status, out_date, out_time, reason, created_at, student:students(student_name, enrollment_no), hostel:hostels(id, name), room:hostel_rooms(no, floor)')
           .order('created_at', { ascending: false })
           .limit(10);
 
@@ -105,27 +107,28 @@ export const adminService = {
   /**
    * Fetch all active hostel blocks with occupancy metrics
    */
-  async getHostels(): Promise<Hostel[]> {
+  async getHostels(passedWardens?: any[], passedCaretakers?: any[]): Promise<Hostel[]> {
     let hostels: any[] = [];
     try {
       const { data, error } = await supabase
         .from('hostels')
-        .select('*, rooms:hostel_rooms(id, capacity, is_active)')
-        .eq('is_active', true);
+        .select('id, name, gender, floor_count, address, warden_id, caretaker_id, is_active, rooms:hostel_rooms(id, capacity, is_active)')
+        .eq('is_active', true)
+        .order('id', { ascending: true });
       if (!error && data) {
         hostels = data;
       }
     } catch (e) {
       console.warn('Failed to load hostels from supabase:', e);
     }
-    let combinedHostels = hostels;
+    const combinedHostels = hostels;
     if (combinedHostels.length === 0) {
       return [];
     }
 
     const [wardensList, caretakersList, activeAllocsRes] = await Promise.all([
-      adminService.getWardens(),
-      adminService.getCaretakers(),
+      passedWardens ? Promise.resolve(passedWardens) : adminService.getWardens(),
+      passedCaretakers ? Promise.resolve(passedCaretakers) : adminService.getCaretakers(),
       supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true)
     ]);
 
@@ -136,15 +139,8 @@ export const adminService = {
       const totalCap = (h.rooms || []).filter((r: any) => r.is_active).reduce((sum: number, r: any) => sum + (r.capacity || 0), 0);
       const occ = activeAllocs.filter((a: any) => a.bed?.room?.hostel_id === h.id).length;
       
-      const wDetail = h.warden_id ? wardensList.find(w => String(w.id) === String(h.warden_id)) : null;
-      const cDetail = h.caretaker_id ? caretakersList.find(c => String(c.id) === String(h.caretaker_id)) : null;
-
-      
-      const assignedWardenId = h.warden || h.wardens?.[0]?.warden_profile_id || null;
-      const assignedCaretakerId = h.caretaker || null;
-
-      const wardenDetail = wardensList.find((w: any) => String(w.id) === String(assignedWardenId)) || null;
-      const caretakerDetail = caretakersList.find((c: any) => String(c.id) === String(assignedCaretakerId)) || null;
+      const wDetail = h.warden_id ? wardensList.find((w: any) => String(w.id) === String(h.warden_id)) : null;
+      const cDetail = h.caretaker_id ? caretakersList.find((c: any) => String(c.id) === String(h.caretaker_id)) : null;
 
       return {
         ...h,
@@ -672,7 +668,7 @@ export const adminService = {
     // Fetch manually added wardens
     const { data: customWardens } = await supabase
       .from('hostel_wardens')
-      .select('*')
+      .select('id, name, email, phone, designation, experience, is_active')
       .eq('is_active', true)
       .order('id', { ascending: true });
     
@@ -680,7 +676,10 @@ export const adminService = {
 
     // Fetch registered warden profiles
     try {
-      const { data: profileWardens } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
+      const { data: profileWardens } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .eq('role', 'WARDEN');
       if (profileWardens && profileWardens.length > 0) {
         const mapped = profileWardens.map((w: any) => {
           const matchedCustom = (customWardens || []).find((cw: any) => 
@@ -844,14 +843,17 @@ export const adminService = {
   async getCaretakers() {
     const { data: customCaretakers } = await supabase
       .from('hostel_caretakers')
-      .select('*')
+      .select('id, name, email, phone, experience, is_active')
       .eq('is_active', true)
       .order('id', { ascending: true });
     
     let combined: any[] = customCaretakers || [];
 
     try {
-      const { data: profileCaretakers } = await supabase.from('profiles').select('*').eq('role', 'CARETAKER');
+      const { data: profileCaretakers } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .eq('role', 'CARETAKER');
       if (profileCaretakers && profileCaretakers.length > 0) {
         const mapped = profileCaretakers.map((c: any) => {
           const matched = (customCaretakers || []).find((cd: any) => 
