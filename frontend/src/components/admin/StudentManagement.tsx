@@ -35,7 +35,7 @@ export const StudentManagement: React.FC = () => {
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedHostelFilter, setSelectedHostelFilter] = useState<string>('');
+  const [selectedHostelFilter, setSelectedHostelFilter] = useState<string>('ALL');
   const [filterAllotted, setFilterAllotted] = useState<'ALL' | 'ALLOTTED' | 'UNALLOTTED'>('ALL');
   
   // Pagination State (50 items per page by default)
@@ -330,8 +330,79 @@ export const StudentManagement: React.FC = () => {
     }
   };
 
-  const handleExportPDF = () => {
-    window.print();
+  const handleExportExcel = () => {
+    const listToExport = filteredStudents.length > 0 ? filteredStudents : students;
+    if (listToExport.length === 0) {
+      showError('No resident records available to export.');
+      return;
+    }
+
+    const headers = [
+      'Sl. No',
+      'Student Name',
+      'USN / Enrollment No',
+      'Gender',
+      'Email',
+      'Phone Number',
+      'Guardian Name',
+      'Guardian Phone',
+      'Emergency Contact',
+      'Hostel Block',
+      'Floor',
+      'Room Number',
+      'Bed Slot',
+      'Allotment Status',
+    ];
+
+    const escapeCsvValue = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = listToExport.map((s, index) => {
+      const floorStr = getFloorDisplay(s) || (s.room_allotted ? 'N/A' : 'Unallotted');
+      const hostelName = s.hostel_name || (s.hostel && typeof s.hostel === 'object' ? s.hostel.name : '') || (s.room_allotted ? 'Assigned' : 'Unassigned');
+      const roomNumber = s.room_no || s.room_number || (s.room_detail as any)?.no || (s.room_allotted ? 'Assigned' : 'Unassigned');
+      const bedNumber = s.bed_number ? String(s.bed_number) : (s.room_allotted ? '1' : 'Unassigned');
+      const statusStr = s.room_allotted ? 'Allotted' : 'Unallotted';
+      const genderStr = s.gender === 'F' ? 'Female' : s.gender === 'M' ? 'Male' : (s.gender || '');
+
+      return [
+        escapeCsvValue(index + 1),
+        escapeCsvValue(s.student_name || ''),
+        escapeCsvValue(s.enrollment_no || ''),
+        escapeCsvValue(genderStr),
+        escapeCsvValue(s.email || ''),
+        escapeCsvValue(s.phone || ''),
+        escapeCsvValue(s.father_name || ''),
+        escapeCsvValue(s.guardian_phone || ''),
+        escapeCsvValue(s.emergency_contact || ''),
+        escapeCsvValue(hostelName),
+        escapeCsvValue(floorStr),
+        escapeCsvValue(roomNumber),
+        escapeCsvValue(bedNumber),
+        escapeCsvValue(statusStr),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.map(h => `"${h}"`).join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const hostelLabel = selectedHostelFilter && selectedHostelFilter !== 'ALL' 
+      ? (hostels.find(h => String(h.id) === selectedHostelFilter)?.name || 'Hostel').replace(/\s+/g, '_')
+      : 'All_Hostels';
+    
+    link.href = url;
+    link.setAttribute('download', `AMC_Resident_Directory_${hostelLabel}_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showSuccess(`Successfully exported ${listToExport.length} resident records to Excel (CSV).`);
   };
 
   const handleOpenAddStudent = () => {
@@ -772,11 +843,12 @@ export const StudentManagement: React.FC = () => {
           </button>
 
           <button
-            onClick={handleExportPDF}
+            onClick={handleExportExcel}
             className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            title="Export Resident Directory to Excel / CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Roster</span>
+            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <span>Export to Excel (CSV)</span>
           </button>
         </div>
       </div>
