@@ -125,12 +125,14 @@ export const RoomManagement: React.FC = () => {
     setSingleHostelId(hostelVal);
     const suggestedNo = generateNextRoomNumber(singleFloor, hostelVal);
     setSingleRoomNo(suggestedNo);
+    setSingleRoomName(suggestedNo ? `Room ${suggestedNo}` : '');
   };
 
   const handleSingleFloorChange = (floorVal: string) => {
     setSingleFloor(floorVal);
     const suggestedNo = generateNextRoomNumber(floorVal, singleHostelId || selectedHostelId);
     setSingleRoomNo(suggestedNo);
+    setSingleRoomName(suggestedNo ? `Room ${suggestedNo}` : '');
   };
 
   const handleOpenAddSingleRoom = () => {
@@ -138,8 +140,9 @@ export const RoomManagement: React.FC = () => {
     setSingleHostelId(targetHostel);
     const defaultFloor = selectedFloor && selectedFloor !== 'all' && selectedFloor !== 'ALL' ? selectedFloor : '';
     setSingleFloor(defaultFloor);
-    setSingleRoomNo(targetHostel && defaultFloor !== '' ? generateNextRoomNumber(defaultFloor, targetHostel) : '');
-    setSingleRoomName('');
+    const initialNo = targetHostel && defaultFloor !== '' ? generateNextRoomNumber(defaultFloor, targetHostel) : '';
+    setSingleRoomNo(initialNo);
+    setSingleRoomName(initialNo ? `Room ${initialNo}` : '');
     setSingleRoomType('S');
     setSingleCapacity(1);
     setShowSingleRoomModal(true);
@@ -200,10 +203,11 @@ export const RoomManagement: React.FC = () => {
     e.stopPropagation(); // prevent opening occupants drawer
     setShowOccupantsDrawer(false); // dismiss occupants view so edit modal is clean
     setEditingRoom(room);
-    setEditHostelId(String(room.hostel || selectedHostelId));
+    const rNo = room.no || room.room_no || '';
+    setEditHostelId(String(room.hostel || room.hostel_id || selectedHostelId));
     setEditFloor(String(room.floor));
-    setEditRoomNo(room.no || room.room_no || '');
-    setEditRoomName(room.name || '');
+    setEditRoomNo(rNo);
+    setEditRoomName(room.name || (rNo ? `Room ${rNo}` : ''));
     setEditRoomType(room.room_type || 'S');
     setEditCapacity(room.capacity || 1);
     setShowEditRoomModal(true);
@@ -710,7 +714,11 @@ export const RoomManagement: React.FC = () => {
                     type="text"
                     required
                     value={editRoomNo}
-                    onChange={(e) => setEditRoomNo(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditRoomNo(val);
+                      setEditRoomName(val.trim() ? `Room ${val.trim()}` : '');
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                   />
                 </div>
@@ -718,11 +726,11 @@ export const RoomManagement: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Room Name <span className="text-slate-400 font-normal">(Optional)</span>
+                  Room Name <span className="text-slate-400 font-normal">(Auto-generated from Room Number)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Deluxe Suite"
+                  placeholder="e.g. Room 101"
                   value={editRoomName}
                   onChange={(e) => setEditRoomName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
@@ -857,7 +865,11 @@ export const RoomManagement: React.FC = () => {
                     required
                     placeholder="e.g. 101, G02"
                     value={singleRoomNo}
-                    onChange={(e) => setSingleRoomNo(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSingleRoomNo(val);
+                      setSingleRoomName(val.trim() ? `Room ${val.trim()}` : '');
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
                   />
                 </div>
@@ -865,11 +877,11 @@ export const RoomManagement: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Room Name <span className="text-slate-400 font-normal">(Optional)</span>
+                  Room Name <span className="text-slate-400 font-normal">(Auto-generated from Room Number)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Deluxe Room 101"
+                  placeholder="e.g. Room 101"
                   value={singleRoomName}
                   onChange={(e) => setSingleRoomName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]"
