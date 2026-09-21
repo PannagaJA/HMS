@@ -319,35 +319,77 @@ export const adminService = {
   async getStudents(): Promise<HostelStudent[]> {
     let students: any[] = [];
     try {
+      // 1. Try full join query
       const { data, error } = await supabase
         .from('students')
         .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
-        .order('student_name', { ascending: true });
-      if (!error && data) {
+        .order('student_name', { ascending: true, nullsFirst: false });
+
+      if (!error && data && data.length > 0) {
         students = data;
+      } else {
+        if (error) {
+          console.warn('Nested student query error, attempting resilient fallback:', error.message || error);
+        }
+        // Fallback: Direct select from students table
+        const { data: rawData, error: rawError } = await supabase
+          .from('students')
+          .select('*')
+          .order('student_name', { ascending: true, nullsFirst: false });
+
+        if (!rawError && rawData) {
+          students = rawData;
+          // Enrich active allocations if possible
+          try {
+            const { data: allocData } = await supabase
+              .from('room_allocations')
+              .select('*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*)))')
+              .eq('is_active', true);
+
+            if (allocData && allocData.length > 0) {
+              students = students.map((st: any) => ({
+                ...st,
+                allocations: allocData.filter((a: any) => String(a.student_id) === String(st.id))
+              }));
+            }
+          } catch (allocErr) {
+            console.warn('Allocations enrichment fallback warning:', allocErr);
+          }
+        }
       }
     } catch (e) {
       console.warn('Failed to load students from supabase:', e);
+      try {
+        const { data: simpleData } = await supabase.from('students').select('*');
+        if (simpleData) students = simpleData;
+      } catch (fe) {
+        console.warn('Simple fallback failed:', fe);
+      }
     }
 
-    const combinedStudents = [...students];
-
-    return combinedStudents.map((s: any) => {
-      const activeAlloc = (s.allocations || []).find((a: any) => a.is_active);
-      const bed = activeAlloc?.bed;
-      const room = bed?.room;
-      const hostel = room?.hostel;
+    return students.map((s: any) => {
+      const activeAlloc = (s.allocations || []).find((a: any) => a.is_active) || s.allocations?.[0];
+      const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+      const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+      const hostel = Array.isArray(room?.hostel) ? room.hostel[0] : room?.hostel;
       const resolvedEmail = s.email || s.profile?.email || '';
+      const isAllotted = !!activeAlloc || !!s.room_allotted || !!s.room_no || !!s.room_number || !!s.bed_number;
+
       return {
         ...s,
+        id: s.id,
+        student_name: s.student_name || s.name || 'Resident Student',
+        enrollment_no: s.enrollment_no || s.usn || '',
+        gender: s.gender || 'M',
+        phone: s.phone || '',
         email: resolvedEmail,
-        room_allotted: !!activeAlloc || !!s.room_allotted,
-        hostel_name: hostel?.name || s.hostel_name || '',
+        room_allotted: isAllotted,
+        hostel_name: hostel?.name || s.hostel_name || (s.hostel ? `Hostel ${s.hostel}` : ''),
         room_no: room?.no || s.room_no || s.room_number || '',
         room_number: room?.no || s.room_number || s.room_no || '',
         bed_number: bed?.bed_number || s.bed_number || null,
         floor: room?.floor !== undefined ? room.floor : (s.floor ?? s.room_detail?.floor ?? null),
-        hostel: hostel ? hostel.id : s.hostel || null,
+        hostel: hostel ? hostel.id : (s.hostel || s.hostel_id || null),
         room_detail: room || s.room_detail || null
       };
     });
