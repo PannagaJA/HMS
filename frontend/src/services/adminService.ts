@@ -15,39 +15,8 @@ let inFlightHostelsListPromise: Promise<Hostel[]> | null = null;
 export const adminService = {
 
   /**
-   * Fetch lightweight hostel list for filters and dropdowns (deduplicated & cached)
-   */
-  async getHostelsList(): Promise<Hostel[]> {
-    if (cachedHostelsList && cachedHostelsList.length > 0) {
-      return cachedHostelsList;
-    }
-    if (inFlightHostelsListPromise) {
-      return inFlightHostelsListPromise;
-    }
-
-    inFlightHostelsListPromise = (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('hostels')
-          .select('id, name, gender, floor_count')
-          .eq('is_active', true)
-          .order('id', { ascending: true });
-        if (error) throw error;
-        cachedHostelsList = (data || []) as Hostel[];
-        return cachedHostelsList;
-      } catch (err) {
-        console.warn('Failed to load hostels list:', err);
-        return [];
-      } finally {
-        inFlightHostelsListPromise = null;
-      }
-    })();
-
-    return inFlightHostelsListPromise;
-  },
-
-  /**
-   * Fetch aggregated system-wide dashboard stats including telemetry, 10 recent gate passes, and 7-day movement trends
+   * Fetch aggregated system-wide dashboard stats, scoped to the active org.
+   * Uses in-flight deduplication to prevent parallel duplicate requests.
    */
   async getDashboardStats() {
     if (inFlightDashboardStatsPromise) {
@@ -56,87 +25,77 @@ export const adminService = {
 
     inFlightDashboardStatsPromise = (async () => {
       try {
-        // Fetch only the 10 recent gate passes with exact columns needed (no select(*))
-        const { data: recentPassesData } = await supabase
-          .from('gate_passes')
-          .select('id, pass_type, status, out_date, out_time, reason, created_at, student:students(student_name, enrollment_no), hostel:hostels(id, name), room:hostel_rooms(no, floor)')
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        const stats = {
-          total_hostels: 3,
-          total_capacity: 137,
-          occupied_beds: 11,
-          total_students: 11,
-          vacant_beds: 126,
-          occupancy_rate: 8,
-          pending_gate_passes: 1,
-          active_issues: 4
-        };
-
-        const formattedRecentPasses = (recentPassesData || []).map((gp: any) => ({
-          ...gp,
-          student_name: gp.student?.student_name || gp.student_name || 'Student Resident',
-          enrollment_no: gp.student?.enrollment_no || gp.enrollment_no || 'N/A',
-          hostel_name: gp.hostel?.name || gp.hostel_name || 'AMC BOYS Hostel',
-          room_no: gp.room?.no || gp.room_no || '101',
-          floor: gp.room?.floor !== undefined ? gp.room?.floor : gp.floor,
-          hostel_id: gp.hostel_id || gp.hostel?.id
-        }));
-
-        const today = new Date();
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const trendArray: { day: string; count: number; height: string }[] = [];
-        let totalPasses = 0;
-        let peakCount = 0;
-        let peakDay = 'N/A';
-
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(today);
-          d.setDate(d.getDate() - i);
-          const dayStr = days[d.getDay()];
-          const dateStr = d.toISOString().split('T')[0];
-
-          const dayCount = (recentPassesData || []).filter((pass: any) => pass.out_date === dateStr).length;
-          totalPasses += dayCount;
-          if (dayCount > peakCount) {
-            peakCount = dayCount;
-            peakDay = dayStr;
+        // Resolve the current user's org_id for tenant isolation
+        let orgId: string | undefined;
+        try {
+          const stored = localStorage.getItem('hms_user');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            orgId = parsed.org_id;
           }
-
-          trendArray.push({
-            day: dayStr,
-            count: dayCount,
-            height: '0%'
-          });
+          if (!orgId) {
+            const { data: authUser } = await supabase.auth.getUser();
+            if (authUser?.user?.id) {
+              const { data: prof } = await supabase.from('profiles').select('org_id').eq('id', authUser.user.id).maybeSingle();
+              orgId = prof?.org_id;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not determine active org_id:', e);
         }
 
-        trendArray.forEach(item => {
-          item.height = peakCount > 0 ? `${Math.max(10, Math.round((item.count / peakCount) * 100))}%` : '10%';
-        });
+        // SAFETY GUARD: Never run unfiltered queries — that would leak data across tenants.
+        // If org_id is still unknown, return zeroed stats and surface the error.
+        if (!orgId) {
+          console.error('[adminService.getDashboardStats] BLOCKED: org_id is undefined. Returning empty stats to prevent cross-tenant data leak.');
+          return {
+            statistics: {
+              total_hostels: 0,
+              total_capacity: 0,
+              occupied_beds: 0,
+              vacant_beds: 0,
+              occupancy_rate: 0,
+              pending_gate_passes: 0,
+              active_issues: 0
+            }
+          };
+        }
 
-        const trendStats = {
-          peakDay: peakCount > 0 ? `${peakDay} (${peakCount} Outpasses)` : 'N/A',
-          peakCount,
-          average: Number((totalPasses / 7).toFixed(1)),
-          trendPercent: totalPasses > 0 ? '+Active Movements' : 'No Movements'
+        // Always use direct table queries for accuracy — avoids view field name inconsistencies
+        // (view may return 'open_issues' vs 'active_issues' depending on which SQL fix was run)
+        const [h, beds, a, p, iss] = await Promise.all([
+          supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
+          supabase.from('beds').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
+          supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
+          // Match both PENDING (uppercase) and pending (lowercase) in case of data inconsistency
+          supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending').eq('org_id', orgId),
+          // Count issues that are NOT completed (handles both case variants)
+          supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)').eq('org_id', orgId),
+        ]);
+
+        const totalCapacity = beds.count || 0;
+        const occupied = a.count || 0;
+
+        const stats = {
+          total_hostels: h.count || 0,
+          total_capacity: totalCapacity,
+          occupied_beds: occupied,
+          vacant_beds: Math.max(0, totalCapacity - occupied),
+          occupancy_rate: totalCapacity > 0 ? Math.round((occupied / totalCapacity) * 100) : 0,
+          pending_gate_passes: p.count || 0,
+          active_issues: iss.count || 0
         };
 
-        return {
-          statistics: stats,
-          recent_passes: formattedRecentPasses,
-          weekly_trends: trendArray,
-          trend_stats: trendStats
-        };
+        console.log('[adminService.getDashboardStats] orgId:', orgId, 'stats:', stats);
+        return { statistics: stats };
       } finally {
-        setTimeout(() => {
-          inFlightDashboardStatsPromise = null;
-        }, 1000);
+        inFlightDashboardStatsPromise = null;
       }
     })();
 
     return inFlightDashboardStatsPromise;
   },
+
 
 
   /**
@@ -188,6 +147,14 @@ export const adminService = {
         caretaker_detail: cDetail || null
       };
     });
+  },
+
+  /**
+   * Alias for getHostels — kept for backward compatibility with components
+   * that call adminService.getHostelsList() for filter dropdowns.
+   */
+  async getHostelsList(): Promise<Hostel[]> {
+    return adminService.getHostels();
   },
 
   async createHostel(payload: { name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }) {

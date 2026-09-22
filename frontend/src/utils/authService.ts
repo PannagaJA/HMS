@@ -32,15 +32,17 @@ export const apiClient = {
 
       // Check profiles table if user ID exists
       let profile: any = null;
+      let profileOrgId: string | undefined = stored?.org_id; // preserve existing org_id from localStorage
       if (effectiveUserId) {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId);
         if (isUuid) {
           const { data } = await supabase
             .from('profiles')
-            .select('id, email, first_name, last_name, role, phone, avatar_url, is_active, created_at, updated_at')
+            .select('id, email, first_name, last_name, role, phone, avatar_url, is_active, created_at, updated_at, org_id')
             .eq('id', effectiveUserId)
             .maybeSingle();
           profile = data;
+          if (data?.org_id) profileOrgId = data.org_id;
         }
       }
 
@@ -132,6 +134,9 @@ export const apiClient = {
         phone: userPhone,
         avatar_url: avatarUrl,
         is_active: isActive,
+        // CRITICAL: Always preserve org_id — this is the tenant identifier.
+        // Without it, getDashboardStats() cannot filter by org and leaks cross-tenant data.
+        org_id: profileOrgId || stored?.org_id,
         created_at: createdAt,
         updated_at: updatedAt
       };
@@ -1225,6 +1230,13 @@ export const authService = {
     if (!input.includes('@')) {
       emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
     }
+
+    // Clear any previous stale sessions from other organizations first
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('hms_user');
+      localStorage.removeItem('hms_token');
+    } catch (_) {}
 
     // 1. First attempt standard Supabase Auth
     try {
