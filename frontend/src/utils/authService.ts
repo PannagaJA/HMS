@@ -38,7 +38,7 @@ export const apiClient = {
         if (isUuid) {
           const { data } = await supabase
             .from('profiles')
-            .select('id, email, first_name, last_name, role, phone, avatar_url, is_active, created_at, updated_at')
+            .select('id, email, first_name, last_name, role, phone, avatar_url, is_active, created_at, updated_at, org_id')
             .eq('id', effectiveUserId)
             .maybeSingle();
           profile = data;
