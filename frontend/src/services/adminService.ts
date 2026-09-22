@@ -10,18 +10,48 @@ export const adminService = {
    * Fetch aggregated system-wide dashboard stats
    */
   async getDashboardStats() {
-    // Always use direct table queries for accuracy — avoids view field name inconsistencies
-    // (view may return 'open_issues' vs 'active_issues' depending on which SQL fix was run)
-    const [h, beds, a, p, iss] = await Promise.all([
-      supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true),
-      supabase.from('beds').select('id', { count: 'exact', head: true }),
-      supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true),
-      // Match both PENDING (uppercase) and pending (lowercase) in case of data inconsistency
-      supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending'),
-      // Count issues that are NOT completed (handles both case variants)
-      supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)')
-    ]);
+    let orgId: string | undefined;
+    try {
+      const stored = localStorage.getItem('hms_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        orgId = parsed.org_id;
+      }
+      if (!orgId) {
+        const { data: authUser } = await supabase.auth.getUser();
+        if (authUser?.user?.id) {
+          const { data: prof } = await supabase.from('profiles').select('org_id').eq('id', authUser.user.id).maybeSingle();
+          orgId = prof?.org_id;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not determine active org_id:', e);
+    }
 
+    // SAFETY GUARD: Never run unfiltered queries — that would leak data across tenants.
+    // If org_id is still unknown, return zeroed stats and surface the error.
+    if (!orgId) {
+      console.error('[adminService.getDashboardStats] BLOCKED: org_id is undefined. Returning empty stats to prevent cross-tenant data leak.');
+      return {
+        statistics: {
+          total_hostels: 0,
+          total_capacity: 0,
+          occupied_beds: 0,
+          vacant_beds: 0,
+          occupancy_rate: 0,
+          pending_gate_passes: 0,
+          active_issues: 0
+        }
+      };
+    }
+
+    const [h, beds, a, p, iss] = await Promise.all([
+      supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
+      supabase.from('beds').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
+      supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
+      supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending').eq('org_id', orgId),
+      supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)').eq('org_id', orgId),
+    ]);
 
     const totalCapacity = beds.count || 0;
     const occupied = a.count || 0;
@@ -36,9 +66,10 @@ export const adminService = {
       active_issues: iss.count || 0
     };
 
-    console.log('[adminService.getDashboardStats] stats:', stats);
+    console.log('[adminService.getDashboardStats] orgId:', orgId, 'stats:', stats);
     return { statistics: stats };
   },
+
 
 
   /**
