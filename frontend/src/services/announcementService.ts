@@ -20,7 +20,33 @@ function saveLocalReadId(userId: string, announcementId: string) {
   } catch {}
 }
 
+const inFlightAnnouncements = new Map<string, Promise<{ data: Announcement[], count: number }>>();
+const inFlightSentAnnouncements = new Map<string, Promise<{ data: Announcement[], count: number }>>();
+let cachedHostels: { id: number; name: string }[] | null = null;
+let inFlightHostelsPromise: Promise<{ id: number; name: string }[]> | null = null;
+
 export const announcementService = {
+
+  async getHostels(): Promise<{ id: number; name: string }[]> {
+    if (cachedHostels) return cachedHostels;
+    if (inFlightHostelsPromise) return inFlightHostelsPromise;
+
+    inFlightHostelsPromise = (async () => {
+      try {
+        const { data, error } = await supabase.from('hostels').select('id, name').eq('is_active', true);
+        if (error) throw error;
+        cachedHostels = data || [];
+        return cachedHostels;
+      } catch (err) {
+        console.warn('Failed to load hostels for announcements:', err);
+        return [];
+      } finally {
+        inFlightHostelsPromise = null;
+      }
+    })();
+
+    return inFlightHostelsPromise;
+  },
 
   async getUserHostelId(role: string, userId: string): Promise<number | null> {
     try {
@@ -76,96 +102,124 @@ export const announcementService = {
   },
 
   async getAnnouncements(role: string, userId: string, page = 1, limit = 20): Promise<{ data: Announcement[], count: number }> {
-    const userRole = (role || '').toUpperCase();
-    const userHostelId = await this.getUserHostelId(role, userId);
-    const now = Date.now();
-
-    let query = supabase
-      .from('announcements')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    const { data: allData, error } = await query;
-
-    if (error) {
-      console.error('Failed to fetch announcements:', error);
-      throw error;
+    const cacheKey = `${role}_${userId}_${page}_${limit}`;
+    if (inFlightAnnouncements.has(cacheKey)) {
+      return inFlightAnnouncements.get(cacheKey)!;
     }
 
-    if (!allData || allData.length === 0) return { data: [], count: 0 };
+    const promise = (async () => {
+      try {
+        const userRole = (role || '').toUpperCase();
+        const userHostelId = await this.getUserHostelId(role, userId);
+        const now = Date.now();
 
-    // Filter non-expired, role-targeted, not self-sent, and hostel-appropriate announcements
-    const filtered = allData.filter(a => {
-      // 1. Expiry check
-      if (a.expires_at) {
-        const expiry = new Date(a.expires_at).getTime();
-        if (expiry <= now) return false;
-      }
+        let query = supabase
+          .from('announcements')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      // 2. Exclude announcements created by this user's role (they belong in "Sent")
-      const createdByRole = (a.created_by_role || '').toUpperCase();
-      if (createdByRole && createdByRole === userRole) {
-        return false;
-      }
+        const { data: allData, error } = await query;
 
-      // 3. Target role check - must be addressed to userRole or ALL
-      const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
-      if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
-        return false;
-      }
-
-      // 4. Hostel scoping check
-      if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
-        if (userHostelId) {
-          return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
-        } else {
-          return a.target_hostel_id === null;
+        if (error) {
+          console.error('Failed to fetch announcements:', error);
+          throw error;
         }
+
+        if (!allData || allData.length === 0) return { data: [], count: 0 };
+
+        // Filter non-expired, role-targeted, not self-sent, and hostel-appropriate announcements
+        const filtered = allData.filter(a => {
+          // 1. Expiry check
+          if (a.expires_at) {
+            const expiry = new Date(a.expires_at).getTime();
+            if (expiry <= now) return false;
+          }
+
+          // 2. Exclude announcements created by this user's role (they belong in "Sent")
+          const createdByRole = (a.created_by_role || '').toUpperCase();
+          if (createdByRole && createdByRole === userRole) {
+            return false;
+          }
+
+          // 3. Target role check - must be addressed to userRole or ALL
+          const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+          if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+            return false;
+          }
+
+          // 4. Hostel scoping check
+          if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
+            if (userHostelId) {
+              return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
+            } else {
+              return a.target_hostel_id === null;
+            }
+          }
+          return true;
+        });
+
+        // Guarantee recent first
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        const totalCount = filtered.length;
+        const from = (page - 1) * limit;
+        const pageData = filtered.slice(from, from + limit);
+
+        if (pageData.length === 0) return { data: [], count: totalCount };
+
+        // Read status from cached user reads (avoids network GET announcements_read calls)
+        const readIds = getLocalReadIds(userId);
+
+        const dataWithReadStatus = pageData.map(a => ({
+          ...a,
+          is_read: readIds.has(a.id)
+        }));
+
+        return { data: dataWithReadStatus, count: totalCount };
+      } finally {
+        inFlightAnnouncements.delete(cacheKey);
       }
-      return true;
-    });
+    })();
 
-    // Guarantee recent first
-    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-    const totalCount = filtered.length;
-    const from = (page - 1) * limit;
-    const pageData = filtered.slice(from, from + limit);
-
-    if (pageData.length === 0) return { data: [], count: totalCount };
-
-    // Read status from cached user reads (avoids network GET announcements_read calls)
-    const readIds = getLocalReadIds(userId);
-
-    const dataWithReadStatus = pageData.map(a => ({
-      ...a,
-      is_read: readIds.has(a.id)
-    }));
-
-    return { data: dataWithReadStatus, count: totalCount };
+    inFlightAnnouncements.set(cacheKey, promise);
+    return promise;
   },
 
   async getSentAnnouncements(role: string, page = 1, limit = 20): Promise<{ data: Announcement[], count: number }> {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabase
-      .from('announcements')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false });
-
-    if (role) {
-      query = query.eq('created_by_role', role);
+    const cacheKey = `${role}_${page}_${limit}`;
+    if (inFlightSentAnnouncements.has(cacheKey)) {
+      return inFlightSentAnnouncements.get(cacheKey)!;
     }
 
-    const { data, count, error } = await query.range(from, to);
+    const promise = (async () => {
+      try {
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
 
-    if (error) {
-      console.error('Failed to fetch sent announcements:', error);
-      throw error;
-    }
+        let query = supabase
+          .from('announcements')
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false });
 
-    return { data: data || [], count: count || 0 };
+        if (role) {
+          query = query.eq('created_by_role', role);
+        }
+
+        const { data, count, error } = await query.range(from, to);
+
+        if (error) {
+          console.error('Failed to fetch sent announcements:', error);
+          throw error;
+        }
+
+        return { data: data || [], count: count || 0 };
+      } finally {
+        inFlightSentAnnouncements.delete(cacheKey);
+      }
+    })();
+
+    inFlightSentAnnouncements.set(cacheKey, promise);
+    return promise;
   },
 
   async deleteAnnouncement(id: string): Promise<void> {

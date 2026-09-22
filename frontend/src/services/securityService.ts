@@ -5,6 +5,8 @@
 import { supabase } from '../lib/supabase';
 import type { GatePassRequest, VisitorLog } from '../types';
 
+let inFlightVisitorLogsPromise: Promise<VisitorLog[]> | null = null;
+
 export const securityService = {
   /**
    * Fetch gate pass movements
@@ -297,25 +299,37 @@ export const securityService = {
    * Fetch visitor checkpoint logs
    */
   async getVisitorLogs(): Promise<VisitorLog[]> {
-    const { data: logs, error } = await supabase
-      .from('visitor_logs')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
-      .order('check_in_time', { ascending: false });
+    if (inFlightVisitorLogsPromise) {
+      return inFlightVisitorLogsPromise;
+    }
 
-    let list = logs || [];
+    inFlightVisitorLogsPromise = (async () => {
+      try {
+        const { data: logs, error } = await supabase
+          .from('visitor_logs')
+          .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
+          .order('check_in_time', { ascending: false });
 
-    return list.map((v: any) => ({
-      ...v,
-      visitor_phone: v.mobile_number,
-      student_name: v.student?.student_name || v.student_name || 'Resident',
-      enrollment_no: v.student?.enrollment_no || v.enrollment_no || 'N/A',
-      hostel_id: v.hostel_id || v.hostel?.id,
-      hostel_name: v.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
-      student_room: v.room?.no || v.room_no || '101',
-      room_no: v.room?.no || v.room_no || '101',
-      floor: v.room?.floor !== undefined ? v.room?.floor : null,
-      status: v.check_out_time ? 'CHECKED_OUT' : 'CHECKED_IN'
-    }));
+        let list = logs || [];
+
+        return list.map((v: any) => ({
+          ...v,
+          visitor_phone: v.mobile_number,
+          student_name: v.student?.student_name || v.student_name || 'Resident',
+          enrollment_no: v.student?.enrollment_no || v.enrollment_no || 'N/A',
+          hostel_id: v.hostel_id || v.hostel?.id,
+          hostel_name: v.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
+          student_room: v.room?.no || v.room_no || '101',
+          room_no: v.room?.no || v.room_no || '101',
+          floor: v.room?.floor !== undefined ? v.room?.floor : null,
+          status: v.check_out_time ? 'CHECKED_OUT' : 'CHECKED_IN'
+        }));
+      } finally {
+        inFlightVisitorLogsPromise = null;
+      }
+    })();
+
+    return inFlightVisitorLogsPromise;
   },
 
   /**

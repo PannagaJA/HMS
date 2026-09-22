@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, LogOut, Download, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { VisitorLog, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { adminService } from '../../services/adminService';
 import { useNotification } from '../../context/NotificationContext';
 import { useDebounce } from '../../hooks/useDebounce';
 import { supabase } from '../../lib/supabase';
@@ -37,12 +38,13 @@ export const VisitorLogsManagement: React.FC = () => {
   const [modalHostelId, setModalHostelId] = useState('');
 
   useEffect(() => {
-    fetchLogsAndHostels();
+    fetchHostels();
+    fetchLogs();
 
     const channel = supabase
       .channel('admin_visitor_logs_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_logs' }, () => {
-        fetchLogsAndHostels();
+        fetchLogs();
       })
       .subscribe();
 
@@ -51,17 +53,22 @@ export const VisitorLogsManagement: React.FC = () => {
     };
   }, []);
 
-  const fetchLogsAndHostels = async () => {
+  const fetchHostels = async () => {
     try {
-      const [logsRes, hostelsRes] = await Promise.all([
-        apiClient.get<VisitorLog[]>('/hms/visitor-logs/'),
-        apiClient.get<Hostel[]>('/hms/hostels/'),
-      ]);
-      setLogs(logsRes.data || []);
-      setHostels(hostelsRes.data || []);
-      if (hostelsRes.data?.length > 0 && !modalHostelId) {
-        setModalHostelId(String(hostelsRes.data[0].id));
+      const hostelList = await adminService.getHostelsList();
+      setHostels(hostelList);
+      if (hostelList.length > 0 && !modalHostelId) {
+        setModalHostelId(String(hostelList[0].id));
       }
+    } catch (err) {
+      console.error('Failed to load hostels:', err);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const logsRes = await apiClient.get<VisitorLog[]>('/hms/visitor-logs/');
+      setLogs(logsRes.data || []);
     } catch (err) {
       console.error('Failed to load visitor logs:', err);
     }
@@ -89,7 +96,7 @@ export const VisitorLogsManagement: React.FC = () => {
       setStudentRoom('');
       setEnrollmentNo('');
       setPurpose('');
-      fetchLogsAndHostels();
+      fetchLogs();
     } catch (err) {
       showError('Failed to register visitor check-in');
     }
@@ -106,7 +113,7 @@ export const VisitorLogsManagement: React.FC = () => {
     try {
       await apiClient.post(`/hms/visitor-logs/${id}/checkout/`);
       showSuccess('Visitor checked out successfully.');
-      fetchLogsAndHostels();
+      fetchLogs();
     } catch (err) {
       showError('Failed to check out visitor');
     }

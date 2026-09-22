@@ -6,6 +6,10 @@ import { supabase } from '../lib/supabase';
 import type { HostelStudent, HostelIssue } from '../types';
 import { adminService } from './adminService';
 
+const inFlightGatePasses = new Map<string, Promise<any[]>>();
+const inFlightIssues = new Map<string, Promise<HostelIssue[]>>();
+const inFlightAssignedHostels = new Map<string, Promise<any[]>>();
+
 export const wardenService = {
   /**
    * Fetch scoped stats for the logged-in warden's assigned hostels
@@ -90,31 +94,45 @@ export const wardenService = {
     }
     if (!resolvedUserId) return [];
 
-    // 1. Primary: Check authoritative assignments table
-    const { data: assignments } = await supabase
-      .from('warden_hostel_assignments')
-      .select('hostel_id, hostel:hostels(*)')
-      .eq('warden_profile_id', resolvedUserId);
-
-    let managedHostels = (assignments || []).map((a: any) => a.hostel).filter(Boolean);
-
-    // 2. Secondary: Check direct warden_id on hostels table in Supabase
-    const { data: directHostels } = await supabase
-      .from('hostels')
-      .select('*')
-      .eq('is_active', true)
-      .eq('warden_id', resolvedUserId);
-
-    if (directHostels && directHostels.length > 0) {
-      for (const dh of directHostels) {
-        if (!managedHostels.some(h => String(h.id) === String(dh.id))) {
-          managedHostels.push(dh);
-        }
-      }
+    const cacheKey = String(resolvedUserId);
+    if (inFlightAssignedHostels.has(cacheKey)) {
+      return inFlightAssignedHostels.get(cacheKey)!;
     }
 
-    // 3. Only return explicitly assigned hostels (via warden_hostel_assignments or hostels.warden_id)
-    return managedHostels;
+    const promise = (async () => {
+      try {
+        // 1. Primary: Check authoritative assignments table
+        const { data: assignments } = await supabase
+          .from('warden_hostel_assignments')
+          .select('hostel_id, hostel:hostels(*)')
+          .eq('warden_profile_id', resolvedUserId);
+
+        let managedHostels = (assignments || []).map((a: any) => a.hostel).filter(Boolean);
+
+        // 2. Secondary: Check direct warden_id on hostels table in Supabase
+        const { data: directHostels } = await supabase
+          .from('hostels')
+          .select('*')
+          .eq('is_active', true)
+          .eq('warden_id', resolvedUserId);
+
+        if (directHostels && directHostels.length > 0) {
+          for (const dh of directHostels) {
+            if (!managedHostels.some(h => String(h.id) === String(dh.id))) {
+              managedHostels.push(dh);
+            }
+          }
+        }
+
+        // 3. Only return explicitly assigned hostels (via warden_hostel_assignments or hostels.warden_id)
+        return managedHostels;
+      } finally {
+        inFlightAssignedHostels.delete(cacheKey);
+      }
+    })();
+
+    inFlightAssignedHostels.set(cacheKey, promise);
+    return promise;
   },
 
   /**
@@ -136,31 +154,45 @@ export const wardenService = {
    * Fetch gate passes scoped for warden review directly from Supabase
    */
   async getGatePasses(hostelId?: string | number): Promise<any[]> {
-    let query = supabase
-      .from('gate_passes')
-      .select('*, student:students(*), hostel:hostels(*), room:hostel_rooms(id, no, floor)')
-      .order('created_at', { ascending: false });
-
-    if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
-      query = query.eq('hostel_id', hostelId);
+    const cacheKey = String(hostelId || 'ALL');
+    if (inFlightGatePasses.has(cacheKey)) {
+      return inFlightGatePasses.get(cacheKey)!;
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('[wardenService.getGatePasses] Supabase error:', error.code, error.message, error.details);
-      return [];
-    }
+    const promise = (async () => {
+      try {
+        let query = supabase
+          .from('gate_passes')
+          .select('*, student:students(*), hostel:hostels(*), room:hostel_rooms(id, no, floor)')
+          .order('created_at', { ascending: false });
 
-    console.log(`[wardenService.getGatePasses] Fetched ${data?.length ?? 0} gate passes`);
-    return (data || []).map((gp: any) => ({
-      ...gp,
-      student_name: gp.student?.student_name || 'Resident Student',
-      enrollment_no: gp.student?.enrollment_no || 'N/A',
-      hostel_name: gp.hostel?.name || 'Hostel Block',
-      room_no: gp.room?.no || '101',
-      floor: gp.room?.floor !== undefined ? gp.room?.floor : null,
-      hostel_id: gp.hostel_id || gp.hostel?.id
-    }));
+        if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
+          query = query.eq('hostel_id', hostelId);
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          console.error('[wardenService.getGatePasses] Supabase error:', error.code, error.message, error.details);
+          return [];
+        }
+
+        console.log(`[wardenService.getGatePasses] Fetched ${data?.length ?? 0} gate passes`);
+        return (data || []).map((gp: any) => ({
+          ...gp,
+          student_name: gp.student?.student_name || 'Resident Student',
+          enrollment_no: gp.student?.enrollment_no || 'N/A',
+          hostel_name: gp.hostel?.name || 'Hostel Block',
+          room_no: gp.room?.no || '101',
+          floor: gp.room?.floor !== undefined ? gp.room?.floor : null,
+          hostel_id: gp.hostel_id || gp.hostel?.id
+        }));
+      } finally {
+        inFlightGatePasses.delete(cacheKey);
+      }
+    })();
+
+    inFlightGatePasses.set(cacheKey, promise);
+    return promise;
   },
 
   /**
@@ -300,105 +332,119 @@ export const wardenService = {
   },
 
   /**
-   * Fetch issues scoped to warden's assigned hostels directly from Supabase in real-time
+   * Fetch hostel maintenance issues scoped for warden review directly from Supabase
    */
   async getIssues(hostelId?: string | number, statusFilter?: string): Promise<HostelIssue[]> {
-    let query = supabase
-      .from('issues')
-      .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
-      .order('created_at', { ascending: false });
-
-    if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
-      query = query.eq('hostel_id', hostelId);
+    const cacheKey = `${hostelId || 'ALL'}_${statusFilter || 'ALL'}`;
+    if (inFlightIssues.has(cacheKey)) {
+      return inFlightIssues.get(cacheKey)!;
     }
 
-    if (statusFilter && statusFilter !== 'ALL' && statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
-    }
-
-    const { data: issues, error } = await query;
-    if (error) {
-      console.error('[wardenService.getIssues] Supabase error:', error.code, error.message, error.details);
-      return [];
-    }
-
-    const issueList = issues || [];
-    const issueIds = issueList.map((i: any) => i.id);
-
-    // Fetch real-time issue_updates from Supabase
-    const allUpdatesMap: Record<number, any[]> = {};
-    if (issueIds.length > 0) {
+    const promise = (async () => {
       try {
-        const { data: rawUpdates, error: upError } = await supabase
-          .from('issue_updates')
-          .select('*')
-          .in('issue_id', issueIds)
+        let query = supabase
+          .from('issues')
+          .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
           .order('created_at', { ascending: false });
 
-        if (!upError && rawUpdates && rawUpdates.length > 0) {
-          // Resolve updater profiles in batch
-          const updaterUuids = Array.from(new Set(rawUpdates.map((u: any) => u.updated_by).filter(Boolean)));
-          const profilesMap: Record<string, string> = {};
-          if (updaterUuids.length > 0) {
-            const { data: profs } = await supabase
-              .from('profiles')
-              .select('id, first_name, last_name, email, role')
-              .in('id', updaterUuids);
-            if (profs) {
-              profs.forEach((p: any) => {
-                const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-                const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || '');
-                const displayName = fullName || p.email || '';
-                profilesMap[p.id] = roleLabel && displayName ? `${displayName} (${roleLabel})` : displayName;
+        if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
+          query = query.eq('hostel_id', hostelId);
+        }
+
+        if (statusFilter && statusFilter !== 'ALL' && statusFilter !== 'all') {
+          query = query.eq('status', statusFilter);
+        }
+
+        const { data: issues, error } = await query;
+        if (error) {
+          console.error('[wardenService.getIssues] Supabase error:', error.code, error.message, error.details);
+          return [];
+        }
+
+        const issueList = issues || [];
+        const issueIds = issueList.map((i: any) => i.id);
+
+        // Fetch real-time issue_updates from Supabase
+        const allUpdatesMap: Record<number, any[]> = {};
+        if (issueIds.length > 0) {
+          try {
+            const { data: rawUpdates, error: upError } = await supabase
+              .from('issue_updates')
+              .select('*')
+              .in('issue_id', issueIds)
+              .order('created_at', { ascending: false });
+
+            if (!upError && rawUpdates && rawUpdates.length > 0) {
+              // Resolve updater profiles in batch
+              const updaterUuids = Array.from(new Set(rawUpdates.map((u: any) => u.updated_by).filter(Boolean)));
+              const profilesMap: Record<string, string> = {};
+              if (updaterUuids.length > 0) {
+                const { data: profs } = await supabase
+                  .from('profiles')
+                  .select('id, first_name, last_name, email, role')
+                  .in('id', updaterUuids);
+                if (profs) {
+                  profs.forEach((p: any) => {
+                    const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                    const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || '');
+                    const displayName = fullName || p.email || '';
+                    profilesMap[p.id] = roleLabel && displayName ? `${displayName} (${roleLabel})` : displayName;
+                  });
+                }
+              }
+
+              rawUpdates.forEach((u: any) => {
+                const resolvedName = u.updated_by_name || (u.updated_by ? profilesMap[u.updated_by] : '') || '';
+                const formatted = {
+                  ...u,
+                  updated_by_name: resolvedName,
+                };
+                if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
+                allUpdatesMap[u.issue_id].push(formatted);
               });
             }
+          } catch (e) {
+            console.warn('Real-time issue_updates query error:', e);
+          }
+        }
+
+        return issueList.map((i: any) => {
+          let img = i.image_url || null;
+          let desc = i.description || '';
+          if (!img && desc.includes('[ATTACHMENT]:')) {
+            const parts = desc.split('[ATTACHMENT]:');
+            desc = parts[0].trim();
+            img = parts[1]?.trim() || null;
           }
 
-          rawUpdates.forEach((u: any) => {
-            const resolvedName = u.updated_by_name || (u.updated_by ? profilesMap[u.updated_by] : '') || '';
-            const formatted = {
-              ...u,
-              updated_by_name: resolvedName,
-            };
-            if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
-            allUpdatesMap[u.issue_id].push(formatted);
-          });
-        }
-      } catch (e) {
-        console.warn('Real-time issue_updates query error:', e);
+          const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
+            ...u,
+            updated_by_name: u.updated_by_name || ''
+          }));
+
+          updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+          return {
+            ...i,
+            description: desc,
+            image_url: img,
+            student_name: i.student?.student_name || i.student_name || '',
+            enrollment_no: i.student?.enrollment_no || i.enrollment_no || '',
+            hostel: i.hostel_id || i.hostel?.id,
+            hostel_id: i.hostel_id || i.hostel?.id,
+            hostel_name: i.hostel?.name || '',
+            room_no: i.room?.no || i.room_no || '',
+            floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
+            updates: updatesList
+          };
+        });
+      } finally {
+        inFlightIssues.delete(cacheKey);
       }
-    }
+    })();
 
-    return issueList.map((i: any) => {
-      let img = i.image_url || null;
-      let desc = i.description || '';
-      if (!img && desc.includes('[ATTACHMENT]:')) {
-        const parts = desc.split('[ATTACHMENT]:');
-        desc = parts[0].trim();
-        img = parts[1]?.trim() || null;
-      }
-
-      const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
-        ...u,
-        updated_by_name: u.updated_by_name || ''
-      }));
-
-      updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-      return {
-        ...i,
-        description: desc,
-        image_url: img,
-        student_name: i.student?.student_name || i.student_name || '',
-        enrollment_no: i.student?.enrollment_no || i.enrollment_no || '',
-        hostel: i.hostel_id || i.hostel?.id,
-        hostel_id: i.hostel_id || i.hostel?.id,
-        hostel_name: i.hostel?.name || '',
-        room_no: i.room?.no || i.room_no || '',
-        floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
-        updates: updatesList
-      };
-    });
+    inFlightIssues.set(cacheKey, promise);
+    return promise;
   },
 
   /**

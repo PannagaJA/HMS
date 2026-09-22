@@ -34,49 +34,47 @@ export const WardenIssueManagement: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
-    fetchIssuesAndHostels();
+    if (!user?.id) return;
+    fetchHostels();
+    fetchIssues();
 
     const channel = supabase
       .channel('warden_issues_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
-        refreshIssuesOnly();
+        fetchIssues();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_updates' }, () => {
-        refreshIssuesOnly();
+        fetchIssues();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id, user?.role]);
 
-  const refreshIssuesOnly = async () => {
-    try {
-      const allIssues = await wardenService.getIssues();
-      setIssues(allIssues);
-    } catch (err) {
-      console.warn('Realtime refresh issues error:', err);
-    }
-  };
-
-  const fetchIssuesAndHostels = async () => {
-    setLoading(true);
+  const fetchHostels = async () => {
     try {
       let hostList: Hostel[] = [];
       if (user?.role === 'WARDEN') {
         hostList = await wardenService.getAssignedHostels(user.id);
       } else {
-        hostList = await adminService.getHostels();
+        hostList = await adminService.getHostelsList();
       }
-
-      const allIssues = await wardenService.getIssues();
-
-      setIssues(allIssues);
       setHostels(hostList);
       setSelectedHostelId('');
     } catch (err) {
-      console.error('Failed to load issues or hostels', err);
+      console.error('Failed to load hostels for issues', err);
+    }
+  };
+
+  const fetchIssues = async () => {
+    setLoading(true);
+    try {
+      const allIssues = await wardenService.getIssues();
+      setIssues(allIssues);
+    } catch (err) {
+      console.error('Failed to load issues', err);
     } finally {
       setLoading(false);
     }

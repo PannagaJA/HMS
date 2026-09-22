@@ -76,7 +76,7 @@ export const Announcements: React.FC = () => {
 
   const fetchHostels = async () => {
     try {
-      const { data } = await supabase.from('hostels').select('id, name').eq('is_active', true);
+      const data = await announcementService.getHostels();
       if (data) setHostels(data);
     } catch (err) {
       console.warn('Failed to load hostels', err);
@@ -84,11 +84,12 @@ export const Announcements: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!user?.id) return;
     fetchAnnouncements();
-  }, [user, activeTab, page, pageSize]); // Re-fetch on tab, page or pageSize change
+  }, [user?.id, user?.role, activeTab, page, pageSize]); // Re-fetch only on actual user ID/role change, tab, page or pageSize change
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
     // Realtime Websocket Updates
     const channel = supabase
@@ -98,7 +99,7 @@ export const Announcements: React.FC = () => {
         
         if (payload.eventType === 'INSERT') {
           const newA = payload.new as Announcement;
-          const userRole = (user.role || '').toUpperCase();
+          const userRole = (user?.role || '').toUpperCase();
           const targetRoles = (newA.target_roles || []).map((r: string) => r.toUpperCase());
           const createdByRole = (newA.created_by_role || '').toUpperCase();
           const isNotExpired = !newA.expires_at || new Date(newA.expires_at).getTime() > Date.now();
@@ -134,7 +135,7 @@ export const Announcements: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, activeTab]);
+  }, [user?.id, user?.role, activeTab, pageSize]);
 
   const handleMarkRead = async (id: string) => {
     if (!user) return;

@@ -6,10 +6,43 @@ import { supabase } from '../lib/supabase';
 import type { Hostel, HostelRoom, HostelStudent } from '../types';
 
 let inFlightDashboardStatsPromise: Promise<any> | null = null;
-
 let inFlightWardensPromise: Promise<any[]> | null = null;
+let cachedHostelsList: Hostel[] | null = null;
+let inFlightHostelsListPromise: Promise<Hostel[]> | null = null;
 
 export const adminService = {
+
+  /**
+   * Fetch lightweight hostel list for filters and dropdowns (deduplicated & cached)
+   */
+  async getHostelsList(): Promise<Hostel[]> {
+    if (cachedHostelsList && cachedHostelsList.length > 0) {
+      return cachedHostelsList;
+    }
+    if (inFlightHostelsListPromise) {
+      return inFlightHostelsListPromise;
+    }
+
+    inFlightHostelsListPromise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('hostels')
+          .select('id, name, gender, floor_count')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        if (error) throw error;
+        cachedHostelsList = (data || []) as Hostel[];
+        return cachedHostelsList;
+      } catch (err) {
+        console.warn('Failed to load hostels list:', err);
+        return [];
+      } finally {
+        inFlightHostelsListPromise = null;
+      }
+    })();
+
+    return inFlightHostelsListPromise;
+  },
 
   /**
    * Fetch aggregated system-wide dashboard stats including telemetry, 10 recent gate passes, and 7-day movement trends
