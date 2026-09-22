@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, Building2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, Building2, Search, Tag, Filter } from 'lucide-react';
 import type { MealType, MenuItem, Menu, Hostel } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -32,15 +32,22 @@ export const MenuManagement: React.FC = () => {
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [activeDay, setActiveDay] = useState<string>('0');
   const [activeTab, setActiveTab] = useState<'timetable' | 'catalog'>('timetable');
+
+  // Catalog Filtering & Search
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
+  const [catalogSearch, setCatalogSearch] = useState<string>('');
 
   // Modal State for Food Item
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemCategory, setItemCategory] = useState('Main Course');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [itemDesc, setItemDesc] = useState('');
   const [isVeg, setIsVeg] = useState(true);
 
@@ -48,6 +55,7 @@ export const MenuManagement: React.FC = () => {
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [targetMealType, setTargetMealType] = useState<MealType | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [slotCategoryFilter, setSlotCategoryFilter] = useState<string>('ALL');
   const [slotStartTime, setSlotStartTime] = useState('07:30');
   const [slotEndTime, setSlotEndTime] = useState('09:30');
   const [isSaving, setIsSaving] = useState(false);
@@ -71,15 +79,17 @@ export const MenuManagement: React.FC = () => {
         loadedHostels = await adminService.getHostelsList();
       }
 
-      const [mealTypesData, menuItemsData] = await Promise.all([
-        diningService.getMealTypes(),
-        diningService.getMenuItems(),
-      ]);
-
+      const mealTypesData = await diningService.getMealTypes();
       setHostels(loadedHostels);
       setMealTypes(mealTypesData || []);
-      setMenuItems(menuItemsData || []);
-      setSelectedHostelId('');
+
+      if (loadedHostels.length > 0 && !selectedHostelId) {
+        setSelectedHostelId(String(loadedHostels[0].id));
+      } else if (!loadedHostels.length) {
+        const { menuItems: itemsData, categories: categoriesData } = await diningService.getHostelDiningData();
+        setMenuItems(itemsData || []);
+        setCategories(categoriesData || []);
+      }
     } catch (err) {
       console.error('Failed to load menu planner data', err);
     }
@@ -87,8 +97,12 @@ export const MenuManagement: React.FC = () => {
 
   const fetchMenus = async (hostelId: string) => {
     try {
-      const menusData = await diningService.getWeeklyMenus(hostelId);
+      const { menus: menusData, menuItems: itemsData, categories: categoriesData } =
+        await diningService.getHostelDiningData(hostelId);
+
       setMenus(menusData || []);
+      setMenuItems(itemsData || []);
+      setCategories(categoriesData || []);
     } catch (err) {
       console.error('Failed to load menus for hostel', err);
     }
@@ -97,7 +111,10 @@ export const MenuManagement: React.FC = () => {
   const handleOpenAddItem = () => {
     setEditingItem(null);
     setItemName('');
-    setItemCategory('Main Course');
+    const defaultCat = categories[0] || 'Main Course';
+    setItemCategory(defaultCat);
+    setIsCustomCategory(false);
+    setCustomCategoryInput('');
     setItemDesc('');
     setIsVeg(true);
     setShowItemModal(true);
@@ -106,7 +123,16 @@ export const MenuManagement: React.FC = () => {
   const handleOpenEditItem = (item: MenuItem) => {
     setEditingItem(item);
     setItemName(item.name);
-    setItemCategory(item.category || 'Main Course');
+    const cat = item.category || 'Main Course';
+    if (categories.includes(cat)) {
+      setItemCategory(cat);
+      setIsCustomCategory(false);
+      setCustomCategoryInput('');
+    } else {
+      setItemCategory('__custom__');
+      setIsCustomCategory(true);
+      setCustomCategoryInput(cat);
+    }
     setItemDesc(item.description || '');
     setIsVeg(Boolean(item.is_veg ?? item.vegetarian ?? true));
     setShowItemModal(true);
@@ -114,9 +140,13 @@ export const MenuManagement: React.FC = () => {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    const finalCategory = isCustomCategory
+      ? (customCategoryInput.trim() || 'Main Course')
+      : itemCategory;
+
     const payload = {
       name: itemName,
-      category: itemCategory,
+      category: finalCategory,
       description: itemDesc,
       is_veg: isVeg,
       vegetarian: isVeg,
@@ -131,8 +161,16 @@ export const MenuManagement: React.FC = () => {
         showSuccess(`Food item "${itemName}" created successfully.`);
       }
       setShowItemModal(false);
-      const itemsData = await diningService.getMenuItems();
-      setMenuItems(itemsData || []);
+      if (selectedHostelId) {
+        fetchMenus(selectedHostelId);
+      } else {
+        const [itemsData, categoriesData] = await Promise.all([
+          diningService.getMenuItems(),
+          diningService.getCategories(),
+        ]);
+        setMenuItems(itemsData || []);
+        setCategories(categoriesData || []);
+      }
     } catch (err) {
       showError('Failed to save food item');
     }
@@ -149,10 +187,15 @@ export const MenuManagement: React.FC = () => {
     try {
       await diningService.deleteMenuItem(id);
       showSuccess('Food item removed successfully.');
-      const itemsData = await diningService.getMenuItems();
-      setMenuItems(itemsData || []);
       if (selectedHostelId) {
         fetchMenus(selectedHostelId);
+      } else {
+        const [itemsData, categoriesData] = await Promise.all([
+          diningService.getMenuItems(),
+          diningService.getCategories(),
+        ]);
+        setMenuItems(itemsData || []);
+        setCategories(categoriesData || []);
       }
     } catch (err) {
       showError('Failed to delete food item');
@@ -165,6 +208,7 @@ export const MenuManagement: React.FC = () => {
       return;
     }
     setTargetMealType(mealType);
+    setSlotCategoryFilter('ALL');
     const rawStart = mealType.start_time || mealType.time_from || '07:30';
     const rawEnd = mealType.end_time || mealType.time_to || '09:30';
     setSlotStartTime(rawStart.substring(0, 5));
@@ -475,41 +519,141 @@ export const MenuManagement: React.FC = () => {
   )}
 
       {activeTab === 'catalog' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {menuItems.map((item) => {
-            const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
-            return (
-              <div
-                key={item.id}
-                className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center justify-between"
+        <div className="space-y-4">
+          {/* Category Filter Pills & Search Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 shadow-xs">
+            {/* Category Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              <button
+                onClick={() => setSelectedCategoryFilter('ALL')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  selectedCategoryFilter === 'ALL'
+                    ? 'bg-[#0B1437] text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${isVegetarian ? 'border-emerald-500' : 'border-rose-500'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 leading-tight">{item.name}</h4>
-                    <p className="text-xs text-slate-400">{item.category || (isVegetarian ? 'Vegetarian' : 'Non-Vegetarian')}</p>
-                  </div>
-                </div>
+                All Items ({menuItems.length})
+              </button>
+              {categories.map((cat) => {
+                const count = menuItems.filter(
+                  (i) => (i.category || 'Main Course').trim().toLowerCase() === cat.trim().toLowerCase()
+                ).length;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategoryFilter(cat)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                      selectedCategoryFilter === cat
+                        ? 'bg-[#0B1437] text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {cat} {count > 0 && <span className="opacity-75 font-normal">({count})</span>}
+                  </button>
+                );
+              })}
+            </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleOpenEditItem(item)}
-                    className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            {/* Quick Search */}
+            <div className="relative shrink-0 sm:w-60">
+              <input
+                type="text"
+                placeholder="Search catalog items..."
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                className="w-full bg-slate-50 pl-8 pr-3 py-1.5 rounded-full text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2" />
+            </div>
+          </div>
+
+          {/* Catalog Cards Grid */}
+          {(() => {
+            const filteredItems = menuItems.filter((item) => {
+              const matchesCategory =
+                selectedCategoryFilter === 'ALL' ||
+                (item.category || 'Main Course').trim().toLowerCase() === selectedCategoryFilter.trim().toLowerCase();
+              const matchesSearch =
+                !catalogSearch.trim() ||
+                item.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+                (item.description && item.description.toLowerCase().includes(catalogSearch.toLowerCase())) ||
+                (item.category && item.category.toLowerCase().includes(catalogSearch.toLowerCase()));
+              return matchesCategory && matchesSearch;
+            });
+
+            if (filteredItems.length === 0) {
+              return (
+                <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 text-center space-y-2">
+                  <UtensilsCrossed className="w-8 h-8 text-slate-300 mx-auto" />
+                  <h3 className="font-bold text-slate-700 text-sm">No food items found</h3>
+                  <p className="text-xs text-slate-400">
+                    {catalogSearch || selectedCategoryFilter !== 'ALL'
+                      ? 'No items match your filter criteria. Try clearing search or selecting another category.'
+                      : 'No food items in the catalog yet. Click "+ Add Food Item" to create dishes.'}
+                  </p>
                 </div>
+              );
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredItems.map((item) => {
+                  const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Clean Veg/Non-Veg Square Stamp Indicator */}
+                        <div
+                          className={`w-4 h-4 rounded-sm border shrink-0 flex items-center justify-center ${
+                            isVegetarian ? 'border-emerald-600' : 'border-rose-600'
+                          }`}
+                          title={isVegetarian ? 'Vegetarian' : 'Non-Vegetarian'}
+                        >
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              isVegetarian ? 'bg-emerald-600' : 'bg-rose-600'
+                            }`}
+                          />
+                        </div>
+
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-bold text-slate-800 leading-tight truncate">{item.name}</h4>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200/60">
+                              {item.category || (isVegetarian ? 'Vegetarian' : 'Non-Vegetarian')}
+                            </span>
+                          </div>
+                          {item.description && (
+                            <p className="text-[11px] text-slate-400 mt-1 truncate">{item.description}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <button
+                          onClick={() => handleOpenEditItem(item)}
+                          className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title="Edit Item"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Delete Item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             );
-          })}
+          })()}
         </div>
       )}
 
@@ -543,20 +687,45 @@ export const MenuManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Category <span className="text-red-500">*</span></label>
-                <Select value={itemCategory} onValueChange={(val) => setItemCategory(val)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Breakfast">Breakfast</SelectItem>
-                    <SelectItem value="Main Course">Main Course</SelectItem>
-                    <SelectItem value="Curry / Gravy">Curry / Gravy</SelectItem>
-                    <SelectItem value="Rice & Breads">Rice & Breads</SelectItem>
-                    <SelectItem value="Snacks & Beverages">Snacks & Beverages</SelectItem>
-                    <SelectItem value="Dessert">Dessert</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700">Category <span className="text-red-500">*</span></label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomCategory(!isCustomCategory);
+                      if (!isCustomCategory) {
+                        setCustomCategoryInput('');
+                      }
+                    }}
+                    className="text-[11px] text-teal-700 hover:underline font-semibold cursor-pointer"
+                  >
+                    {isCustomCategory ? 'Choose from list' : '+ Custom Category'}
+                  </button>
+                </div>
+
+                {isCustomCategory ? (
+                  <input
+                    type="text"
+                    required
+                    value={customCategoryInput}
+                    onChange={(e) => setCustomCategoryInput(e.target.value)}
+                    placeholder="Enter new category name..."
+                    className="w-full bg-slate-50 px-4 py-2.5 rounded-2xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437]"
+                  />
+                ) : (
+                  <Select value={itemCategory} onValueChange={(val) => setItemCategory(val)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div>
@@ -655,44 +824,80 @@ export const MenuManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-2">
-                  Select Menu Items ({selectedItemIds.length} Selected)
-                </label>
-                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                  {menuItems.map((item) => {
-                    const isSelected = selectedItemIds.includes(item.id);
-                    const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
-
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => handleToggleItemSelection(item.id)}
-                        className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-50/60 border-emerald-300'
-                            : 'bg-slate-50 border-slate-200/80 hover:border-slate-300'
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-700">
+                    Select Menu Items ({selectedItemIds.length} Selected)
+                  </label>
+                  {/* Category Filter Chips for Slot Config */}
+                  <div className="flex items-center gap-1 overflow-x-auto max-w-[200px] scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setSlotCategoryFilter('ALL')}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all cursor-pointer ${
+                        slotCategoryFilter === 'ALL'
+                          ? 'bg-[#0B1437] text-white'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {categories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSlotCategoryFilter(cat)}
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap transition-all cursor-pointer ${
+                          slotCategoryFilter === cat
+                            ? 'bg-[#0B1437] text-white'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                         }`}
                       >
-                      <div className="flex items-center gap-2.5">
-                        <span className={`w-2.5 h-2.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">{item.name}</p>
-                          <p className="text-[10px] text-slate-400">{item.category || (isVegetarian ? 'Vegetarian' : 'Non-Vegetarian')}</p>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {menuItems
+                    .filter((item) => {
+                      if (slotCategoryFilter === 'ALL') return true;
+                      return (item.category || 'Main Course').trim().toLowerCase() === slotCategoryFilter.trim().toLowerCase();
+                    })
+                    .map((item) => {
+                      const isSelected = selectedItemIds.includes(item.id);
+                      const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleToggleItemSelection(item.id)}
+                          className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-50/60 border-emerald-300'
+                              : 'bg-slate-50 border-slate-200/80 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{item.category || (isVegetarian ? 'Vegetarian' : 'Non-Vegetarian')}</p>
+                            </div>
+                          </div>
+
+                          <div className={`w-5 h-5 rounded-lg border shrink-0 flex items-center justify-center transition-all ${
+                            isSelected ? 'bg-[#0B1437] border-[#0B1437] text-white' : 'border-slate-300'
+                          }`}>
+                            {isSelected && <Check className="w-3 h-3" />}
+                          </div>
                         </div>
-                      </div>
-
-                      <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
-                        isSelected ? 'bg-[#0B1437] border-[#0B1437] text-white' : 'border-slate-300'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3" />}
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                </div>
               </div>
-            </div>
 
-            <div className="pt-4 flex justify-end gap-2 border-t border-slate-100">
+              <div className="pt-4 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowConfigureModal(false)}
