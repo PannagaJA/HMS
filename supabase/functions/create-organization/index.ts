@@ -78,12 +78,24 @@ serve(async (req: Request) => {
     });
 
     if (profileError) {
-      console.error("Profile upsert error:", profileError);
-      throw profileError || new Error("Failed to create admin profile.");
+      console.warn("Could not upsert profile info:", profileError);
     }
 
-    // 4. Send Email via Resend
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    // 4. Seed Default Meal Types for the Organization
+    const defaultMealTypes = [
+      { name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:00:00', org_id: org_id },
+      { name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:00:00', org_id: org_id },
+      { name: 'SN', description: 'Snacks', time_from: '16:30:00', time_to: '17:30:00', org_id: org_id },
+      { name: 'DN', description: 'Dinner', time_from: '19:30:00', time_to: '21:00:00', org_id: org_id }
+    ];
+    
+    const { error: seedError } = await supabaseAdmin.from('meal_types').insert(defaultMealTypes);
+    if (seedError) {
+      console.warn("Could not seed default meal types for new organization:", seedError);
+    }
+
+    // 5. Send Welcome Email via Resend
+    const resendApiKey = Deno.env.get('RESEND_API_KEY') || '';
 
     if (!resendApiKey) {
       console.warn("RESEND_API_KEY not provided. Organization created but email not sent.");

@@ -940,7 +940,7 @@ FOR EACH ROW EXECUTE FUNCTION public.trig_fn_snapshot_student_location();
 CREATE OR REPLACE FUNCTION public.trig_fn_set_org_id()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.org_id IS NULL THEN
+  IF NEW.org_id IS NULL OR NEW.org_id = '00000000-0000-0000-0000-000000000001'::uuid THEN
     NEW.org_id := public.user_org_id();
   END IF;
   RETURN NEW;
@@ -994,6 +994,10 @@ CREATE TRIGGER tr_set_org_id_announcements BEFORE INSERT ON public.announcements
 
 DROP TRIGGER IF EXISTS tr_set_org_id_announcements_read ON public.announcements_read;
 CREATE TRIGGER tr_set_org_id_announcements_read BEFORE INSERT ON public.announcements_read FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+CREATE TRIGGER tr_set_org_id_issues BEFORE INSERT ON public.issues FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+CREATE TRIGGER tr_set_org_id_issue_updates BEFORE INSERT ON public.issue_updates FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+CREATE TRIGGER tr_set_org_id_gate_passes BEFORE INSERT ON public.gate_passes FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
+CREATE TRIGGER tr_set_org_id_meal_skips BEFORE INSERT ON public.student_meal_skips FOR EACH ROW EXECUTE FUNCTION public.trig_fn_set_org_id();
 
 -- 15. Enable RLS
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
@@ -1239,6 +1243,7 @@ CREATE POLICY avatar_delete ON storage.objects FOR DELETE TO authenticated
 USING (bucket_id = 'avatars' AND ((storage.foldername(name))[1] = auth.uid()::text OR public.is_admin()));
 
 -- 18. Views
+DROP VIEW IF EXISTS public.view_admin_dashboard_stats;
 CREATE OR REPLACE VIEW public.view_admin_dashboard_stats 
 WITH (security_invoker = true) AS
 SELECT 
@@ -1287,23 +1292,23 @@ REVOKE UPDATE ON public.gate_passes FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.create_room_with_beds FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.resize_room_capacity FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.decommission_room FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.allocate_student_room FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.vacate_student_room FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.update_issue_status FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.allocate_student_room(BIGINT, BIGINT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.vacate_student_room(BIGINT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_issue_status(BIGINT, TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.approve_gate_pass FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.reject_gate_pass FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.log_gate_movement FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.checkout_visitor FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.checkout_visitor(BIGINT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.update_my_profile FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.create_room_with_beds TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resize_room_capacity TO authenticated;
 GRANT EXECUTE ON FUNCTION public.decommission_room TO authenticated;
-GRANT EXECUTE ON FUNCTION public.allocate_student_room TO authenticated;
-GRANT EXECUTE ON FUNCTION public.vacate_student_room TO authenticated;
-GRANT EXECUTE ON FUNCTION public.update_issue_status TO authenticated;
+GRANT EXECUTE ON FUNCTION public.allocate_student_room(BIGINT, BIGINT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.vacate_student_room(BIGINT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_issue_status(BIGINT, TEXT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.approve_gate_pass TO authenticated;
 GRANT EXECUTE ON FUNCTION public.reject_gate_pass TO authenticated;
 GRANT EXECUTE ON FUNCTION public.log_gate_movement TO authenticated;
-GRANT EXECUTE ON FUNCTION public.checkout_visitor TO authenticated;
+GRANT EXECUTE ON FUNCTION public.checkout_visitor(BIGINT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_my_profile TO authenticated;
