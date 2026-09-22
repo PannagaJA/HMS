@@ -20,7 +20,7 @@ export const IssueTracking: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const [issues, setIssues] = useState<HostelIssue[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
-  const [selectedHostelId, setSelectedHostelId] = useState<string>('');
+  const [selectedHostelId, setSelectedHostelId] = useState<string>('ALL');
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const [selectedIssue, setSelectedIssue] = useState<HostelIssue | null>(null);
   const [viewingUpdatesIssue, setViewingUpdatesIssue] = useState<HostelIssue | null>(null);
@@ -54,6 +54,8 @@ export const IssueTracking: React.FC = () => {
     try {
       const hostelList = await adminService.getHostelsList();
       setHostels(hostelList);
+      // Auto-select 'ALL' on first load so issues display without manual hostel selection
+      setSelectedHostelId((prev) => prev || 'ALL');
     } catch (err) {
       console.error('Failed to load hostels for issue tracking', err);
     }
@@ -117,7 +119,11 @@ export const IssueTracking: React.FC = () => {
   };
 
   const filtered = issues.filter((i) => {
-    if (!selectedHostelId) return false;
+    if (!selectedHostelId || selectedHostelId === 'ALL') {
+      // When 'ALL' or unset, skip hostel filtering — just apply status filter below
+      const matchesStatus = activeFilter === 'ALL' || i.status === activeFilter;
+      return matchesStatus;
+    }
 
     // 1. Filter by Status
     const matchesStatus = activeFilter === 'ALL' || i.status === activeFilter;

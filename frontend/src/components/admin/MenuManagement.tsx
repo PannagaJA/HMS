@@ -79,7 +79,12 @@ export const MenuManagement: React.FC = () => {
       setHostels(loadedHostels);
       setMealTypes(mealTypesData || []);
       setMenuItems(menuItemsData || []);
-      setSelectedHostelId('');
+      // Auto-select first hostel on initial load so menu data fetches immediately.
+      // Only update if not already set to avoid overwriting a user's active selection.
+      setSelectedHostelId((prev) => {
+        if (prev) return prev;
+        return loadedHostels.length > 0 ? String(loadedHostels[0].id) : '';
+      });
     } catch (err) {
       console.error('Failed to load menu planner data', err);
     }

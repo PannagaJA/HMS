@@ -25,7 +25,7 @@ export const WardenGatePassManagement: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
-  const [selectedHostelId, setSelectedHostelId] = useState<string>('');
+  const [selectedHostelId, setSelectedHostelId] = useState<string>('ALL');
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [actionModalPass, setActionModalPass] = useState<GatePassRequest | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
@@ -110,8 +110,7 @@ export const WardenGatePassManagement: React.FC = () => {
 
   // 1. Filter by Selected Hostel first
   const hostelFilteredPasses = passes.filter((p: any) => {
-    if (!selectedHostelId) return false;
-    if (selectedHostelId === 'ALL') {
+    if (!selectedHostelId || selectedHostelId === 'ALL') {
       return true;
     }
 
