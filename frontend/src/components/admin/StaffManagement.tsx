@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Phone, Mail } from 'lucide-react';
 import type { HostelWarden, HostelCaretaker } from '../../types';
-import { apiClient } from '../../api/apiClient';
+import { adminService } from '../../services/adminService';
 import { useNotification } from '../../context/NotificationContext';
 
 export const StaffManagement: React.FC = () => {
@@ -27,13 +27,13 @@ export const StaffManagement: React.FC = () => {
   const fetchStaff = async () => {
     try {
       const [wRes, cRes, sRes] = await Promise.all([
-        apiClient.get<HostelWarden[]>('/hms/wardens/'),
-        apiClient.get<HostelCaretaker[]>('/hms/caretakers/'),
-        apiClient.get<any[]>('/hms/security/'),
+        adminService.getWardens(),
+        adminService.getCaretakers(),
+        adminService.getSecurityStaff(),
       ]);
-      setWardens(wRes.data || []);
-      setCaretakers(cRes.data || []);
-      setSecurityStaff(sRes.data || []);
+      setWardens(wRes || []);
+      setCaretakers(cRes || []);
+      setSecurityStaff(sRes || []);
     } catch (err) {
       console.error('Failed to load staff list', err);
     }
@@ -77,22 +77,26 @@ export const StaffManagement: React.FC = () => {
       } else if (activeTab === 'security') {
         payload.designation = designation || 'Security Guard';
       }
-
-      const endpointMap = {
-        'wardens': '/hms/wardens/',
-        'caretakers': '/hms/caretakers/',
-        'security': '/hms/security/'
-      };
       
       const roleName = activeTab === 'wardens' ? 'Warden' : activeTab === 'caretakers' ? 'Caretaker' : 'Security Staff';
 
       if (editingStaffId) {
-        const endpoint = `${endpointMap[activeTab]}${editingStaffId}/`;
-        await apiClient.put(endpoint, payload);
+        if (activeTab === 'wardens') {
+          await adminService.updateWarden(editingStaffId, payload);
+        } else if (activeTab === 'caretakers') {
+          await adminService.updateCaretaker(editingStaffId, payload);
+        } else {
+          await adminService.updateSecurityStaff(editingStaffId, payload);
+        }
         showSuccess(`${roleName} updated successfully.`);
       } else {
-        const endpoint = endpointMap[activeTab];
-        await apiClient.post(endpoint, payload);
+        if (activeTab === 'wardens') {
+          await adminService.createWarden(payload);
+        } else if (activeTab === 'caretakers') {
+          await adminService.createCaretaker(payload);
+        } else {
+          await adminService.createSecurityStaff(payload);
+        }
         if (email) {
           showSuccess(`New ${roleName.toLowerCase()} enrolled. An email with a temporary password was sent!`);
         } else {
@@ -132,18 +136,18 @@ export const StaffManagement: React.FC = () => {
     });
     if (!isConfirmed) return;
 
-    const endpointMap = {
-      'wardens': `/hms/wardens/${id}/`,
-      'caretakers': `/hms/caretakers/${id}/`,
-      'security': `/hms/security/${id}/`
-    };
-    const endpoint = endpointMap[activeTab];
     try {
-      await apiClient.delete(endpoint);
+      if (activeTab === 'wardens') {
+        await adminService.deleteWarden(id);
+      } else if (activeTab === 'caretakers') {
+        await adminService.deleteCaretaker(id);
+      } else {
+        await adminService.deleteSecurityStaff(id);
+      }
       showSuccess('Staff profile deleted successfully.');
       await fetchStaff();
     } catch (err: any) {
-      showError(err.response?.data?.detail || 'Failed to delete staff member');
+      showError(err.message || 'Failed to delete staff member');
     }
   };
 

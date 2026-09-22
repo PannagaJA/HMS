@@ -362,51 +362,6 @@ export const wardenService = {
         }
 
         const issueList = issues || [];
-        const issueIds = issueList.map((i: any) => i.id);
-
-        // Fetch real-time issue_updates from Supabase
-        const allUpdatesMap: Record<number, any[]> = {};
-        if (issueIds.length > 0) {
-          try {
-            const { data: rawUpdates, error: upError } = await supabase
-              .from('issue_updates')
-              .select('*')
-              .in('issue_id', issueIds)
-              .order('created_at', { ascending: false });
-
-            if (!upError && rawUpdates && rawUpdates.length > 0) {
-              // Resolve updater profiles in batch
-              const updaterUuids = Array.from(new Set(rawUpdates.map((u: any) => u.updated_by).filter(Boolean)));
-              const profilesMap: Record<string, string> = {};
-              if (updaterUuids.length > 0) {
-                const { data: profs } = await supabase
-                  .from('profiles')
-                  .select('id, first_name, last_name, email, role')
-                  .in('id', updaterUuids);
-                if (profs) {
-                  profs.forEach((p: any) => {
-                    const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-                    const roleLabel = p.role === 'WARDEN' ? 'Warden' : p.role === 'ADMIN' ? 'Admin' : (p.role || '');
-                    const displayName = fullName || p.email || '';
-                    profilesMap[p.id] = roleLabel && displayName ? `${displayName} (${roleLabel})` : displayName;
-                  });
-                }
-              }
-
-              rawUpdates.forEach((u: any) => {
-                const resolvedName = u.updated_by_name || (u.updated_by ? profilesMap[u.updated_by] : '') || '';
-                const formatted = {
-                  ...u,
-                  updated_by_name: resolvedName,
-                };
-                if (!allUpdatesMap[u.issue_id]) allUpdatesMap[u.issue_id] = [];
-                allUpdatesMap[u.issue_id].push(formatted);
-              });
-            }
-          } catch (e) {
-            console.warn('Real-time issue_updates query error:', e);
-          }
-        }
 
         return issueList.map((i: any) => {
           let img = i.image_url || null;
@@ -416,13 +371,6 @@ export const wardenService = {
             desc = parts[0].trim();
             img = parts[1]?.trim() || null;
           }
-
-          const updatesList = (allUpdatesMap[i.id] || []).map((u: any) => ({
-            ...u,
-            updated_by_name: u.updated_by_name || ''
-          }));
-
-          updatesList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
           return {
             ...i,
@@ -435,7 +383,7 @@ export const wardenService = {
             hostel_name: i.hostel?.name || '',
             room_no: i.room?.no || i.room_no || '',
             floor: i.room?.floor !== undefined ? i.room?.floor : (i.floor !== undefined ? i.floor : null),
-            updates: updatesList
+            updates: i.updates || []
           };
         });
       } finally {

@@ -7,6 +7,8 @@ import type { Hostel, HostelRoom, HostelStudent } from '../types';
 
 let inFlightDashboardStatsPromise: Promise<any> | null = null;
 let inFlightWardensPromise: Promise<any[]> | null = null;
+let inFlightCaretakersPromise: Promise<any[]> | null = null;
+let inFlightSecurityStaffPromise: Promise<any[]> | null = null;
 let cachedHostelsList: Hostel[] | null = null;
 let inFlightHostelsListPromise: Promise<Hostel[]> | null = null;
 
@@ -698,46 +700,58 @@ export const adminService = {
    * Staff: Wardens - Backed by Supabase profiles table (role = 'WARDEN')
    */
   async getWardens() {
-    // Fetch manually added wardens
-    const { data: customWardens } = await supabase
-      .from('hostel_wardens')
-      .select('id, name, email, phone, designation, experience, is_active')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    
-    let combined: any[] = customWardens || [];
-
-    // Fetch registered warden profiles
-    try {
-      const { data: profileWardens } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, email, phone, role')
-        .eq('role', 'WARDEN');
-      if (profileWardens && profileWardens.length > 0) {
-        const mapped = profileWardens.map((w: any) => {
-          const matchedCustom = (customWardens || []).find((cw: any) => 
-            (cw.email && w.email && cw.email.toLowerCase() === w.email.toLowerCase()) ||
-            cw.id === w.id
-          );
-          return {
-            id: w.id,
-            name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matchedCustom?.name || w.email,
-            email: w.email,
-            phone: w.phone || matchedCustom?.phone || '',
-            designation: matchedCustom?.designation || 'Hostel Warden',
-            experience: matchedCustom?.experience !== undefined ? Number(matchedCustom.experience) : 5
-          };
-        });
-
-        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
-        const nonDuplicateCustom = (customWardens || []).filter((cw: any) => !profileEmails.includes((cw.email || '').toLowerCase()));
-        combined = [...mapped, ...nonDuplicateCustom];
-      }
-    } catch (err) {
-      console.warn('Could not fetch WARDEN profiles:', err);
+    if (inFlightWardensPromise) {
+      return inFlightWardensPromise;
     }
-    
-    return combined;
+
+    inFlightWardensPromise = (async () => {
+      try {
+        // Fetch manually added wardens
+        const { data: customWardens } = await supabase
+          .from('hostel_wardens')
+          .select('id, name, email, phone, designation, experience, is_active')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        
+        let combined: any[] = customWardens || [];
+
+        // Fetch registered warden profiles
+        try {
+          const { data: profileWardens } = await supabase
+            .from('profiles')
+            .select('id, first_name, last_name, email, phone, role')
+            .eq('role', 'WARDEN');
+          if (profileWardens && profileWardens.length > 0) {
+            const mapped = profileWardens.map((w: any) => {
+              const matchedCustom = (customWardens || []).find((cw: any) => 
+                (cw.email && w.email && cw.email.toLowerCase() === w.email.toLowerCase()) ||
+                cw.id === w.id
+              );
+              return {
+                id: w.id,
+                name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matchedCustom?.name || w.email,
+                email: w.email,
+                phone: w.phone || matchedCustom?.phone || '',
+                designation: matchedCustom?.designation || 'Hostel Warden',
+                experience: matchedCustom?.experience !== undefined ? Number(matchedCustom.experience) : 5
+              };
+            });
+
+            const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+            const nonDuplicateCustom = (customWardens || []).filter((cw: any) => !profileEmails.includes((cw.email || '').toLowerCase()));
+            combined = [...mapped, ...nonDuplicateCustom];
+          }
+        } catch (err) {
+          console.warn('Could not fetch WARDEN profiles:', err);
+        }
+        
+        return combined;
+      } finally {
+        inFlightWardensPromise = null;
+      }
+    })();
+
+    return inFlightWardensPromise;
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
@@ -874,41 +888,53 @@ export const adminService = {
    * Staff: Caretakers - Directly backed by Supabase hostel_caretakers table
    */
   async getCaretakers() {
-    const { data: customCaretakers } = await supabase
-      .from('hostel_caretakers')
-      .select('id, name, email, phone, experience, is_active')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    
-    let combined: any[] = customCaretakers || [];
-
-    try {
-      const { data: profileCaretakers } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, email, phone, role')
-        .eq('role', 'CARETAKER');
-      if (profileCaretakers && profileCaretakers.length > 0) {
-        const mapped = profileCaretakers.map((c: any) => {
-          const matched = (customCaretakers || []).find((cd: any) => 
-            (cd.email && c.email && cd.email.toLowerCase() === c.email.toLowerCase()) ||
-            cd.id === c.id
-          );
-          return {
-            id: c.id,
-            name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || matched?.name || c.email,
-            email: c.email,
-            phone: c.phone || matched?.phone || '',
-            experience: matched?.experience !== undefined ? Number(matched.experience) : 3
-          };
-        });
-        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
-        const nonDup = (customCaretakers || []).filter((cd: any) => !profileEmails.includes((cd.email || '').toLowerCase()));
-        combined = [...mapped, ...nonDup];
-      }
-    } catch (err) {
-      console.warn('Could not fetch CARETAKER profiles:', err);
+    if (inFlightCaretakersPromise) {
+      return inFlightCaretakersPromise;
     }
-    return combined;
+
+    inFlightCaretakersPromise = (async () => {
+      try {
+        const { data: customCaretakers } = await supabase
+          .from('hostel_caretakers')
+          .select('id, name, email, phone, experience, is_active')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        
+        let combined: any[] = customCaretakers || [];
+
+        try {
+          const { data: profileCaretakers } = await supabase
+            .from('profiles')
+            .select('id, first_name, last_name, email, phone, role')
+            .eq('role', 'CARETAKER');
+          if (profileCaretakers && profileCaretakers.length > 0) {
+            const mapped = profileCaretakers.map((c: any) => {
+              const matched = (customCaretakers || []).find((cd: any) => 
+                (cd.email && c.email && cd.email.toLowerCase() === c.email.toLowerCase()) ||
+                cd.id === c.id
+              );
+              return {
+                id: c.id,
+                name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || matched?.name || c.email,
+                email: c.email,
+                phone: c.phone || matched?.phone || '',
+                experience: matched?.experience !== undefined ? Number(matched.experience) : 3
+              };
+            });
+            const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+            const nonDup = (customCaretakers || []).filter((cd: any) => !profileEmails.includes((cd.email || '').toLowerCase()));
+            combined = [...mapped, ...nonDup];
+          }
+        } catch (err) {
+          console.warn('Could not fetch CARETAKER profiles:', err);
+        }
+        return combined;
+      } finally {
+        inFlightCaretakersPromise = null;
+      }
+    })();
+
+    return inFlightCaretakersPromise;
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
@@ -1038,42 +1064,54 @@ export const adminService = {
    * Staff: Security
    */
   async getSecurityStaff() {
-    // Fetch manually added security staff
-    const { data: customSecurity } = await supabase
-      .from('security_staff')
-      .select('*')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    
-    let combined: any[] = customSecurity || [];
-
-    // Fetch registered security profiles
-    try {
-      const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
-      if (profileSecurity && profileSecurity.length > 0) {
-        const mapped = profileSecurity.map((w: any) => {
-          const matched = (customSecurity || []).find((cs: any) => 
-            (cs.email && w.email && cs.email.toLowerCase() === w.email.toLowerCase()) ||
-            cs.id === w.id
-          );
-          return {
-            id: w.id,
-            name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matched?.name || w.email,
-            email: w.email,
-            phone: w.phone || matched?.phone || '',
-            designation: matched?.designation || 'Security Guard',
-            experience: matched?.experience !== undefined ? Number(matched?.experience) : 5
-          };
-        });
-        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
-        const nonDuplicateCustom = (customSecurity || []).filter((cs: any) => !profileEmails.includes((cs.email || '').toLowerCase()));
-        combined = [...mapped, ...nonDuplicateCustom];
-      }
-    } catch (err) {
-      console.warn('Could not fetch SECURITY profiles:', err);
+    if (inFlightSecurityStaffPromise) {
+      return inFlightSecurityStaffPromise;
     }
 
-    return combined;
+    inFlightSecurityStaffPromise = (async () => {
+      try {
+        // Fetch manually added security staff
+        const { data: customSecurity } = await supabase
+          .from('security_staff')
+          .select('*')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        
+        let combined: any[] = customSecurity || [];
+
+        // Fetch registered security profiles
+        try {
+          const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
+          if (profileSecurity && profileSecurity.length > 0) {
+            const mapped = profileSecurity.map((w: any) => {
+              const matched = (customSecurity || []).find((cs: any) => 
+                (cs.email && w.email && cs.email.toLowerCase() === w.email.toLowerCase()) ||
+                cs.id === w.id
+              );
+              return {
+                id: w.id,
+                name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matched?.name || w.email,
+                email: w.email,
+                phone: w.phone || matched?.phone || '',
+                designation: matched?.designation || 'Security Guard',
+                experience: matched?.experience !== undefined ? Number(matched?.experience) : 5
+              };
+            });
+            const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+            const nonDuplicateCustom = (customSecurity || []).filter((cs: any) => !profileEmails.includes((cs.email || '').toLowerCase()));
+            combined = [...mapped, ...nonDuplicateCustom];
+          }
+        } catch (err) {
+          console.warn('Could not fetch SECURITY profiles:', err);
+        }
+
+        return combined;
+      } finally {
+        inFlightSecurityStaffPromise = null;
+      }
+    })();
+
+    return inFlightSecurityStaffPromise;
   },
 
   async createSecurityStaff(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
