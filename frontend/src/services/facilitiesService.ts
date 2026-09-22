@@ -6,46 +6,29 @@ import { supabase } from '../lib/supabase';
 import type { MealType, MenuItem, Menu, HostelIssue } from '../types';
 import { wardenService } from './wardenService';
 
-interface HostelDiningData {
-  menus: Menu[];
-  menuItems: MenuItem[];
-  categories: string[];
-}
-
-const diningDataCache = new Map<string, { data: HostelDiningData; timestamp: number }>();
-const inFlightDiningData = new Map<string, Promise<HostelDiningData>>();
-let cachedMealTypes: MealType[] | null = null;
 let inFlightMealTypes: Promise<MealType[]> | null = null;
+let inFlightMenuItems: Promise<MenuItem[]> | null = null;
+const inFlightWeeklyMenus = new Map<string, Promise<Menu[]>>();
 
 export const diningService = {
-  clearDiningCache(hostelId?: number | string) {
-    if (hostelId) {
-      diningDataCache.delete(String(hostelId));
-      inFlightDiningData.delete(String(hostelId));
-    } else {
-      diningDataCache.clear();
-      inFlightDiningData.clear();
-    }
-  },
-
   async getMealTypes(): Promise<MealType[]> {
-    if (cachedMealTypes && cachedMealTypes.length > 0) {
-      return cachedMealTypes;
-    }
     if (inFlightMealTypes) {
       return inFlightMealTypes;
     }
     const promise = (async () => {
       try {
         const { data, error } = await supabase.from('meal_types').select('*').order('id', { ascending: true });
+        if (error) {
+          console.error('[diningService.getMealTypes] Supabase error:', error.code, error.message);
+        }
         if (!error && data && data.length > 0) {
+          // Deduplicate by name — keep the first occurrence of each meal type name
           const seen = new Set<string>();
           const unique = data.filter((mt: any) => {
             if (seen.has(mt.name)) return false;
             seen.add(mt.name);
             return true;
           });
-          cachedMealTypes = unique;
           return unique;
         }
       } catch (e) {
@@ -54,164 +37,38 @@ export const diningService = {
         inFlightMealTypes = null;
       }
 
-      const fallbacks = [
+      // Fallback hardcoded defaults when DB has no data
+      return [
         { id: 1, name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00', start_time: '07:30', end_time: '09:30' },
         { id: 2, name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00', start_time: '12:30', end_time: '14:30' },
         { id: 3, name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00', start_time: '17:00', end_time: '18:30' },
         { id: 4, name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00', start_time: '20:00', end_time: '22:00' },
       ] as any;
-      cachedMealTypes = fallbacks;
-      return fallbacks;
     })();
 
     inFlightMealTypes = promise;
     return promise;
   },
 
-  async getHostelDiningData(hostelId?: number | string): Promise<HostelDiningData> {
-    const key = String(hostelId || 'ALL');
-    const now = Date.now();
-    const cached = diningDataCache.get(key);
-    if (cached && now - cached.timestamp < 60000) {
-      return cached.data;
+  async getMenuItems(): Promise<MenuItem[]> {
+    if (inFlightMenuItems) {
+      return inFlightMenuItems;
     }
-    if (inFlightDiningData.has(key)) {
-      return inFlightDiningData.get(key)!;
-    }
-
     const promise = (async () => {
-      const itemsMap = new Map<number, MenuItem>();
-      const categoriesSet = new Set<string>([
-        'Breakfast',
-        'Main Course',
-        'Curry / Gravy',
-        'Rice & Breads',
-        'Snacks & Beverages',
-        'Dessert'
-      ]);
-      const menus: Menu[] = [];
-
       try {
-        // 1. Direct query menu_items (single query to fetch all catalog items)
-        const { data: directItems, error: itemsErr } = await supabase
-          .from('menu_items')
-          .select('*')
-          .order('id', { ascending: true });
-
-        if (!itemsErr && directItems && directItems.length > 0) {
-          for (const item of directItems) {
-            const cat = (item.category || 'Main Course').trim();
-            itemsMap.set(Number(item.id), {
-              ...item,
-              id: Number(item.id),
-              category: cat,
-              is_veg: Boolean(item.vegetarian ?? item.is_veg ?? true)
-            });
-            if (cat) categoriesSet.add(cat);
-          }
-        }
-
-        // 2. Direct query menus for all 7 days in a single query
-        let query = supabase
-          .from('menus')
-          .select('*, meal_type:meal_types(*), items:menu_item_links(item:menu_items(*))');
-        if (hostelId) {
-          query = query.eq('hostel_id', hostelId);
-        }
-
-        const { data: directMenus, error: menusErr } = await query;
-
-        if (!menusErr && directMenus && directMenus.length > 0) {
-          for (const meal of directMenus) {
-            const rawItems = (meal.items || []).map((l: any) => l.item).filter(Boolean);
-            const formattedItems = rawItems.map((item: any) => {
-              const cat = (item.category || 'Main Course').trim();
-              if (cat) categoriesSet.add(cat);
-              const mapped = {
-                ...item,
-                id: Number(item.id),
-                category: cat,
-                is_veg: Boolean(item.vegetarian ?? item.is_veg ?? true)
-              };
-              itemsMap.set(Number(item.id), mapped);
-              return mapped;
-            });
-
-            menus.push({
-              ...meal,
-              meal_type: meal.meal_type?.id || meal.meal_type_id,
-              items: formattedItems,
-              items_detail: formattedItems
-            });
-          }
-        } else if (itemsMap.size === 0) {
-          // If direct table select returned no rows (e.g. unauthenticated session), fallback to RPC
-          const { data: rpcData, error: rpcErr } = await supabase.rpc('get_today_menu', {});
-          if (!rpcErr && Array.isArray(rpcData)) {
-            for (const meal of rpcData) {
-              if (hostelId && meal.hostel_id && String(meal.hostel_id) !== String(hostelId)) {
-                continue;
-              }
-              menus.push({
-                ...meal,
-                meal_type: meal.meal_type?.id || meal.meal_type_id,
-                items: meal.items || [],
-                items_detail: meal.items || []
-              });
-
-              for (const item of (meal.items || [])) {
-                if (item && item.id) {
-                  const existing = itemsMap.get(Number(item.id));
-                  const cat = (item.category || existing?.category || 'Main Course').trim();
-                  itemsMap.set(Number(item.id), {
-                    ...existing,
-                    ...item,
-                    id: Number(item.id),
-                    category: cat,
-                    is_veg: Boolean(item.vegetarian ?? item.is_veg ?? true)
-                  });
-                  if (cat) categoriesSet.add(cat);
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('getHostelDiningData error:', err);
+        const { data, error } = await supabase.from('menu_items').select('*').order('name', { ascending: true });
+        if (error) throw error;
+        return data || [];
+      } finally {
+        inFlightMenuItems = null;
       }
-
-      const result: HostelDiningData = {
-        menus,
-        menuItems: Array.from(itemsMap.values()),
-        categories: Array.from(categoriesSet).filter(Boolean)
-      };
-
-      diningDataCache.set(key, { data: result, timestamp: Date.now() });
-      inFlightDiningData.delete(key);
-      return result;
     })();
 
-    inFlightDiningData.set(key, promise);
+    inFlightMenuItems = promise;
     return promise;
   },
 
-  async getCategories(hostelId?: number | string): Promise<string[]> {
-    const data = await this.getHostelDiningData(hostelId);
-    return data.categories;
-  },
-
-  async getMenuItems(hostelId?: number | string): Promise<MenuItem[]> {
-    const data = await this.getHostelDiningData(hostelId);
-    return data.menuItems;
-  },
-
-  async getWeeklyMenus(hostelId?: number | string): Promise<Menu[]> {
-    const data = await this.getHostelDiningData(hostelId);
-    return data.menus;
-  },
-
   async createMenuItem(payload: { name: string; category?: string; description?: string; is_veg?: boolean }) {
-    diningService.clearDiningCache();
     const insertObj: any = {
       name: payload.name,
       description: payload.description || '',
@@ -223,16 +80,12 @@ export const diningService = {
 
     try {
       const { data, error } = await supabase.from('menu_items').insert(insertObj).select().single();
-      if (!error && data) {
-        diningService.clearDiningCache();
-        return data;
-      }
+      if (!error && data) return data;
       if (error && error.message?.includes('category')) {
         // If remote DB lacks the category column, fallback without it
         delete insertObj.category;
         const { data: retryData, error: retryErr } = await supabase.from('menu_items').insert(insertObj).select().single();
         if (retryErr) throw retryErr;
-        diningService.clearDiningCache();
         return retryData;
       }
       if (error) throw error;
@@ -242,7 +95,6 @@ export const diningService = {
         delete insertObj.category;
         const { data: retryData, error: retryErr } = await supabase.from('menu_items').insert(insertObj).select().single();
         if (retryErr) throw retryErr;
-        diningService.clearDiningCache();
         return retryData;
       }
       throw e;
@@ -250,7 +102,6 @@ export const diningService = {
   },
 
   async updateMenuItem(id: number | string, payload: Partial<{ name: string; category: string; description: string; is_veg: boolean }>) {
-    diningService.clearDiningCache();
     const updateBody: any = { ...payload };
     if ('is_veg' in payload) {
       updateBody.vegetarian = payload.is_veg;
@@ -262,18 +113,15 @@ export const diningService = {
         delete updateBody.category;
         const { data: retryData, error: retryErr } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
         if (retryErr) throw retryErr;
-        diningService.clearDiningCache();
         return retryData;
       }
       if (error) throw error;
-      diningService.clearDiningCache();
       return data;
     } catch (e: any) {
       if (e?.message?.includes('category')) {
         delete updateBody.category;
         const { data: retryData, error: retryErr } = await supabase.from('menu_items').update(updateBody).eq('id', id).select().single();
         if (retryErr) throw retryErr;
-        diningService.clearDiningCache();
         return retryData;
       }
       throw e;
@@ -281,11 +129,44 @@ export const diningService = {
   },
 
   async deleteMenuItem(id: number | string) {
-    diningService.clearDiningCache();
     const { error } = await supabase.from('menu_items').delete().eq('id', id);
     if (error) throw error;
-    diningService.clearDiningCache();
     return { success: true };
+  },
+
+  async getWeeklyMenus(hostelId?: number | string): Promise<Menu[]> {
+    const key = String(hostelId || 'ALL');
+    if (inFlightWeeklyMenus.has(key)) {
+      return inFlightWeeklyMenus.get(key)!;
+    }
+    const promise = (async () => {
+      try {
+        let query = supabase
+          .from('menus')
+          .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))');
+        if (hostelId) {
+          query = query.eq('hostel_id', Number(hostelId));
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []).map((m: any) => {
+          const items = (m.links || []).map((l: any) => l.item).filter(Boolean).map((i: any) => ({
+            ...i,
+            is_veg: Boolean(i.vegetarian ?? i.is_veg ?? true)
+          }));
+          return {
+            ...m,
+            meal_type: m.meal_type_id || m.meal_type?.id,
+            items,
+            items_detail: items
+          };
+        });
+      } finally {
+        inFlightWeeklyMenus.delete(key);
+      }
+    })();
+    inFlightWeeklyMenus.set(key, promise);
+    return promise;
   },
 
   async getTodayMenu(): Promise<{ day_name: string; day_id: string; meals: Menu[] }> {
