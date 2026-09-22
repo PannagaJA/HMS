@@ -1,7 +1,52 @@
 import { supabase } from '../lib/supabase';
 import type { Announcement } from '../types';
 
+let inFlightUnreadCountPromise: Promise<number> | null = null;
+
+function getLocalReadIds(userId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(`hms_read_announcements_${userId}`);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLocalReadId(userId: string, announcementId: string) {
+  try {
+    const set = getLocalReadIds(userId);
+    set.add(announcementId);
+    localStorage.setItem(`hms_read_announcements_${userId}`, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+const inFlightAnnouncements = new Map<string, Promise<{ data: Announcement[], count: number }>>();
+const inFlightSentAnnouncements = new Map<string, Promise<{ data: Announcement[], count: number }>>();
+let cachedHostels: { id: number; name: string }[] | null = null;
+let inFlightHostelsPromise: Promise<{ id: number; name: string }[]> | null = null;
+
 export const announcementService = {
+
+  async getHostels(): Promise<{ id: number; name: string }[]> {
+    if (cachedHostels) return cachedHostels;
+    if (inFlightHostelsPromise) return inFlightHostelsPromise;
+
+    inFlightHostelsPromise = (async () => {
+      try {
+        const { data, error } = await supabase.from('hostels').select('id, name').eq('is_active', true);
+        if (error) throw error;
+        cachedHostels = data || [];
+        return cachedHostels;
+      } catch (err) {
+        console.warn('Failed to load hostels for announcements:', err);
+        return [];
+      } finally {
+        inFlightHostelsPromise = null;
+      }
+    })();
+
+    return inFlightHostelsPromise;
+  },
 
   async getUserHostelId(role: string, userId: string): Promise<number | null> {
     try {
@@ -57,103 +102,124 @@ export const announcementService = {
   },
 
   async getAnnouncements(role: string, userId: string, page = 1, limit = 20): Promise<{ data: Announcement[], count: number }> {
-    const userRole = (role || '').toUpperCase();
-    const userHostelId = await this.getUserHostelId(role, userId);
-    const now = Date.now();
-
-    let query = supabase
-      .from('announcements')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    const { data: allData, error } = await query;
-
-    if (error) {
-      console.error('Failed to fetch announcements:', error);
-      throw error;
+    const cacheKey = `${role}_${userId}_${page}_${limit}`;
+    if (inFlightAnnouncements.has(cacheKey)) {
+      return inFlightAnnouncements.get(cacheKey)!;
     }
 
-    if (!allData || allData.length === 0) return { data: [], count: 0 };
+    const promise = (async () => {
+      try {
+        const userRole = (role || '').toUpperCase();
+        const userHostelId = await this.getUserHostelId(role, userId);
+        const now = Date.now();
 
-    // Filter non-expired, role-targeted, not self-sent, and hostel-appropriate announcements
-    const filtered = allData.filter(a => {
-      // 1. Expiry check
-      if (a.expires_at) {
-        const expiry = new Date(a.expires_at).getTime();
-        if (expiry <= now) return false;
-      }
+        let query = supabase
+          .from('announcements')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      // 2. Exclude announcements created by this user's role (they belong in "Sent")
-      const createdByRole = (a.created_by_role || '').toUpperCase();
-      if (createdByRole && createdByRole === userRole) {
-        return false;
-      }
+        const { data: allData, error } = await query;
 
-      // 3. Target role check - must be addressed to userRole or ALL
-      const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
-      if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
-        return false;
-      }
-
-      // 4. Hostel scoping check
-      if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
-        if (userHostelId) {
-          return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
-        } else {
-          return a.target_hostel_id === null;
+        if (error) {
+          console.error('Failed to fetch announcements:', error);
+          throw error;
         }
+
+        if (!allData || allData.length === 0) return { data: [], count: 0 };
+
+        // Filter non-expired, role-targeted, not self-sent, and hostel-appropriate announcements
+        const filtered = allData.filter(a => {
+          // 1. Expiry check
+          if (a.expires_at) {
+            const expiry = new Date(a.expires_at).getTime();
+            if (expiry <= now) return false;
+          }
+
+          // 2. Exclude announcements created by this user's role (they belong in "Sent")
+          const createdByRole = (a.created_by_role || '').toUpperCase();
+          if (createdByRole && createdByRole === userRole) {
+            return false;
+          }
+
+          // 3. Target role check - must be addressed to userRole or ALL
+          const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+          if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+            return false;
+          }
+
+          // 4. Hostel scoping check
+          if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
+            if (userHostelId) {
+              return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
+            } else {
+              return a.target_hostel_id === null;
+            }
+          }
+          return true;
+        });
+
+        // Guarantee recent first
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        const totalCount = filtered.length;
+        const from = (page - 1) * limit;
+        const pageData = filtered.slice(from, from + limit);
+
+        if (pageData.length === 0) return { data: [], count: totalCount };
+
+        // Read status from cached user reads (avoids network GET announcements_read calls)
+        const readIds = getLocalReadIds(userId);
+
+        const dataWithReadStatus = pageData.map(a => ({
+          ...a,
+          is_read: readIds.has(a.id)
+        }));
+
+        return { data: dataWithReadStatus, count: totalCount };
+      } finally {
+        inFlightAnnouncements.delete(cacheKey);
       }
-      return true;
-    });
+    })();
 
-    // Guarantee recent first
-    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-    const totalCount = filtered.length;
-    const from = (page - 1) * limit;
-    const pageData = filtered.slice(from, from + limit);
-
-    if (pageData.length === 0) return { data: [], count: totalCount };
-
-    // Fetch read status for these specific announcements for the current user
-    const announcementIds = pageData.map(a => a.id);
-    const { data: readData } = await supabase
-      .from('announcements_read')
-      .select('announcement_id')
-      .eq('user_id', userId)
-      .in('announcement_id', announcementIds);
-
-    const readIds = new Set(readData?.map(r => r.announcement_id) || []);
-
-    const dataWithReadStatus = pageData.map(a => ({
-      ...a,
-      is_read: readIds.has(a.id)
-    }));
-
-    return { data: dataWithReadStatus, count: totalCount };
+    inFlightAnnouncements.set(cacheKey, promise);
+    return promise;
   },
 
   async getSentAnnouncements(role: string, page = 1, limit = 20): Promise<{ data: Announcement[], count: number }> {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabase
-      .from('announcements')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false });
-
-    if (role) {
-      query = query.eq('created_by_role', role);
+    const cacheKey = `${role}_${page}_${limit}`;
+    if (inFlightSentAnnouncements.has(cacheKey)) {
+      return inFlightSentAnnouncements.get(cacheKey)!;
     }
 
-    const { data, count, error } = await query.range(from, to);
+    const promise = (async () => {
+      try {
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
 
-    if (error) {
-      console.error('Failed to fetch sent announcements:', error);
-      throw error;
-    }
+        let query = supabase
+          .from('announcements')
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false });
 
-    return { data: data || [], count: count || 0 };
+        if (role) {
+          query = query.eq('created_by_role', role);
+        }
+
+        const { data, count, error } = await query.range(from, to);
+
+        if (error) {
+          console.error('Failed to fetch sent announcements:', error);
+          throw error;
+        }
+
+        return { data: data || [], count: count || 0 };
+      } finally {
+        inFlightSentAnnouncements.delete(cacheKey);
+      }
+    })();
+
+    inFlightSentAnnouncements.set(cacheKey, promise);
+    return promise;
   },
 
   async deleteAnnouncement(id: string): Promise<void> {
@@ -202,85 +268,79 @@ export const announcementService = {
   },
 
   async markAsRead(announcementId: string, userId: string): Promise<void> {
+    saveLocalReadId(userId, announcementId);
     try {
-      // Check if already marked to avoid duplicates
-      const { data: existing } = await supabase
+      // Async sync to DB without blocking or querying
+      supabase
         .from('announcements_read')
-        .select('id')
-        .eq('announcement_id', announcementId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (!existing) {
-        await supabase
-          .from('announcements_read')
-          .insert([{ announcement_id: announcementId, user_id: userId }]);
-      }
+        .insert([{ announcement_id: announcementId, user_id: userId }])
+        .then(() => {});
     } catch (error) {
       console.warn('Failed to mark announcement as read:', error);
     }
   },
 
   async getUnreadCount(role: string, userId: string): Promise<number> {
-    try {
-      const userRole = (role || '').toUpperCase();
-      const nowIso = new Date().toISOString();
-
-      const { data: targeted, error: targetError } = await supabase
-        .from('announcements')
-        .select('id, target_roles, target_hostel_id, expires_at, created_by_role');
-        
-      if (targetError) {
-        console.warn('Error querying targeted announcements for unread count:', targetError);
-        return 0;
-      }
-      if (!targeted || targeted.length === 0) return 0;
-
-      const userHostelId = await this.getUserHostelId(role, userId);
-      const validAnnouncements = targeted.filter(a => {
-        if (a.expires_at && new Date(a.expires_at) <= new Date(nowIso)) {
-          return false;
-        }
-        const createdByRole = (a.created_by_role || '').toUpperCase();
-        if (createdByRole && createdByRole === userRole) {
-          return false;
-        }
-        const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
-        if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
-          return false;
-        }
-        if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
-          if (userHostelId) {
-            return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
-          } else {
-            return a.target_hostel_id === null;
-          }
-        }
-        return true;
-      });
-
-      if (validAnnouncements.length === 0) return 0;
-
-      const targetedIds = validAnnouncements.map(t => t.id);
-
-      // Get read announcements for this user
-      const { data: readRows, error: readError } = await supabase
-        .from('announcements_read')
-        .select('announcement_id')
-        .eq('user_id', userId)
-        .in('announcement_id', targetedIds);
-        
-      if (readError) {
-        console.warn('Error checking read rows for unread count:', readError);
-        return targetedIds.length;
-      }
-
-      const readIds = new Set(readRows?.map(r => r.announcement_id) || []);
-      const unreadCount = targetedIds.filter(id => !readIds.has(id)).length;
-      return Math.max(0, unreadCount);
-    } catch (err) {
-      console.error('Failed to get unread count:', err);
-      return 0;
+    if (inFlightUnreadCountPromise) {
+      return inFlightUnreadCountPromise;
     }
+
+    inFlightUnreadCountPromise = (async () => {
+      try {
+        const userRole = (role || '').toUpperCase();
+        const nowIso = new Date().toISOString();
+
+        const { data: targeted, error: targetError } = await supabase
+          .from('announcements')
+          .select('id, target_roles, target_hostel_id, expires_at, created_by_role');
+          
+        if (targetError) {
+          console.warn('Error querying targeted announcements for unread count:', targetError);
+          return 0;
+        }
+        if (!targeted || targeted.length === 0) return 0;
+
+        const userHostelId = await this.getUserHostelId(role, userId);
+        const validAnnouncements = targeted.filter(a => {
+          if (a.expires_at && new Date(a.expires_at) <= new Date(nowIso)) {
+            return false;
+          }
+          const createdByRole = (a.created_by_role || '').toUpperCase();
+          if (createdByRole && createdByRole === userRole) {
+            return false;
+          }
+          const roles = (a.target_roles || []).map((r: string) => String(r).toUpperCase());
+          if (roles.length > 0 && !roles.includes(userRole) && !roles.includes('ALL')) {
+            return false;
+          }
+          if (['STUDENT', 'WARDEN', 'CARETAKER'].includes(userRole)) {
+            if (userHostelId) {
+              return a.target_hostel_id === null || Number(a.target_hostel_id) === Number(userHostelId);
+            } else {
+              return a.target_hostel_id === null;
+            }
+          }
+          return true;
+        });
+
+        if (validAnnouncements.length === 0) return 0;
+
+        const targetedIds = validAnnouncements.map(t => t.id);
+
+        // Get read announcements for this user from local storage
+        const readIds = getLocalReadIds(userId);
+        const unreadCount = targetedIds.filter(id => !readIds.has(id)).length;
+        return Math.max(0, unreadCount);
+      } catch (err) {
+        console.error('Failed to get unread count:', err);
+        return 0;
+      } finally {
+        setTimeout(() => {
+          inFlightUnreadCountPromise = null;
+        }, 1000);
+      }
+    })();
+
+    return inFlightUnreadCountPromise;
   }
 };

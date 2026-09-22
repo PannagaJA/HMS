@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, Building2 } from 'lucide-react';
 import type { MealType, MenuItem, Menu, Hostel } from '../../types';
-import { apiClient } from '../../api/apiClient';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { wardenService } from '../../services/wardenService';
 import { adminService } from '../../services/adminService';
+import { diningService } from '../../services/facilitiesService';
 import {
   Select,
   SelectContent,
@@ -54,7 +54,7 @@ export const MenuManagement: React.FC = () => {
 
   useEffect(() => {
     fetchHostelsAndData();
-  }, [user]);
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     if (selectedHostelId) {
@@ -68,18 +68,17 @@ export const MenuManagement: React.FC = () => {
       if (user?.role === 'WARDEN') {
         loadedHostels = await wardenService.getAssignedHostels(user.id);
       } else {
-        const hostelsRes = await apiClient.get<Hostel[]>('/hms/hostels/');
-        loadedHostels = hostelsRes.data || [];
+        loadedHostels = await adminService.getHostelsList();
       }
 
-      const [mealTypesRes, menuItemsRes] = await Promise.all([
-        apiClient.get<MealType[]>('/hms/meal-types/'),
-        apiClient.get<MenuItem[]>('/hms/menu-items/'),
+      const [mealTypesData, menuItemsData] = await Promise.all([
+        diningService.getMealTypes(),
+        diningService.getMenuItems(),
       ]);
 
       setHostels(loadedHostels);
-      setMealTypes(mealTypesRes.data || []);
-      setMenuItems(menuItemsRes.data || []);
+      setMealTypes(mealTypesData || []);
+      setMenuItems(menuItemsData || []);
       setSelectedHostelId('');
     } catch (err) {
       console.error('Failed to load menu planner data', err);
@@ -88,9 +87,8 @@ export const MenuManagement: React.FC = () => {
 
   const fetchMenus = async (hostelId: string) => {
     try {
-      const endpoint = hostelId ? `/hms/menus/?hostel=${hostelId}` : '/hms/menus/';
-      const menusRes = await apiClient.get<Menu[]>(endpoint);
-      setMenus(menusRes.data || []);
+      const menusData = await diningService.getWeeklyMenus(hostelId);
+      setMenus(menusData || []);
     } catch (err) {
       console.error('Failed to load menus for hostel', err);
     }
@@ -126,15 +124,15 @@ export const MenuManagement: React.FC = () => {
 
     try {
       if (editingItem) {
-        await apiClient.put(`/hms/menu-items/${editingItem.id}/`, payload);
+        await diningService.updateMenuItem(editingItem.id, payload);
         showSuccess(`Food item "${itemName}" updated successfully.`);
       } else {
-        await apiClient.post('/hms/menu-items/', payload);
+        await diningService.createMenuItem(payload);
         showSuccess(`Food item "${itemName}" created successfully.`);
       }
       setShowItemModal(false);
-      const itemsRes = await apiClient.get<MenuItem[]>('/hms/menu-items/');
-      setMenuItems(itemsRes.data || []);
+      const itemsData = await diningService.getMenuItems();
+      setMenuItems(itemsData || []);
     } catch (err) {
       showError('Failed to save food item');
     }
@@ -149,10 +147,10 @@ export const MenuManagement: React.FC = () => {
     });
     if (!isConfirmed) return;
     try {
-      await apiClient.delete(`/hms/menu-items/${id}/`);
+      await diningService.deleteMenuItem(id);
       showSuccess('Food item removed successfully.');
-      const itemsRes = await apiClient.get<MenuItem[]>('/hms/menu-items/');
-      setMenuItems(itemsRes.data || []);
+      const itemsData = await diningService.getMenuItems();
+      setMenuItems(itemsData || []);
       if (selectedHostelId) {
         fetchMenus(selectedHostelId);
       }
@@ -192,24 +190,12 @@ export const MenuManagement: React.FC = () => {
     if (!targetMealType || !selectedHostelId) return;
     setIsSaving(true);
     try {
-      const existing = menus.find(
-        (m) =>
-          String(m.day_of_week) === String(activeDay) &&
-          Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(targetMealType.id) &&
-          (!m.hostel_id || String(m.hostel_id) === String(selectedHostelId) || String((m as any).hostel?.id || (m as any).hostel) === String(selectedHostelId))
+      await diningService.saveMenuSlot(
+        activeDay,
+        targetMealType.id,
+        selectedItemIds,
+        selectedHostelId
       );
-      const payload = {
-        hostel: Number(selectedHostelId),
-        day_of_week: Number(activeDay),
-        meal_type: targetMealType.id,
-        items: selectedItemIds,
-      };
-
-      if (existing) {
-        await apiClient.put(`/hms/menus/${existing.id}/`, payload);
-      } else {
-        await apiClient.post('/hms/menus/', payload);
-      }
       const selectedHostelName = hostels.find((h) => String(h.id) === String(selectedHostelId))?.name || 'Selected Hostel';
       showSuccess(`Dining schedule updated for ${targetMealType.name} (${selectedHostelName}).`);
       setShowConfigureModal(false);

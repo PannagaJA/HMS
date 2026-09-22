@@ -35,21 +35,44 @@ export const WardenGatePassManagement: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
-    fetchGatePassesAndHostels();
+    if (!user?.id) return;
+    fetchHostels();
+    fetchGatePasses();
 
     const channel = supabase
       .channel('warden_gate_passes_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gate_passes' }, () => {
-        refreshGatePassesOnly();
+        fetchGatePasses();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id, user?.role]);
 
-  const refreshGatePassesOnly = async () => {
+  const fetchHostels = async () => {
+    try {
+      let hostList: Hostel[] = [];
+      if (user?.role === 'WARDEN') {
+        hostList = await wardenService.getAssignedHostels(user.id);
+      } else {
+        hostList = await adminService.getHostelsList();
+      }
+      setHostels(hostList);
+      setSelectedHostelId((prev) => {
+        if (prev) return prev;
+        if (user?.role === 'ADMIN') return 'ALL';
+        if (user?.role === 'WARDEN') return hostList.length === 1 ? String(hostList[0].id) : 'ALL';
+        return hostList.length > 0 ? String(hostList[0].id) : 'ALL';
+      });
+    } catch (err) {
+      console.error('Failed to load hostels for gate passes', err);
+    }
+  };
+
+  const fetchGatePasses = async () => {
+    setLoading(true);
     try {
       const allPasses = await wardenService.getGatePasses();
       let scopedPasses = allPasses;
@@ -64,46 +87,7 @@ export const WardenGatePassManagement: React.FC = () => {
       }
       setPasses(scopedPasses);
     } catch (err) {
-      console.warn('Realtime refresh gate passes error:', err);
-    }
-  };
-
-  const fetchGatePassesAndHostels = async () => {
-    setLoading(true);
-    try {
-      let hostList: Hostel[] = [];
-      if (user?.role === 'WARDEN') {
-        hostList = await wardenService.getAssignedHostels(user.id);
-      } else {
-        hostList = await adminService.getHostels();
-      }
-
-      // Fetch gate passes directly using wardenService backed by Supabase
-      const allPasses = await wardenService.getGatePasses();
-
-      // If user is a warden, strictly scope gate passes to their assigned hostels only
-      let scopedPasses = allPasses;
-      if (user?.role === 'WARDEN') {
-        const assignedIds = hostList.map((h) => String(h.id));
-        const assignedNames = hostList.map((h) => h.name.toLowerCase().trim());
-        scopedPasses = allPasses.filter((p: any) => {
-          const passHostelId = String(p.hostel_id || (p.hostel && typeof p.hostel === 'object' ? p.hostel.id : p.hostel) || '');
-          const passHostelName = (p.hostel_name || (p.hostel && typeof p.hostel === 'object' ? p.hostel.name : '') || '').toLowerCase().trim();
-          return assignedIds.includes(passHostelId) || assignedNames.some(name => passHostelName.includes(name) || name.includes(passHostelName));
-        });
-      }
-
-      setPasses(scopedPasses);
-      setHostels(hostList);
-      // Preserve existing selected hostel, or default to ALL/first assigned hostel
-      setSelectedHostelId((prev) => {
-        if (prev) return prev;
-        if (user?.role === 'ADMIN') return 'ALL';
-        if (user?.role === 'WARDEN') return hostList.length === 1 ? String(hostList[0].id) : 'ALL';
-        return hostList.length > 0 ? String(hostList[0].id) : 'ALL';
-      });
-    } catch (err) {
-      console.error('Failed to load gate passes or hostels', err);
+      console.error('Failed to load gate passes', err);
     } finally {
       setLoading(false);
     }
@@ -118,7 +102,7 @@ export const WardenGatePassManagement: React.FC = () => {
       showSuccess(`Gate pass for ${actionModalPass.student_name} ${actionType === 'approve' ? 'approved' : 'rejected'}.`);
       setActionModalPass(null);
       setActionNote('');
-      await refreshGatePassesOnly();
+      await fetchGatePasses();
     } catch (err: any) {
       showError(err.message || err.response?.data?.error || 'Action failed');
     }

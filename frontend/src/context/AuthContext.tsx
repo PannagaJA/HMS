@@ -31,6 +31,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const isSyntheticToken = (token: string | null): boolean =>
   typeof token === 'string' && token.startsWith('hms-session-');
 
+let inFlightProfilePromise: Promise<User | null> | null = null;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => getStoredUser());
   const [token, setToken] = useState<string | null>(() => getAccessToken());
@@ -38,43 +40,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(() => !getStoredUser());
 
   const refreshUserProfile = async (): Promise<User | null> => {
-    try {
-      const stored = getStoredUser();
-      const storedToken = getAccessToken();
-
-      // If there's neither a stored session nor a token, user is signed out
-      if (!stored && !storedToken) {
-        setUser(null);
-        setToken(null);
-        return null;
-      }
-
-      // Query /auth/me/ to fetch fresh profile/student data from Supabase
-      const res = await apiClient.get<User>('/auth/me/');
-      if (res.data) {
-        setUser(res.data);
-        const sessionRes = await supabase.auth.getSession();
-        const currentToken = sessionRes.data?.session?.access_token || storedToken || '';
-        setToken(currentToken);
-        saveAuthSession(currentToken, undefined, res.data);
-        return res.data;
-      } else if (stored) {
-        setUser(stored);
-        if (storedToken) setToken(storedToken);
-        return stored;
-      }
-    } catch (err) {
-      console.error('Session restoration background check:', err);
-      const stored = getStoredUser();
-      if (stored) {
-        setUser(stored);
-        setToken(getAccessToken());
-        return stored;
-      }
-    } finally {
-      setIsLoading(false);
+    if (inFlightProfilePromise) {
+      return inFlightProfilePromise;
     }
-    return null;
+
+    inFlightProfilePromise = (async () => {
+      try {
+        const stored = getStoredUser();
+        const storedToken = getAccessToken();
+
+        // Short-circuit for synthetic/fallback sessions.
+        if (isSyntheticToken(storedToken) && stored) {
+          setUser(stored);
+          setToken(storedToken);
+          return stored;
+        }
+
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData?.user && !stored) {
+          setUser(null);
+          setToken(null);
+          localStorage.removeItem('hms_user');
+          localStorage.removeItem('hms_token');
+          return null;
+        }
+
+        const res = await apiClient.get<User>('/auth/me/');
+        if (res.data) {
+          setUser(res.data);
+          const sessionRes = await supabase.auth.getSession();
+          const currentToken = sessionRes.data?.session?.access_token || storedToken || '';
+          setToken(currentToken);
+          saveAuthSession(currentToken, undefined, res.data);
+          return res.data;
+        } else if (stored) {
+          setUser(stored);
+          if (storedToken) setToken(storedToken);
+          return stored;
+        }
+      } catch (err) {
+        console.error('Session restoration background check:', err);
+        const stored = getStoredUser();
+        if (stored) {
+          setUser(stored);
+          setToken(getAccessToken());
+          return stored;
+        }
+      } finally {
+        setIsLoading(false);
+        inFlightProfilePromise = null;
+      }
+      return null;
+    })();
+
+    return inFlightProfilePromise;
   };
 
   useEffect(() => {

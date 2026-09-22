@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Building2, Plus, Edit2, Trash2, UserPlus, X } from 'lucide-react';
 import type { Hostel, HostelWarden, HostelCaretaker } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { adminService } from '../../services/adminService';
 import { useNotification } from '../../context/NotificationContext';
 import {
   Select,
@@ -41,14 +42,17 @@ export const HostelManagement: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [hRes, wRes, cRes] = await Promise.all([
-        apiClient.get<Hostel[]>('/hms/hostels/'),
+      const [wRes, cRes] = await Promise.all([
         apiClient.get<HostelWarden[]>('/hms/wardens/'),
         apiClient.get<HostelCaretaker[]>('/hms/caretakers/'),
       ]);
-      setHostels(hRes.data || []);
-      setWardens(wRes.data || []);
-      setCaretakers(cRes.data || []);
+      const wData = wRes.data || [];
+      const cData = cRes.data || [];
+      setWardens(wData);
+      setCaretakers(cData);
+
+      const hostelsData = await adminService.getHostels(wData, cData);
+      setHostels(hostelsData || []);
     } catch (err) {
       console.error('Failed to load hostel data', err);
     }

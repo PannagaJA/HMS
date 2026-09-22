@@ -5,69 +5,95 @@
 import { supabase } from '../lib/supabase';
 import type { Hostel, HostelRoom, HostelStudent } from '../types';
 
+let inFlightDashboardStatsPromise: Promise<any> | null = null;
+let inFlightWardensPromise: Promise<any[]> | null = null;
+let inFlightCaretakersPromise: Promise<any[]> | null = null;
+let inFlightSecurityStaffPromise: Promise<any[]> | null = null;
+let cachedHostelsList: Hostel[] | null = null;
+let inFlightHostelsListPromise: Promise<Hostel[]> | null = null;
+
 export const adminService = {
+
   /**
-   * Fetch aggregated system-wide dashboard stats
+   * Fetch aggregated system-wide dashboard stats, scoped to the active org.
+   * Uses in-flight deduplication to prevent parallel duplicate requests.
    */
   async getDashboardStats() {
-    let orgId: string | undefined;
-    try {
-      const stored = localStorage.getItem('hms_user');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        orgId = parsed.org_id;
-      }
-      if (!orgId) {
-        const { data: authUser } = await supabase.auth.getUser();
-        if (authUser?.user?.id) {
-          const { data: prof } = await supabase.from('profiles').select('org_id').eq('id', authUser.user.id).maybeSingle();
-          orgId = prof?.org_id;
-        }
-      }
-    } catch (e) {
-      console.warn('Could not determine active org_id:', e);
+    if (inFlightDashboardStatsPromise) {
+      return inFlightDashboardStatsPromise;
     }
 
-    // SAFETY GUARD: Never run unfiltered queries — that would leak data across tenants.
-    // If org_id is still unknown, return zeroed stats and surface the error.
-    if (!orgId) {
-      console.error('[adminService.getDashboardStats] BLOCKED: org_id is undefined. Returning empty stats to prevent cross-tenant data leak.');
-      return {
-        statistics: {
-          total_hostels: 0,
-          total_capacity: 0,
-          occupied_beds: 0,
-          vacant_beds: 0,
-          occupancy_rate: 0,
-          pending_gate_passes: 0,
-          active_issues: 0
+    inFlightDashboardStatsPromise = (async () => {
+      try {
+        // Resolve the current user's org_id for tenant isolation
+        let orgId: string | undefined;
+        try {
+          const stored = localStorage.getItem('hms_user');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            orgId = parsed.org_id;
+          }
+          if (!orgId) {
+            const { data: authUser } = await supabase.auth.getUser();
+            if (authUser?.user?.id) {
+              const { data: prof } = await supabase.from('profiles').select('org_id').eq('id', authUser.user.id).maybeSingle();
+              orgId = prof?.org_id;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not determine active org_id:', e);
         }
-      };
-    }
 
-    const [h, beds, a, p, iss] = await Promise.all([
-      supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
-      supabase.from('beds').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
-      supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
-      supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending').eq('org_id', orgId),
-      supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)').eq('org_id', orgId),
-    ]);
+        // SAFETY GUARD: Never run unfiltered queries — that would leak data across tenants.
+        // If org_id is still unknown, return zeroed stats and surface the error.
+        if (!orgId) {
+          console.error('[adminService.getDashboardStats] BLOCKED: org_id is undefined. Returning empty stats to prevent cross-tenant data leak.');
+          return {
+            statistics: {
+              total_hostels: 0,
+              total_capacity: 0,
+              occupied_beds: 0,
+              vacant_beds: 0,
+              occupancy_rate: 0,
+              pending_gate_passes: 0,
+              active_issues: 0
+            }
+          };
+        }
 
-    const totalCapacity = beds.count || 0;
-    const occupied = a.count || 0;
+        // Always use direct table queries for accuracy — avoids view field name inconsistencies
+        // (view may return 'open_issues' vs 'active_issues' depending on which SQL fix was run)
+        const [h, beds, a, p, iss] = await Promise.all([
+          supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
+          supabase.from('beds').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
+          supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
+          // Match both PENDING (uppercase) and pending (lowercase) in case of data inconsistency
+          supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending').eq('org_id', orgId),
+          // Count issues that are NOT completed (handles both case variants)
+          supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)').eq('org_id', orgId),
+        ]);
 
-    const stats = {
-      total_hostels: h.count || 0,
-      total_capacity: totalCapacity,
-      occupied_beds: occupied,
-      vacant_beds: Math.max(0, totalCapacity - occupied),
-      occupancy_rate: totalCapacity > 0 ? Math.round((occupied / totalCapacity) * 100) : 0,
-      pending_gate_passes: p.count || 0,
-      active_issues: iss.count || 0
-    };
+        const totalCapacity = beds.count || 0;
+        const occupied = a.count || 0;
 
-    console.log('[adminService.getDashboardStats] orgId:', orgId, 'stats:', stats);
-    return { statistics: stats };
+        const stats = {
+          total_hostels: h.count || 0,
+          total_capacity: totalCapacity,
+          occupied_beds: occupied,
+          vacant_beds: Math.max(0, totalCapacity - occupied),
+          occupancy_rate: totalCapacity > 0 ? Math.round((occupied / totalCapacity) * 100) : 0,
+          pending_gate_passes: p.count || 0,
+          active_issues: iss.count || 0
+        };
+
+        console.log('[adminService.getDashboardStats] orgId:', orgId, 'stats:', stats);
+        return { statistics: stats };
+      } finally {
+        inFlightDashboardStatsPromise = null;
+      }
+    })();
+
+    return inFlightDashboardStatsPromise;
   },
 
 
@@ -75,27 +101,28 @@ export const adminService = {
   /**
    * Fetch all active hostel blocks with occupancy metrics
    */
-  async getHostels(): Promise<Hostel[]> {
+  async getHostels(passedWardens?: any[], passedCaretakers?: any[]): Promise<Hostel[]> {
     let hostels: any[] = [];
     try {
       const { data, error } = await supabase
         .from('hostels')
-        .select('*, rooms:hostel_rooms(id, capacity, is_active)')
-        .eq('is_active', true);
+        .select('id, name, gender, floor_count, address, warden_id, caretaker_id, is_active, rooms:hostel_rooms(id, capacity, is_active)')
+        .eq('is_active', true)
+        .order('id', { ascending: true });
       if (!error && data) {
         hostels = data;
       }
     } catch (e) {
       console.warn('Failed to load hostels from supabase:', e);
     }
-    let combinedHostels = hostels;
+    const combinedHostels = hostels;
     if (combinedHostels.length === 0) {
       return [];
     }
 
     const [wardensList, caretakersList, activeAllocsRes] = await Promise.all([
-      adminService.getWardens(),
-      adminService.getCaretakers(),
+      passedWardens ? Promise.resolve(passedWardens) : adminService.getWardens(),
+      passedCaretakers ? Promise.resolve(passedCaretakers) : adminService.getCaretakers(),
       supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true)
     ]);
 
@@ -106,15 +133,8 @@ export const adminService = {
       const totalCap = (h.rooms || []).filter((r: any) => r.is_active).reduce((sum: number, r: any) => sum + (r.capacity || 0), 0);
       const occ = activeAllocs.filter((a: any) => a.bed?.room?.hostel_id === h.id).length;
       
-      const wDetail = h.warden_id ? wardensList.find(w => String(w.id) === String(h.warden_id)) : null;
-      const cDetail = h.caretaker_id ? caretakersList.find(c => String(c.id) === String(h.caretaker_id)) : null;
-
-      
-      const assignedWardenId = h.warden || h.wardens?.[0]?.warden_profile_id || null;
-      const assignedCaretakerId = h.caretaker || null;
-
-      const wardenDetail = wardensList.find((w: any) => String(w.id) === String(assignedWardenId)) || null;
-      const caretakerDetail = caretakersList.find((c: any) => String(c.id) === String(assignedCaretakerId)) || null;
+      const wDetail = h.warden_id ? wardensList.find((w: any) => String(w.id) === String(h.warden_id)) : null;
+      const cDetail = h.caretaker_id ? caretakersList.find((c: any) => String(c.id) === String(h.caretaker_id)) : null;
 
       return {
         ...h,
@@ -127,6 +147,14 @@ export const adminService = {
         caretaker_detail: cDetail || null
       };
     });
+  },
+
+  /**
+   * Alias for getHostels — kept for backward compatibility with components
+   * that call adminService.getHostelsList() for filter dropdowns.
+   */
+  async getHostelsList(): Promise<Hostel[]> {
+    return adminService.getHostels();
   },
 
   async createHostel(payload: { name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }) {
@@ -639,43 +667,58 @@ export const adminService = {
    * Staff: Wardens - Backed by Supabase profiles table (role = 'WARDEN')
    */
   async getWardens() {
-    // Fetch manually added wardens
-    const { data: customWardens } = await supabase
-      .from('hostel_wardens')
-      .select('*')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    
-    let combined: any[] = customWardens || [];
-
-    // Fetch registered warden profiles
-    try {
-      const { data: profileWardens } = await supabase.from('profiles').select('*').eq('role', 'WARDEN');
-      if (profileWardens && profileWardens.length > 0) {
-        const mapped = profileWardens.map((w: any) => {
-          const matchedCustom = (customWardens || []).find((cw: any) => 
-            (cw.email && w.email && cw.email.toLowerCase() === w.email.toLowerCase()) ||
-            cw.id === w.id
-          );
-          return {
-            id: w.id,
-            name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matchedCustom?.name || w.email,
-            email: w.email,
-            phone: w.phone || matchedCustom?.phone || '',
-            designation: matchedCustom?.designation || 'Hostel Warden',
-            experience: matchedCustom?.experience !== undefined ? Number(matchedCustom.experience) : 5
-          };
-        });
-
-        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
-        const nonDuplicateCustom = (customWardens || []).filter((cw: any) => !profileEmails.includes((cw.email || '').toLowerCase()));
-        combined = [...mapped, ...nonDuplicateCustom];
-      }
-    } catch (err) {
-      console.warn('Could not fetch WARDEN profiles:', err);
+    if (inFlightWardensPromise) {
+      return inFlightWardensPromise;
     }
-    
-    return combined;
+
+    inFlightWardensPromise = (async () => {
+      try {
+        // Fetch manually added wardens
+        const { data: customWardens } = await supabase
+          .from('hostel_wardens')
+          .select('id, name, email, phone, designation, experience, is_active')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        
+        let combined: any[] = customWardens || [];
+
+        // Fetch registered warden profiles
+        try {
+          const { data: profileWardens } = await supabase
+            .from('profiles')
+            .select('id, first_name, last_name, email, phone, role')
+            .eq('role', 'WARDEN');
+          if (profileWardens && profileWardens.length > 0) {
+            const mapped = profileWardens.map((w: any) => {
+              const matchedCustom = (customWardens || []).find((cw: any) => 
+                (cw.email && w.email && cw.email.toLowerCase() === w.email.toLowerCase()) ||
+                cw.id === w.id
+              );
+              return {
+                id: w.id,
+                name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matchedCustom?.name || w.email,
+                email: w.email,
+                phone: w.phone || matchedCustom?.phone || '',
+                designation: matchedCustom?.designation || 'Hostel Warden',
+                experience: matchedCustom?.experience !== undefined ? Number(matchedCustom.experience) : 5
+              };
+            });
+
+            const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+            const nonDuplicateCustom = (customWardens || []).filter((cw: any) => !profileEmails.includes((cw.email || '').toLowerCase()));
+            combined = [...mapped, ...nonDuplicateCustom];
+          }
+        } catch (err) {
+          console.warn('Could not fetch WARDEN profiles:', err);
+        }
+        
+        return combined;
+      } finally {
+        inFlightWardensPromise = null;
+      }
+    })();
+
+    return inFlightWardensPromise;
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
@@ -812,38 +855,53 @@ export const adminService = {
    * Staff: Caretakers - Directly backed by Supabase hostel_caretakers table
    */
   async getCaretakers() {
-    const { data: customCaretakers } = await supabase
-      .from('hostel_caretakers')
-      .select('*')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    
-    let combined: any[] = customCaretakers || [];
-
-    try {
-      const { data: profileCaretakers } = await supabase.from('profiles').select('*').eq('role', 'CARETAKER');
-      if (profileCaretakers && profileCaretakers.length > 0) {
-        const mapped = profileCaretakers.map((c: any) => {
-          const matched = (customCaretakers || []).find((cd: any) => 
-            (cd.email && c.email && cd.email.toLowerCase() === c.email.toLowerCase()) ||
-            cd.id === c.id
-          );
-          return {
-            id: c.id,
-            name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || matched?.name || c.email,
-            email: c.email,
-            phone: c.phone || matched?.phone || '',
-            experience: matched?.experience !== undefined ? Number(matched.experience) : 3
-          };
-        });
-        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
-        const nonDup = (customCaretakers || []).filter((cd: any) => !profileEmails.includes((cd.email || '').toLowerCase()));
-        combined = [...mapped, ...nonDup];
-      }
-    } catch (err) {
-      console.warn('Could not fetch CARETAKER profiles:', err);
+    if (inFlightCaretakersPromise) {
+      return inFlightCaretakersPromise;
     }
-    return combined;
+
+    inFlightCaretakersPromise = (async () => {
+      try {
+        const { data: customCaretakers } = await supabase
+          .from('hostel_caretakers')
+          .select('id, name, email, phone, experience, is_active')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        
+        let combined: any[] = customCaretakers || [];
+
+        try {
+          const { data: profileCaretakers } = await supabase
+            .from('profiles')
+            .select('id, first_name, last_name, email, phone, role')
+            .eq('role', 'CARETAKER');
+          if (profileCaretakers && profileCaretakers.length > 0) {
+            const mapped = profileCaretakers.map((c: any) => {
+              const matched = (customCaretakers || []).find((cd: any) => 
+                (cd.email && c.email && cd.email.toLowerCase() === c.email.toLowerCase()) ||
+                cd.id === c.id
+              );
+              return {
+                id: c.id,
+                name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || matched?.name || c.email,
+                email: c.email,
+                phone: c.phone || matched?.phone || '',
+                experience: matched?.experience !== undefined ? Number(matched.experience) : 3
+              };
+            });
+            const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+            const nonDup = (customCaretakers || []).filter((cd: any) => !profileEmails.includes((cd.email || '').toLowerCase()));
+            combined = [...mapped, ...nonDup];
+          }
+        } catch (err) {
+          console.warn('Could not fetch CARETAKER profiles:', err);
+        }
+        return combined;
+      } finally {
+        inFlightCaretakersPromise = null;
+      }
+    })();
+
+    return inFlightCaretakersPromise;
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
@@ -973,42 +1031,54 @@ export const adminService = {
    * Staff: Security
    */
   async getSecurityStaff() {
-    // Fetch manually added security staff
-    const { data: customSecurity } = await supabase
-      .from('security_staff')
-      .select('*')
-      .eq('is_active', true)
-      .order('id', { ascending: true });
-    
-    let combined: any[] = customSecurity || [];
-
-    // Fetch registered security profiles
-    try {
-      const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
-      if (profileSecurity && profileSecurity.length > 0) {
-        const mapped = profileSecurity.map((w: any) => {
-          const matched = (customSecurity || []).find((cs: any) => 
-            (cs.email && w.email && cs.email.toLowerCase() === w.email.toLowerCase()) ||
-            cs.id === w.id
-          );
-          return {
-            id: w.id,
-            name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matched?.name || w.email,
-            email: w.email,
-            phone: w.phone || matched?.phone || '',
-            designation: matched?.designation || 'Security Guard',
-            experience: matched?.experience !== undefined ? Number(matched?.experience) : 5
-          };
-        });
-        const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
-        const nonDuplicateCustom = (customSecurity || []).filter((cs: any) => !profileEmails.includes((cs.email || '').toLowerCase()));
-        combined = [...mapped, ...nonDuplicateCustom];
-      }
-    } catch (err) {
-      console.warn('Could not fetch SECURITY profiles:', err);
+    if (inFlightSecurityStaffPromise) {
+      return inFlightSecurityStaffPromise;
     }
 
-    return combined;
+    inFlightSecurityStaffPromise = (async () => {
+      try {
+        // Fetch manually added security staff
+        const { data: customSecurity } = await supabase
+          .from('security_staff')
+          .select('*')
+          .eq('is_active', true)
+          .order('id', { ascending: true });
+        
+        let combined: any[] = customSecurity || [];
+
+        // Fetch registered security profiles
+        try {
+          const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
+          if (profileSecurity && profileSecurity.length > 0) {
+            const mapped = profileSecurity.map((w: any) => {
+              const matched = (customSecurity || []).find((cs: any) => 
+                (cs.email && w.email && cs.email.toLowerCase() === w.email.toLowerCase()) ||
+                cs.id === w.id
+              );
+              return {
+                id: w.id,
+                name: `${w.first_name || ''} ${w.last_name || ''}`.trim() || matched?.name || w.email,
+                email: w.email,
+                phone: w.phone || matched?.phone || '',
+                designation: matched?.designation || 'Security Guard',
+                experience: matched?.experience !== undefined ? Number(matched?.experience) : 5
+              };
+            });
+            const profileEmails = mapped.map(m => (m.email || '').toLowerCase()).filter(Boolean);
+            const nonDuplicateCustom = (customSecurity || []).filter((cs: any) => !profileEmails.includes((cs.email || '').toLowerCase()));
+            combined = [...mapped, ...nonDuplicateCustom];
+          }
+        } catch (err) {
+          console.warn('Could not fetch SECURITY profiles:', err);
+        }
+
+        return combined;
+      } finally {
+        inFlightSecurityStaffPromise = null;
+      }
+    })();
+
+    return inFlightSecurityStaffPromise;
   },
 
   async createSecurityStaff(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {

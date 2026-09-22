@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Building2, History, X, Clock, Image, Eye, ChevronLeft, ChevronRight, Loader2, UserCheck } from 'lucide-react';
 import type { HostelIssue, Hostel } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { adminService } from '../../services/adminService';
 import { wardenService } from '../../services/wardenService';
 import { useNotification } from '../../context/NotificationContext';
 import { supabase } from '../../lib/supabase';
@@ -31,15 +32,16 @@ export const IssueTracking: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
-    fetchIssuesAndHostels();
+    fetchHostels();
+    fetchIssues();
 
     const channel = supabase
       .channel('admin_issues_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
-        refreshIssuesOnly();
+        fetchIssues();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_updates' }, () => {
-        refreshIssuesOnly();
+        fetchIssues();
       })
       .subscribe();
 
@@ -48,25 +50,21 @@ export const IssueTracking: React.FC = () => {
     };
   }, []);
 
-  const refreshIssuesOnly = async () => {
+  const fetchHostels = async () => {
+    try {
+      const hostelList = await adminService.getHostelsList();
+      setHostels(hostelList);
+    } catch (err) {
+      console.error('Failed to load hostels for issue tracking', err);
+    }
+  };
+
+  const fetchIssues = async () => {
     try {
       const allIssues = await wardenService.getIssues();
       setIssues(allIssues);
     } catch (err) {
-      console.warn('Realtime refresh issues error:', err);
-    }
-  };
-
-  const fetchIssuesAndHostels = async () => {
-    try {
-      const [issues, hostelsRes] = await Promise.all([
-        wardenService.getIssues(),
-        apiClient.get<Hostel[]>('/hms/hostels/'),
-      ]);
-      setIssues(issues);
-      setHostels(hostelsRes.data);
-    } catch (err) {
-      console.error('Failed to load issues or hostels', err);
+      console.error('Failed to load issues', err);
     }
   };
 
