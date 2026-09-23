@@ -168,6 +168,12 @@ export const apiClient = {
     }
 
     // 3. Students / Resident Directory (/hms/students/ & /warden/residents/structured/)
+    if (endpoint.includes('/warden/visitor-students/') || endpoint.includes('/warden/students/lookup/')) {
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const hostelId = urlParams.get('hostel_id') || urlParams.get('hostel') || undefined;
+      const lookup = await wardenService.getStudentVisitorLookup(hostelId);
+      return { data: lookup as T };
+    }
     if (endpoint.includes('/warden/residents/structured/') || endpoint.includes('/hms/students/structured/')) {
       const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
       const hostelId = urlParams.get('hostel_id') || urlParams.get('hostel') || undefined;

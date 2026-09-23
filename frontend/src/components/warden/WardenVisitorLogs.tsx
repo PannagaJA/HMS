@@ -29,6 +29,7 @@ export const WardenVisitorLogs: React.FC = () => {
   const { showSuccess, showError, confirm } = useNotification();
   const [logs, setLogs] = useState<VisitorLog[]>([]);
   const [students, setStudents] = useState<HostelStudent[]>([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [search, setSearch] = useState('');
@@ -44,7 +45,6 @@ export const WardenVisitorLogs: React.FC = () => {
 
   useEffect(() => {
     fetchVisitorLogs();
-    fetchStudents();
     fetchHostels();
 
     const channel = supabase
@@ -84,27 +84,37 @@ export const WardenVisitorLogs: React.FC = () => {
   };
 
   const fetchStudents = async () => {
+    if (students.length > 0) return;
     try {
-      const res = await apiClient.get<HostelStudent[]>('/warden/students/');
-      setStudents(res.data);
+      setIsLoadingStudents(true);
+      const res = await apiClient.get<any[]>('/warden/visitor-students/');
+      setStudents(res.data || []);
     } catch (err) {
       console.error('Failed to load students', err);
+    } finally {
+      setIsLoadingStudents(false);
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    setShowAddModal(true);
+    if (students.length === 0) {
+      fetchStudents();
     }
   };
 
   const handleCreateLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const st = students.find((s) => String(s.id) === String(formData.student));
+      const st = students.find((s: any) => String(s.id) === String(formData.student));
       const studentId = Number(formData.student);
-      const hostelId = st?.hostel || (st?.room_detail as any)?.hostel_id || (st as any)?.hostel_id || 1;
-      const roomId = st?.room_detail?.id || (st as any)?.room_id || 1;
+      const hostelId = (st as any)?.hostel_id || (st as any)?.hostel || (st as any)?.room_detail?.hostel_id || 1;
 
       await apiClient.post('/hms/visitor-logs/', {
         student_id: studentId,
         student_name: st?.student_name,
         enrollment_no: st?.enrollment_no,
-        student_room: st?.room_no || st?.room_number,
+        student_room: (st as any)?.room_no || (st as any)?.room_number,
         hostel_id: hostelId,
         visitor_name: formData.visitor_name,
         mobile_number: formData.mobile_number,
@@ -195,7 +205,7 @@ export const WardenVisitorLogs: React.FC = () => {
           <p className="text-xs text-slate-500 mt-0.5">Track external guests visiting residents in assigned blocks</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={handleOpenAddModal}
           className="w-full sm:w-auto px-4 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Register New Visitor
@@ -432,16 +442,26 @@ export const WardenVisitorLogs: React.FC = () => {
             <form onSubmit={handleCreateLog} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Visiting Student *</label>
-                <Select value={formData.student} onValueChange={(val) => setFormData({ ...formData, student: val })}>
+                <Select 
+                  value={formData.student} 
+                  onValueChange={(val) => setFormData({ ...formData, student: val })}
+                  disabled={isLoadingStudents}
+                >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Resident Student" />
+                    <SelectValue placeholder={isLoadingStudents ? "Loading resident students..." : "Select Resident Student"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {students.map((st) => (
-                      <SelectItem key={st.id} value={String(st.id)}>
-                        {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor ?? (st.room_detail as any)?.floor, st.room_detail?.no || st.room_no)}
-                      </SelectItem>
-                    ))}
+                    {isLoadingStudents ? (
+                      <div className="p-4 text-xs text-slate-500 text-center">Loading students...</div>
+                    ) : students.length === 0 ? (
+                      <div className="p-4 text-xs text-slate-500 text-center">No resident students found</div>
+                    ) : (
+                      students.map((st: any) => (
+                        <SelectItem key={st.id} value={String(st.id)}>
+                          {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor, st.room_no)}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
