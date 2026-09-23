@@ -28,8 +28,8 @@ serve(async (req: Request) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Use standard password instead of temporary
-    const tempPassword = 'amc@2026';
+    // Use standard default password across all roles
+    const tempPassword = 'password123';
 
     // Fetch the org_id of the admin making this request
     const authHeader = req.headers.get('Authorization');

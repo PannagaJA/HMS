@@ -869,15 +869,29 @@ export const apiClient = {
       const effectiveEmail = user?.email || stored?.email || '';
       const effectiveUsername = stored?.username || (effectiveEmail ? effectiveEmail.split('@')[0] : '');
 
-      // If user has an active Supabase Auth session, update Supabase Auth
+      // 1. If user has an active Supabase Auth session, update Supabase Auth
+      let authUpdated = false;
       if (user) {
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
-        if (error) {
-          throw new Error(error.message || 'Failed to update password in authentication service.');
+        try {
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+          if (!error) authUpdated = true;
+        } catch (_) {}
+      }
+
+      // 2. Direct Cloud Password RPC (Updates auth.users directly on Supabase PostgreSQL for all devices)
+      const identToUpdate = effectiveEmail || stored?.enrollment_no || stored?.username || stored?.id;
+      if (identToUpdate) {
+        try {
+          await supabase.rpc('change_user_password', {
+            p_identifier: identToUpdate,
+            p_new_password: newPassword
+          });
+        } catch (rpcErr) {
+          console.warn('RPC change_user_password warning:', rpcErr);
         }
       }
 
-      // Save updated password in custom passwords map for directory/fallback sessions
+      // 3. Save updated password in custom passwords map for directory/fallback sessions
       if (typeof localStorage !== 'undefined') {
         try {
           const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
