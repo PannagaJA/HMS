@@ -9,6 +9,7 @@ import { adminService } from './adminService';
 const inFlightGatePasses = new Map<string, Promise<any[]>>();
 const inFlightIssues = new Map<string, Promise<HostelIssue[]>>();
 const inFlightAssignedHostels = new Map<string, Promise<any[]>>();
+const inFlightWardenStats = new Map<string, Promise<any>>();
 
 export const wardenService = {
   /**
@@ -17,70 +18,143 @@ export const wardenService = {
   async getDashboardStats(userId?: string, hostelId?: number | string) {
     let resolvedUserId = userId;
     if (!resolvedUserId) {
-      const { data: authData } = await supabase.auth.getUser();
-      resolvedUserId = authData?.user?.id;
+      try {
+        const stored = localStorage.getItem('hms_user');
+        if (stored) {
+          resolvedUserId = JSON.parse(stored)?.id;
+        }
+      } catch (e) {}
+      if (!resolvedUserId) {
+        const session = (await supabase.auth.getSession()).data.session;
+        resolvedUserId = session?.user?.id;
+      }
     }
 
-    const managedHostelsRaw = await this.getAssignedHostels(resolvedUserId);
-    const managedHostels = managedHostelsRaw.map((h: any) => ({
-      id: h.id,
-      name: h.name,
-      gender: h.gender,
-      floors: h.floor_count !== undefined && h.floor_count !== null ? Number(h.floor_count) : (h.floors || 3)
-    }));
+    const cacheKey = `${resolvedUserId || 'anon'}_${hostelId || 'default'}`;
+    if (inFlightWardenStats.has(cacheKey)) {
+      return inFlightWardenStats.get(cacheKey)!;
+    }
 
-    const targetHostelId = hostelId
-      ? Number(hostelId)
-      : managedHostels.length > 0 ? managedHostels[0].id : null;
+    const promise = (async () => {
+      try {
+        const { data: hostelData, error } = await supabase
+          .from('hostels')
+          .select(`
+            id,
+            name,
+            gender,
+            floor_count,
+            is_active,
+            warden_id,
+            warden_hostel_assignments(warden_profile_id),
+            rooms:hostel_rooms(
+              id,
+              no,
+              floor,
+              capacity,
+              room_type,
+              is_active,
+              beds(
+                id,
+                bed_number,
+                allocations:room_allocations(id, is_active)
+              )
+            ),
+            gate_passes(id, status),
+            issues(id, status)
+          `)
+          .eq('is_active', true)
+          .order('id', { ascending: true });
 
-    let targetStat: any = null;
+        if (error) {
+          console.error('[wardenService.getDashboardStats] Error querying hostels:', error);
+          throw error;
+        }
 
-    if (targetHostelId) {
-      // Calculate live real-time stats for targetHostelId
-      const [roomsRes, passesRes, issuesRes] = await Promise.all([
-        supabase.from('hostel_rooms').select('id, capacity, is_active, beds(id, allocations:room_allocations(id, is_active))').eq('hostel_id', targetHostelId).eq('is_active', true),
-        supabase.from('gate_passes').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).or('status.eq.PENDING,status.eq.pending'),
-        supabase.from('issues').select('id', { count: 'exact', head: true }).eq('hostel_id', targetHostelId).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)')
-      ]);
+        const allHostels = hostelData || [];
 
-      const rooms = roomsRes.data || [];
-      const totalRooms = rooms.length;
-      let totalCap = 0;
-      let occupied = 0;
-
-      rooms.forEach((r: any) => {
-        totalCap += (r.capacity || 0);
-        (r.beds || []).forEach((b: any) => {
-          if ((b.allocations || []).some((a: any) => a.is_active)) {
-            occupied++;
-          }
+        // Identify hostels assigned to this warden (via warden_hostel_assignments or direct warden_id)
+        const managed = allHostels.filter((h: any) => {
+          if (!resolvedUserId) return true; // Fallback if admin viewing
+          const isDirect = String(h.warden_id) === String(resolvedUserId);
+          const isAssigned = (h.warden_hostel_assignments || []).some(
+            (a: any) => String(a.warden_profile_id) === String(resolvedUserId)
+          );
+          return isDirect || isAssigned;
         });
-      });
 
-      targetStat = {
-        hostel_id: targetHostelId,
-        total_rooms: totalRooms,
-        total_capacity: totalCap,
-        occupied_beds: occupied,
-        pending_gate_passes: passesRes.count || 0,
-        open_issues: issuesRes.count || 0
-      };
-    }
+        const managedHostels = managed.map((h: any) => ({
+          id: h.id,
+          name: h.name,
+          gender: h.gender,
+          floors: h.floor_count !== undefined && h.floor_count !== null ? Number(h.floor_count) : 3
+        }));
 
-    const totalRooms = targetStat?.total_rooms || 0;
-    const totalCap = targetStat?.total_capacity || 0;
-    const occupied = targetStat?.occupied_beds || 0;
-    const rate = totalCap > 0 ? Math.round((occupied / totalCap) * 100) : 0;
+        const target = (hostelId 
+          ? managed.find((h: any) => String(h.id) === String(hostelId)) 
+          : managed[0]) || managed[0] || allHostels[0];
 
-    return {
-      managed_hostels: managedHostels,
-      total_residents: occupied,
-      total_rooms: totalRooms,
-      total_capacity: totalCap,
-      pending_gate_passes: targetStat?.pending_gate_passes || 0,
-      open_issues: targetStat?.open_issues || 0,
-      occupancy_rate: rate
-    };
+        let totalRooms = 0;
+        let totalCap = 0;
+        let occupied = 0;
+        let pendingGatePasses = 0;
+        let openIssues = 0;
+        let roomsList: any[] = [];
+
+        if (target) {
+          const rawRooms = (target.rooms || []).filter((r: any) => r.is_active);
+          totalRooms = rawRooms.length;
+
+          roomsList = rawRooms.map((r: any) => {
+            let occ = 0;
+            totalCap += (r.capacity || 0);
+            (r.beds || []).forEach((b: any) => {
+              if ((b.allocations || []).some((a: any) => a.is_active)) {
+                occ++;
+                occupied++;
+              }
+            });
+            return {
+              id: r.id,
+              no: r.no,
+              room_no: r.no,
+              floor: r.floor,
+              capacity: r.capacity,
+              room_type: r.room_type,
+              occupied_count: occ,
+              current_occupancy: occ,
+              hostel_id: target.id
+            };
+          });
+
+          pendingGatePasses = (target.gate_passes || []).filter((gp: any) => 
+            String(gp.status || '').toLowerCase() === 'pending'
+          ).length;
+
+          openIssues = (target.issues || []).filter((iss: any) => 
+            !['completed', 'closed', 'resolved'].includes(String(iss.status || '').toLowerCase())
+          ).length;
+        }
+
+        const rate = totalCap > 0 ? Math.round((occupied / totalCap) * 100) : 0;
+
+        return {
+          managed_hostels: managedHostels,
+          total_residents: occupied,
+          total_rooms: totalRooms,
+          total_capacity: totalCap,
+          pending_gate_passes: pendingGatePasses,
+          open_issues: openIssues,
+          occupancy_rate: rate,
+          rooms: roomsList
+        };
+      } finally {
+        inFlightWardenStats.delete(cacheKey);
+      }
+    })();
+
+    inFlightWardenStats.set(cacheKey, promise);
+    return promise;
   },
 
   /**
@@ -89,8 +163,16 @@ export const wardenService = {
   async getAssignedHostels(userId?: string) {
     let resolvedUserId = userId;
     if (!resolvedUserId) {
-      const { data: authData } = await supabase.auth.getUser();
-      resolvedUserId = authData?.user?.id;
+      try {
+        const stored = localStorage.getItem('hms_user');
+        if (stored) {
+          resolvedUserId = JSON.parse(stored)?.id;
+        }
+      } catch (e) {}
+      if (!resolvedUserId) {
+        const session = (await supabase.auth.getSession()).data.session;
+        resolvedUserId = session?.user?.id;
+      }
     }
     if (!resolvedUserId) return [];
 
@@ -511,5 +593,82 @@ export const wardenService = {
     }
 
     return { updates: [guaranteedEntry], rpcError };
+  },
+
+  /**
+   * Fetch structured single room details with active occupants on-demand
+   */
+  async getRoomDetails(hostelId: number | string, roomId: number | string) {
+    let query = supabase
+      .from('hostel_rooms')
+      .select('*, hostel:hostels(id, name), beds(*, allocations:room_allocations(*, student:students(*)))')
+      .eq('id', Number(roomId));
+
+    if (hostelId) {
+      query = query.eq('hostel_id', Number(hostelId));
+    }
+
+    const { data: r, error } = await query.maybeSingle();
+
+    if (error) {
+      console.error('[wardenService.getRoomDetails] Error:', error);
+      throw error;
+    }
+    if (!r) return null;
+
+    let occupied_count = 0;
+    const occupants: any[] = [];
+    const beds: any[] = [];
+
+    (r.beds || []).forEach((b: any) => {
+      const activeAlloc = (b.allocations || []).find((a: any) => a.is_active);
+      if (activeAlloc) {
+        occupied_count++;
+        if (activeAlloc.student) {
+          occupants.push({
+            bed_id: b.id,
+            bed_number: b.bed_number,
+            student_id: activeAlloc.student.id,
+            student_name: activeAlloc.student.student_name || 'Resident',
+            enrollment_no: activeAlloc.student.enrollment_no || 'N/A',
+            student: {
+              id: activeAlloc.student.id,
+              name: activeAlloc.student.student_name || 'Resident',
+              student_name: activeAlloc.student.student_name || 'Resident',
+              enrollment_no: activeAlloc.student.enrollment_no || 'N/A',
+            }
+          });
+        }
+      }
+      beds.push({
+        id: b.id,
+        bed_number: b.bed_number,
+        occupant: activeAlloc?.student ? {
+          student_id: activeAlloc.student.id,
+          student_name: activeAlloc.student.student_name,
+          enrollment_no: activeAlloc.student.enrollment_no,
+          is_active: true
+        } : null
+      });
+    });
+
+    return {
+      id: r.id,
+      room_no: r.no,
+      no: r.no,
+      floor: r.floor,
+      capacity: r.capacity,
+      room_type: r.room_type,
+      hostel_id: r.hostel_id,
+      hostel: {
+        id: r.hostel?.id || r.hostel_id,
+        name: r.hostel?.name || 'Hostel Block'
+      },
+      hostel_name: r.hostel?.name || 'Hostel Block',
+      occupied_count,
+      current_occupancy: occupied_count,
+      beds,
+      occupants
+    };
   }
 };

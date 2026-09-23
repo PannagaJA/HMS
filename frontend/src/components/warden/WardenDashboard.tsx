@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Users,
   Ticket,
@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Layers,
   DoorClosed,
+  Loader2,
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import type { HostelRoom } from '../../types';
@@ -32,28 +33,27 @@ interface WardenStats {
   pending_gate_passes: number;
   open_issues: number;
   occupancy_rate: number;
+  rooms?: HostelRoom[];
 }
 
 export const WardenDashboard: React.FC = () => {
   const [stats, setStats] = useState<WardenStats | null>(null);
-  const [rooms, setRooms] = useState<HostelRoom[]>([]);
+  const [allRooms, setAllRooms] = useState<HostelRoom[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<number | null>(null);
-  const [selectedFloor, setSelectedFloor] = useState<string>('');
-  const [selectedRoom, setSelectedRoom] = useState<HostelRoom | null>(null);
+  const [selectedFloor, setSelectedFloor] = useState<string>('all');
+  const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
+  const [isLoadingRoomDetails, setIsLoadingRoomDetails] = useState(false);
 
   const currentHostel = stats?.managed_hostels?.find((h) => h.id === selectedHostelId);
+  const lastFetchedHostelIdRef = useRef<number | null | undefined>(undefined);
 
   useEffect(() => {
+    // If we already have the data for this hostelId from initial load, skip re-fetching
+    if (selectedHostelId !== null && lastFetchedHostelIdRef.current === selectedHostelId) {
+      return;
+    }
     fetchDashboardData(selectedHostelId);
   }, [selectedHostelId]);
-
-  useEffect(() => {
-    if (selectedHostelId && selectedFloor) {
-      fetchRooms(selectedHostelId, selectedFloor);
-    } else {
-      setRooms([]);
-    }
-  }, [selectedHostelId, selectedFloor]);
 
   const handleHostelChange = (hostelId: number) => {
     setSelectedHostelId(hostelId);
@@ -62,11 +62,15 @@ export const WardenDashboard: React.FC = () => {
 
   const fetchDashboardData = async (hostelId?: number | null) => {
     try {
+      lastFetchedHostelIdRef.current = hostelId;
       const url = hostelId ? `/warden/dashboard/?hostel_id=${hostelId}` : '/warden/dashboard/';
       const res = await apiClient.get<WardenStats>(url);
       setStats(res.data);
-      if (!selectedHostelId && res.data?.managed_hostels?.length > 0) {
-        setSelectedHostelId(res.data.managed_hostels[0].id);
+      setAllRooms(res.data?.rooms || []);
+      if (selectedHostelId === null && res.data?.managed_hostels?.length > 0) {
+        const firstHostelId = res.data.managed_hostels[0].id;
+        lastFetchedHostelIdRef.current = firstHostelId;
+        setSelectedHostelId(firstHostelId);
         setSelectedFloor('all');
       }
     } catch (err) {
@@ -74,17 +78,26 @@ export const WardenDashboard: React.FC = () => {
     }
   };
 
-  const fetchRooms = async (hostelId: number, floor: string) => {
+  const handleRoomClick = async (room: HostelRoom) => {
+    setSelectedRoom(room);
+    const hid = selectedHostelId || room.hostel_id || stats?.managed_hostels?.[0]?.id;
+    if (!hid || !room.id) return;
+    setIsLoadingRoomDetails(true);
     try {
-      const url = floor === 'all'
-        ? `/warden/rooms/?hostel_id=${hostelId}`
-        : `/warden/rooms/?hostel_id=${hostelId}&floor=${floor}`;
-      const res = await apiClient.get<HostelRoom[]>(url);
-      setRooms(res.data);
-    } catch (err) {
-      console.error('Failed to load warden rooms', err);
+      const res = await apiClient.get<any>(`/api/hostels/${hid}/rooms/${room.id}/`);
+      if (res.data) {
+        setSelectedRoom(res.data);
+      }
+    } catch (e) {
+      console.warn('Failed to load full room details on-demand:', e);
+    } finally {
+      setIsLoadingRoomDetails(false);
     }
   };
+
+  const displayedRooms = selectedFloor === 'all'
+    ? allRooms
+    : allRooms.filter((r) => String(r.floor) === String(selectedFloor));
 
   return (
     <div className="space-y-6">
@@ -223,7 +236,7 @@ export const WardenDashboard: React.FC = () => {
               Choose a floor level or "All Floors" from the dropdown above to view the live room & bed matrix.
             </p>
           </div>
-        ) : rooms.length === 0 ? (
+        ) : displayedRooms.length === 0 ? (
           <div className="bg-slate-50/70 p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2.5">
             <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto border border-slate-200">
               <DoorClosed className="w-5 h-5" />
@@ -235,7 +248,7 @@ export const WardenDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {rooms.map((room) => {
+            {displayedRooms.map((room) => {
               const occ = room.occupied_count || room.current_occupancy || (room.occupants ? room.occupants.length : 0);
               const isFull = occ >= room.capacity;
               const isEmpty = occ === 0;
@@ -243,7 +256,7 @@ export const WardenDashboard: React.FC = () => {
               return (
                 <div
                   key={room.id}
-                  onClick={() => setSelectedRoom(room)}
+                  onClick={() => handleRoomClick(room)}
                   className={`p-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md ${
                     isFull
                       ? 'bg-rose-50/40 border-rose-200/70 hover:border-rose-400'
@@ -277,12 +290,20 @@ export const WardenDashboard: React.FC = () => {
 
       {/* Room Details Modal */}
       {selectedRoom && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150">
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setSelectedRoom(null)}
+        >
+          <div 
+            className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Room {selectedRoom.no} Details</h3>
-                <p className="text-xs text-slate-400">Floor {selectedRoom.floor} · {selectedRoom.hostel_name || 'Hostel Block'}</p>
+                <h3 className="text-lg font-bold text-slate-900">Room {selectedRoom.no || selectedRoom.room_no} Details</h3>
+                <p className="text-xs text-slate-400">
+                  Floor {selectedRoom.floor} · {selectedRoom.hostel?.name || selectedRoom.hostel_name || currentHostel?.name || 'Hostel Block'}
+                </p>
               </div>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
                 Capacity: {selectedRoom.capacity}
@@ -290,28 +311,46 @@ export const WardenDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-3 mb-6">
-              <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Occupants</h4>
-              {(!selectedRoom.occupants || selectedRoom.occupants.length === 0) ? (
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Occupants</h4>
+                {isLoadingRoomDetails && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Loading details...</span>
+                  </span>
+                )}
+              </div>
+              {isLoadingRoomDetails && (!selectedRoom.occupants || selectedRoom.occupants.length === 0) ? (
+                <div className="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                </div>
+              ) : (!selectedRoom.occupants || selectedRoom.occupants.length === 0) ? (
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-center text-xs text-slate-400">
                   Room is currently vacant.
                 </div>
               ) : (
-                selectedRoom.occupants.map((occ: any, i: number) => (
-                  <div key={i} className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-[#0B1437] text-white flex items-center justify-center text-xs font-bold">
-                        {occ.student_name?.[0] || 'S'}
+                selectedRoom.occupants.map((occ: any, i: number) => {
+                  const studentName = occ.student?.name || occ.student_name || 'Resident';
+                  const enrollmentNo = occ.student?.enrollment_no || occ.enrollment_no || 'N/A';
+                  const bedNum = occ.bed_number || (i + 1);
+
+                  return (
+                    <div key={i} className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-[#0B1437] text-white flex items-center justify-center text-xs font-bold shrink-0">
+                          {studentName?.[0] || 'S'}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 leading-tight">{studentName}</div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{enrollmentNo}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900">{occ.student_name}</div>
-                        <div className="text-[10px] text-slate-400">{occ.enrollment_no}</div>
-                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 shrink-0">
+                        Bed {bedNum}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                      Bed {occ.bed_number || i + 1}
-                    </span>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

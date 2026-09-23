@@ -6,6 +6,8 @@ import { securityService } from '../services/securityService';
 import { studentService } from '../services/studentService';
 import { diningService, issueService } from '../services/facilitiesService';
 
+const inFlightWardenRooms = new Map<string, Promise<any>>();
+
 export const apiClient = {
   async get<T = any>(endpoint: string) {
     // 1. Current user profile (/auth/me/)
@@ -178,14 +180,22 @@ export const apiClient = {
       return { data: students as T };
     }
 
-    // 4. Hostels Management (/hms/hostels/)
+    // 4. Single Room Details & Hostels Management (/hms/hostels/)
+    const singleRoomMatch = endpoint.match(/(?:\/api|\/hms)?\/hostels\/(\d+)\/rooms\/(\d+)\/?/);
+    if (singleRoomMatch) {
+      const hostelId = Number(singleRoomMatch[1]);
+      const roomId = Number(singleRoomMatch[2]);
+      const details = await wardenService.getRoomDetails(hostelId, roomId);
+      return { data: details as T };
+    }
+
     if (endpoint.includes('/hms/hostels/') && endpoint.includes('/rooms/')) {
       const parts = endpoint.split('/').filter(Boolean);
       const hostelId = parts[parts.indexOf('hostels') + 1];
       const rooms = await adminService.getRooms(hostelId);
       return { data: rooms as T };
     }
-    if (endpoint.includes('/hms/hostels/')) {
+    if (endpoint.includes('/hms/hostels/') || endpoint.includes('/hostels/')) {
       const hostels = await adminService.getHostels();
       return { data: hostels as T };
     }
@@ -202,48 +212,65 @@ export const apiClient = {
     if (endpoint.includes('/warden/dashboard/')) {
       const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
       const hostelId = urlParams.get('hostel_id');
-      const { data: user } = await supabase.auth.getUser();
-      const stats = await wardenService.getDashboardStats(user.user?.id, hostelId || undefined);
+      const stored = getStoredUser();
+      const userId = stored?.id || (await supabase.auth.getSession()).data.session?.user?.id;
+      const stats = await wardenService.getDashboardStats(userId, hostelId || undefined);
       return { data: stats as T };
     }
     if (endpoint.includes('/warden/rooms/')) {
       const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
-      const hostelId = urlParams.get('hostel_id');
-      const floor = urlParams.get('floor');
-      let query = supabase.from('hostel_rooms').select('*, beds(*, allocations:room_allocations(*, student:students(*)))').eq('is_active', true);
-      if (hostelId) query = query.eq('hostel_id', hostelId);
-      if (floor && floor !== 'all') query = query.eq('floor', floor);
-      const { data, error } = await query;
-      if (error) throw error;
+      const hostelId = urlParams.get('hostel_id') || 'all';
+      const floor = urlParams.get('floor') || 'all';
+      const cacheKey = `${hostelId}_${floor}`;
 
-      const formattedRooms = (data || []).map((r: any) => {
-        let occupied_count = 0;
-        const occupants: any[] = [];
+      if (inFlightWardenRooms.has(cacheKey)) {
+        return { data: (await inFlightWardenRooms.get(cacheKey)!) as T };
+      }
 
-        (r.beds || []).forEach((b: any) => {
-          (b.allocations || []).forEach((a: any) => {
-            if (a.is_active) {
-              occupied_count++;
-              if (a.student) {
-                occupants.push({
-                  student_name: a.student.student_name || 'Resident',
-                  enrollment_no: a.student.enrollment_no || 'N/A',
-                  bed_number: b.bed_number,
-                });
-              }
-            }
+      const promise = (async () => {
+        try {
+          let query = supabase.from('hostel_rooms').select('*, beds(*, allocations:room_allocations(*, student:students(*)))').eq('is_active', true);
+          if (hostelId && hostelId !== 'all') query = query.eq('hostel_id', hostelId);
+          if (floor && floor !== 'all') query = query.eq('floor', floor);
+          const { data, error } = await query;
+          if (error) throw error;
+
+          const formattedRooms = (data || []).map((r: any) => {
+            let occupied_count = 0;
+            const occupants: any[] = [];
+
+            (r.beds || []).forEach((b: any) => {
+              (b.allocations || []).forEach((a: any) => {
+                if (a.is_active) {
+                  occupied_count++;
+                  if (a.student) {
+                    occupants.push({
+                      student_name: a.student.student_name || 'Resident',
+                      enrollment_no: a.student.enrollment_no || 'N/A',
+                      bed_number: b.bed_number,
+                    });
+                  }
+                }
+              });
+            });
+
+            return {
+              ...r,
+              occupied_count,
+              current_occupancy: occupied_count,
+              occupants,
+            };
           });
-        });
 
-        return {
-          ...r,
-          occupied_count,
-          current_occupancy: occupied_count,
-          occupants,
-        };
-      });
+          return formattedRooms;
+        } finally {
+          inFlightWardenRooms.delete(cacheKey);
+        }
+      })();
 
-      return { data: formattedRooms as T };
+      inFlightWardenRooms.set(cacheKey, promise);
+      const result = await promise;
+      return { data: result as T };
     }
 
     // 7. Maintenance Issues (/hms/issues/, /warden/issues/, /student/issues/)
