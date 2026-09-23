@@ -21,6 +21,13 @@ import { supabase } from '../../lib/supabase';
 import type { Announcement } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
 import { Pagination } from '../common/Pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const Announcements: React.FC = () => {
   const { user } = useAuth();
@@ -543,31 +550,39 @@ export const Announcements: React.FC = () => {
               <div className="grid sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">Priority Level</label>
-                  <select
+                  <Select
                     value={newAnnouncement.priority}
-                    onChange={e => setNewAnnouncement(prev => ({ ...prev, priority: e.target.value as any }))}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all"
+                    onValueChange={(val: any) => setNewAnnouncement(prev => ({ ...prev, priority: val }))}
                   >
-                    <option value="low">🟢 Low Priority</option>
-                    <option value="medium">🟡 Medium Priority</option>
-                    <option value="high">🔴 High Priority</option>
-                  </select>
+                    <SelectTrigger className="w-full h-11 bg-slate-50 border-slate-200 font-semibold text-slate-800 rounded-xl">
+                      <SelectValue placeholder="Select Priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">🟢 Low Priority</SelectItem>
+                      <SelectItem value="medium">🟡 Medium Priority</SelectItem>
+                      <SelectItem value="high">🔴 High Priority</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">Target Hostel</label>
-                  <select
-                    value={newAnnouncement.target_hostel_id}
-                    onChange={e => setNewAnnouncement(prev => ({ ...prev, target_hostel_id: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 focus:border-[#0B1437] focus:bg-white transition-all"
+                  <Select
+                    value={newAnnouncement.target_hostel_id || 'ALL'}
+                    onValueChange={(val) => setNewAnnouncement(prev => ({ ...prev, target_hostel_id: val === 'ALL' ? '' : val }))}
                   >
-                    <option value="">🏫 All Hostels</option>
-                    {hostels.map(h => (
-                      <option key={h.id} value={h.id.toString()}>
-                        {h.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full h-11 bg-slate-50 border-slate-200 font-semibold text-slate-800 rounded-xl">
+                      <SelectValue placeholder="Select Target Hostel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">🏫 All Hostels</SelectItem>
+                      {hostels.map(h => (
+                        <SelectItem key={h.id} value={h.id.toString()}>
+                          {h.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>

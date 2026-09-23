@@ -1,5 +1,12 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export interface PaginationProps {
   currentPage: number;
@@ -64,22 +71,26 @@ export const Pagination: React.FC<PaginationProps> = ({
         </div>
 
         {/* Per page selector */}
-        <div className="flex items-center gap-1.5 bg-white border border-slate-200/90 rounded-xl px-2.5 py-1 shadow-2xs shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-slate-500 font-medium text-[11px] sm:text-xs whitespace-nowrap">Per page:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              onPageSizeChange(Number(e.target.value));
+          <Select
+            value={String(pageSize)}
+            onValueChange={(val) => {
+              onPageSizeChange(Number(val));
               onPageChange(1);
             }}
-            className="bg-transparent border-0 font-bold text-slate-800 focus:outline-none cursor-pointer text-xs pr-1"
           >
-            {pageSizeOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-7 min-w-[58px] px-2.5 py-0.5 text-xs font-bold text-slate-800 bg-white border border-slate-200/90 rounded-xl shadow-2xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="min-w-[70px]">
+              {pageSizeOptions.map((opt) => (
+                <SelectItem key={opt} value={String(opt)}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

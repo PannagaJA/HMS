@@ -251,6 +251,66 @@ export const wardenService = {
   },
 
   /**
+   * Fetch lightweight resident student lookup specifically for visitor registration dropdown
+   * Returns only: id, student_name, enrollment_no, floor, room_no, room_id, hostel_id
+   */
+  async getStudentVisitorLookup(hostelId?: string | number) {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select(`
+          id,
+          student_name,
+          enrollment_no,
+          allocations:room_allocations(
+            is_active,
+            bed:beds(
+              room:hostel_rooms(
+                id,
+                no,
+                floor,
+                hostel_id
+              )
+            )
+          )
+        `)
+        .order('student_name', { ascending: true, nullsFirst: false });
+
+      if (error) throw error;
+
+      const targetHostelStr = hostelId && hostelId !== 'ALL' && hostelId !== 'all' ? String(hostelId) : null;
+
+      return (data || [])
+        .map((st: any) => {
+          const activeAlloc = (st.allocations || []).find((a: any) => a.is_active === true);
+          if (!activeAlloc) return null;
+
+          const bed = Array.isArray(activeAlloc.bed) ? activeAlloc.bed[0] : activeAlloc.bed;
+          const room = Array.isArray(bed?.room) ? bed?.room[0] : bed?.room;
+          const hostelIdVal = room?.hostel_id;
+
+          if (targetHostelStr && String(hostelIdVal) !== targetHostelStr) {
+            return null;
+          }
+
+          return {
+            id: st.id,
+            student_name: st.student_name || 'Resident Student',
+            enrollment_no: st.enrollment_no || '',
+            floor: room?.floor !== undefined ? room.floor : null,
+            room_no: room?.no || '',
+            room_id: room?.id || null,
+            hostel_id: hostelIdVal || null
+          };
+        })
+        .filter(Boolean);
+    } catch (err) {
+      console.error('[wardenService.getStudentVisitorLookup] Error:', err);
+      return [];
+    }
+  },
+
+  /**
    * Fetch gate passes scoped for warden review directly from Supabase
    */
   async getGatePasses(hostelId?: string | number): Promise<any[]> {
