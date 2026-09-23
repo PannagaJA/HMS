@@ -28,7 +28,33 @@ export const studentService = {
         });
         if (!rpcError && rpcData) {
           student = rpcData;
-          return { profile: student, roommates: [] };
+          let rpcRoommates: any[] = rpcData.roommates || [];
+          // If RPC didn't return roommates or returned empty, check local cache for same room
+          if (rpcRoommates.length === 0 && rpcData.room_no && typeof localStorage !== 'undefined') {
+            try {
+              const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+              const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+              const allLocal = [...cachedStudents, ...customStudents];
+              rpcRoommates = allLocal
+                .filter((s: any) => 
+                  s.room_allotted === true &&
+                  (s.room_no === rpcData.room_no || s.room_number === rpcData.room_no) &&
+                  String(s.id) !== String(rpcData.id) &&
+                  s.enrollment_no !== rpcData.enrollment_no
+                )
+                .map((s: any) => ({
+                  id: s.id,
+                  student_name: s.student_name,
+                  enrollment_no: s.enrollment_no,
+                  phone: s.phone || '',
+                  gender: s.gender || 'M',
+                  bed_number: s.bed_number || null,
+                  room_no: rpcData.room_no,
+                  hostel_name: s.hostel_name || rpcData.hostel_name,
+                }));
+            } catch (_) {}
+          }
+          return { profile: student, roommates: rpcRoommates };
         }
       } catch (_) {}
     }
@@ -177,6 +203,34 @@ export const studentService = {
       } catch (err) {
         console.warn('Failed to fetch roommates:', err);
       }
+    }
+
+    // If roommates still empty, check localStorage cached students
+    if (roommates.length === 0 && profile?.room_no && typeof localStorage !== 'undefined') {
+      try {
+        const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+        const allLocal = [...cachedStudents, ...customStudents];
+        roommates = allLocal
+          .filter((s: any) => 
+            s.room_allotted === true &&
+            (s.room_no === profile.room_no || s.room_number === profile.room_no) &&
+            String(s.id) !== String(profile.id) &&
+            s.enrollment_no !== profile.enrollment_no
+          )
+          .map((s: any) => ({
+            id: s.id,
+            student_name: s.student_name,
+            enrollment_no: s.enrollment_no,
+            phone: s.phone || '',
+            gender: s.gender || 'M',
+            bed_number: s.bed_number || null,
+            room_no: profile.room_no,
+            hostel_name: s.hostel_name || profile.hostel_name,
+            no_dues: s.no_dues ?? true,
+            status: s.status || 'ACTIVE'
+          } as HostelStudent));
+      } catch (_) {}
     }
 
     return { profile, roommates };

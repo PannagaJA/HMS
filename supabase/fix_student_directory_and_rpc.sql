@@ -59,41 +59,71 @@ BEGIN
   WHERE ra.student_id = v_student.id AND ra.is_active = TRUE
   LIMIT 1;
 
-  -- 3. Construct clean JSON response
-  v_result := jsonb_build_object(
-    'id', v_student.id,
-    'profile_id', v_student.profile_id,
-    'student_name', v_student.student_name,
-    'enrollment_no', v_student.enrollment_no,
-    'email', v_student.email,
-    'phone', COALESCE(v_student.phone, ''),
-    'gender', COALESCE(v_student.gender, 'M'),
-    'father_name', COALESCE(v_student.father_name, ''),
-    'guardian_phone', COALESCE(v_student.guardian_phone, ''),
-    'emergency_contact', COALESCE(v_student.emergency_contact, ''),
-    'status', COALESCE(v_student.status, 'ACTIVE'),
-    'room_allotted', (v_alloc.alloc_id IS NOT NULL),
-    'hostel', v_alloc.hostel_id,
-    'hostel_id', v_alloc.hostel_id,
-    'hostel_name', COALESCE(v_alloc.hostel_name, ''),
-    'room_id', v_alloc.room_id,
-    'room_no', COALESCE(v_alloc.room_no, ''),
-    'room_number', COALESCE(v_alloc.room_no, ''),
-    'floor', v_alloc.floor,
-    'bed_id', v_alloc.bed_id,
-    'bed_number', v_alloc.bed_number,
-    'allocated_at', v_alloc.allocated_at,
-    'room_detail', CASE WHEN v_alloc.room_id IS NOT NULL THEN
-      jsonb_build_object(
-        'id', v_alloc.room_id,
-        'no', v_alloc.room_no,
-        'floor', v_alloc.floor,
-        'hostel', jsonb_build_object('id', v_alloc.hostel_id, 'name', v_alloc.hostel_name)
+  -- 3. Find active co-residents / roommates in the exact same room
+  DECLARE
+    v_roommates JSONB := '[]'::jsonb;
+  BEGIN
+    IF v_alloc.room_id IS NOT NULL THEN
+      SELECT COALESCE(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', st.id,
+            'student_name', st.student_name,
+            'enrollment_no', st.enrollment_no,
+            'phone', COALESCE(st.phone, ''),
+            'gender', COALESCE(st.gender, 'M'),
+            'bed_number', bd.bed_number,
+            'room_no', v_alloc.room_no
+          )
+        ),
+        '[]'::jsonb
       )
-    ELSE NULL END
-  );
+      INTO v_roommates
+      FROM public.room_allocations r_co
+      JOIN public.beds bd ON r_co.bed_id = bd.id
+      JOIN public.students st ON r_co.student_id = st.id
+      WHERE bd.room_id = v_alloc.room_id
+        AND r_co.is_active = TRUE
+        AND r_co.student_id != v_student.id;
+    END IF;
 
-  RETURN v_result;
+    -- 4. Construct clean JSON response
+    v_result := jsonb_build_object(
+      'id', v_student.id,
+      'profile_id', v_student.profile_id,
+      'student_name', v_student.student_name,
+      'enrollment_no', v_student.enrollment_no,
+      'email', v_student.email,
+      'phone', COALESCE(v_student.phone, ''),
+      'gender', COALESCE(v_student.gender, 'M'),
+      'father_name', COALESCE(v_student.father_name, ''),
+      'guardian_phone', COALESCE(v_student.guardian_phone, ''),
+      'emergency_contact', COALESCE(v_student.emergency_contact, ''),
+      'status', COALESCE(v_student.status, 'ACTIVE'),
+      'room_allotted', (v_alloc.alloc_id IS NOT NULL),
+      'hostel', v_alloc.hostel_id,
+      'hostel_id', v_alloc.hostel_id,
+      'hostel_name', COALESCE(v_alloc.hostel_name, ''),
+      'room_id', v_alloc.room_id,
+      'room_no', COALESCE(v_alloc.room_no, ''),
+      'room_number', COALESCE(v_alloc.room_no, ''),
+      'floor', v_alloc.floor,
+      'bed_id', v_alloc.bed_id,
+      'bed_number', v_alloc.bed_number,
+      'allocated_at', v_alloc.allocated_at,
+      'roommates', v_roommates,
+      'room_detail', CASE WHEN v_alloc.room_id IS NOT NULL THEN
+        jsonb_build_object(
+          'id', v_alloc.room_id,
+          'no', v_alloc.room_no,
+          'floor', v_alloc.floor,
+          'hostel', jsonb_build_object('id', v_alloc.hostel_id, 'name', v_alloc.hostel_name)
+        )
+      ELSE NULL END
+    );
+
+    RETURN v_result;
+  END;
 END;
 $$;
 
