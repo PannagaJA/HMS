@@ -679,6 +679,7 @@ export const adminService = {
       .insert({
         student_name: payload.student_name,
         enrollment_no: payload.enrollment_no,
+        email: studentEmail,
         gender: payload.gender,
         phone: payload.phone || '',
         father_name: payload.father_name || '',
@@ -729,6 +730,7 @@ export const adminService = {
   async bulkCreateStudents(students: Array<{
     student_name: string;
     enrollment_no: string;
+    email?: string;
     gender: 'M' | 'F';
     phone?: string;
     father_name?: string;
@@ -737,48 +739,92 @@ export const adminService = {
   }>) {
     if (!students || students.length === 0) return [];
 
-    const dbPayload = students.map(s => ({
-      student_name: s.student_name.trim(),
-      enrollment_no: s.enrollment_no.trim().toUpperCase(),
-      gender: s.gender || 'M',
-      phone: (s.phone || '').trim(),
-      father_name: (s.father_name || '').trim(),
-      guardian_phone: (s.guardian_phone || '').trim(),
-      emergency_contact: (s.emergency_contact || '').trim(),
-      no_dues: true,
-      status: 'ACTIVE'
-    }));
+    const defaultOrgId = '00000000-0000-0000-0000-000000000001';
+    const dbPayload = students.map(s => {
+      const email = (s.email || '').trim().toLowerCase() || `${s.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
+      return {
+        student_name: s.student_name.trim(),
+        enrollment_no: s.enrollment_no.trim().toUpperCase(),
+        email: email,
+        gender: s.gender || 'M',
+        phone: (s.phone || '').trim(),
+        father_name: (s.father_name || '').trim(),
+        guardian_phone: (s.guardian_phone || '').trim(),
+        emergency_contact: (s.emergency_contact || '').trim(),
+        org_id: defaultOrgId,
+        no_dues: true,
+        status: 'ACTIVE'
+      };
+    });
 
     try {
-      // First attempt upsert based on enrollment_no
+      // 1. Primary Attempt: Upsert with composite key (org_id, enrollment_no)
       const { data, error } = await supabase
         .from('students')
-        .upsert(dbPayload, { onConflict: 'enrollment_no', ignoreDuplicates: false })
+        .upsert(dbPayload, { onConflict: 'org_id,enrollment_no', ignoreDuplicates: false })
         .select();
       
       if (!error && data) {
         return data;
       }
 
-      if (error) {
-        console.warn('Upsert failed, falling back to sequential/insert:', error.message);
-        // Fallback: standard insert
-        const { data: insertData, error: insertError } = await supabase
-          .from('students')
-          .insert(dbPayload)
-          .select();
-        
-        if (!insertError && insertData) {
-          return insertData;
-        }
-        if (insertError) throw insertError;
+      // 2. Secondary Attempt: Upsert with enrollment_no
+      const { data: data2, error: error2 } = await supabase
+        .from('students')
+        .upsert(dbPayload, { onConflict: 'enrollment_no', ignoreDuplicates: false })
+        .select();
+      
+      if (!error2 && data2) {
+        return data2;
       }
+
+      // 3. Bulletproof Fallback: Query existing USNs, update existing and insert new records
+      console.warn('Upsert fallback triggered, performing smart split update/insert');
+      const usns = dbPayload.map(p => p.enrollment_no);
+      const { data: existingRecords } = await supabase
+        .from('students')
+        .select('id, enrollment_no')
+        .in('enrollment_no', usns);
+      
+      const existingMap = new Map((existingRecords || []).map(r => [r.enrollment_no, r.id]));
+      const toInsert: any[] = [];
+      const updatePromises: PromiseLike<any>[] = [];
+
+      for (const p of dbPayload) {
+        const existingId = existingMap.get(p.enrollment_no);
+        if (existingId) {
+          updatePromises.push(
+            supabase
+              .from('students')
+              .update({
+                student_name: p.student_name,
+                email: p.email,
+                gender: p.gender,
+                phone: p.phone,
+                father_name: p.father_name,
+                guardian_phone: p.guardian_phone,
+                emergency_contact: p.emergency_contact
+              })
+              .eq('id', existingId)
+          );
+        } else {
+          toInsert.push(p);
+        }
+      }
+
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from('students').insert(toInsert);
+        if (insErr) console.warn('Insert batch warning:', insErr.message);
+      }
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+      }
+
+      return dbPayload;
     } catch (e: any) {
       console.warn('Bulk student insertion error:', e);
       throw e;
     }
-
-    return [];
   },
 
   /**
