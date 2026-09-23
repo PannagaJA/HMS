@@ -496,17 +496,46 @@ export const adminService = {
   async getStudents(): Promise<HostelStudent[]> {
     let students: any[] = [];
     try {
-      // 1. Try full join query
+      // 1. Clean query with only required student fields and active allocation hierarchy
       const { data, error } = await supabase
         .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .select(`
+          id,
+          student_name,
+          enrollment_no,
+          father_name,
+          gender,
+          phone,
+          email,
+          guardian_phone,
+          emergency_contact,
+          no_dues,
+          status,
+          allocations:room_allocations(
+            id,
+            bed_id,
+            is_active,
+            allocated_at,
+            vacated_at,
+            bed:beds(
+              id,
+              bed_number,
+              room:hostel_rooms(
+                id,
+                no,
+                floor,
+                hostel:hostels(id, name)
+              )
+            )
+          )
+        `)
         .order('student_name', { ascending: true, nullsFirst: false });
 
       if (!error && data && data.length > 0) {
         students = data;
       } else {
         if (error) {
-          console.warn('Nested student query error, attempting resilient fallback:', error.message || error);
+          console.warn('Student query error, attempting resilient fallback:', error.message || error);
         }
         // Fallback: Direct select from students table
         const { data: rawData, error: rawError } = await supabase
@@ -545,12 +574,12 @@ export const adminService = {
     }
 
     return students.map((s: any) => {
-      const activeAlloc = (s.allocations || []).find((a: any) => a.is_active) || s.allocations?.[0];
-      const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
-      const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
-      const hostel = Array.isArray(room?.hostel) ? room.hostel[0] : room?.hostel;
+      const activeAlloc = (s.allocations || []).find((a: any) => a.is_active === true);
+      const isAllotted = !!activeAlloc;
+      const bed = isAllotted ? (Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed) : null;
+      const room = isAllotted ? (Array.isArray(bed?.room) ? bed.room[0] : bed?.room) : null;
+      const hostel = isAllotted ? (Array.isArray(room?.hostel) ? room.hostel[0] : room?.hostel) : null;
       const resolvedEmail = s.email || s.profile?.email || '';
-      const isAllotted = !!activeAlloc || !!s.room_allotted || !!s.room_no || !!s.room_number || !!s.bed_number;
 
       return {
         ...s,
@@ -561,15 +590,140 @@ export const adminService = {
         phone: s.phone || '',
         email: resolvedEmail,
         room_allotted: isAllotted,
-        hostel_name: hostel?.name || s.hostel_name || (s.hostel ? `Hostel ${s.hostel}` : ''),
-        room_no: room?.no || s.room_no || s.room_number || '',
-        room_number: room?.no || s.room_number || s.room_no || '',
-        bed_number: bed?.bed_number || s.bed_number || null,
-        floor: room?.floor !== undefined ? room.floor : (s.floor ?? s.room_detail?.floor ?? null),
-        hostel: hostel ? hostel.id : (s.hostel || s.hostel_id || null),
-        room_detail: room || s.room_detail || null
+        hostel_name: isAllotted ? (hostel?.name || '') : '',
+        room_no: isAllotted ? (room?.no || '') : '',
+        room_number: isAllotted ? (room?.no || '') : '',
+        bed_number: isAllotted ? (bed?.bed_number || null) : null,
+        floor: isAllotted ? (room?.floor !== undefined ? room.floor : null) : null,
+        hostel: isAllotted ? (hostel ? hostel.id : null) : null,
+        room_detail: isAllotted ? (room || null) : null
       };
     });
+  },
+
+  /**
+   * Fetch resident students directory structured into allotted, unallotted, and summary counts
+   */
+  async getStructuredResidents(hostelId?: string | number) {
+    let rawStudents: any[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select(`
+          id,
+          student_name,
+          enrollment_no,
+          father_name,
+          gender,
+          phone,
+          email,
+          guardian_phone,
+          emergency_contact,
+          no_dues,
+          status,
+          allocations:room_allocations(
+            id,
+            bed_id,
+            is_active,
+            allocated_at,
+            vacated_at,
+            bed:beds(
+              id,
+              bed_number,
+              room:hostel_rooms(
+                id,
+                no,
+                floor,
+                hostel:hostels(id, name)
+              )
+            )
+          )
+        `)
+        .order('student_name', { ascending: true, nullsFirst: false });
+
+      if (!error && data) {
+        rawStudents = data;
+      } else {
+        if (error) console.warn('[adminService.getStructuredResidents] Query warning:', error);
+        rawStudents = await this.getStudents();
+      }
+    } catch (e) {
+      console.warn('Failed to load structured residents from Supabase:', e);
+      rawStudents = await this.getStudents();
+    }
+
+    const allotted: any[] = [];
+    const unallotted: any[] = [];
+    const all: any[] = [];
+
+    const targetHostelStr = hostelId && hostelId !== 'ALL' && hostelId !== 'all' ? String(hostelId) : null;
+
+    for (const s of rawStudents) {
+      const activeAlloc = (s.allocations || []).find((a: any) => a.is_active === true);
+      const isAllotted = !!activeAlloc;
+
+      const bed = isAllotted ? (Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed) : null;
+      const room = isAllotted ? (Array.isArray(bed?.room) ? bed.room[0] : bed?.room) : null;
+      const hostel = isAllotted ? (Array.isArray(room?.hostel) ? room.hostel[0] : room?.hostel) : null;
+
+      const vacatedAlloc = !isAllotted
+        ? (s.allocations || []).find((a: any) => a.vacated_at) || (s.allocations || [])[0]
+        : null;
+
+      const formattedItem: any = {
+        ...s,
+        id: s.id,
+        student_name: s.student_name || s.name || 'Resident Student',
+        enrollment_no: s.enrollment_no || s.usn || '',
+        gender: s.gender || 'M',
+        phone: s.phone || '',
+        email: s.email || s.profile?.email || null,
+        father_name: s.father_name || '',
+        guardian_phone: s.guardian_phone || '',
+        emergency_contact: s.emergency_contact || '',
+        status: s.status || 'ACTIVE',
+        room_allotted: isAllotted,
+        hostel: isAllotted ? (hostel?.id || null) : null,
+        hostel_id: isAllotted ? (hostel?.id || null) : null,
+        hostel_name: isAllotted ? (hostel?.name || '') : '',
+        room_id: isAllotted ? (room?.id || null) : null,
+        room_no: isAllotted ? (room?.no || '') : '',
+        room_number: isAllotted ? (room?.no || '') : '',
+        floor: isAllotted ? (room?.floor !== undefined ? room.floor : null) : null,
+        bed_id: isAllotted ? (bed?.id || null) : null,
+        bed_number: isAllotted ? (bed?.bed_number || null) : null,
+        allocated_at: isAllotted ? (activeAlloc?.allocated_at || null) : null,
+        unallotted_reason: !isAllotted ? (vacatedAlloc ? 'PREVIOUSLY_VACATED' : 'NEVER_ALLOTTED') : null,
+        last_vacated_at: !isAllotted ? (vacatedAlloc?.vacated_at || null) : null,
+        room_detail: isAllotted ? (room || null) : null,
+        allocations: s.allocations || []
+      };
+
+      // Filter by hostelId if specified
+      if (targetHostelStr) {
+        if (isAllotted && String(formattedItem.hostel_id) !== targetHostelStr) {
+          continue;
+        }
+      }
+
+      all.push(formattedItem);
+      if (isAllotted) {
+        allotted.push(formattedItem);
+      } else {
+        unallotted.push(formattedItem);
+      }
+    }
+
+    return {
+      summary: {
+        total: all.length,
+        allotted: allotted.length,
+        unallotted: unallotted.length
+      },
+      allotted,
+      unallotted,
+      all
+    };
   },
 
   /**

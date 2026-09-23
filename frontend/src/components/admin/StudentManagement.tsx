@@ -106,19 +106,23 @@ export const StudentManagement: React.FC = () => {
       let sList: HostelStudent[] = [];
 
       if (user?.role === 'WARDEN') {
-        hList = await wardenService.getAssignedHostels(user?.id);
+        const [hListRes, sRes] = await Promise.all([
+          wardenService.getAssignedHostels(user?.id),
+          apiClient.get<any>('/warden/residents/structured/')
+        ]);
+        hList = hListRes || [];
+        const rawList = sRes.data?.all || sRes.data || [];
         const assignedIds = hList.map(h => String(h.id));
-        const sRes = await apiClient.get<HostelStudent[]>('/hms/students/');
-        sList = (sRes.data || []).filter(st => {
-          const stHostelId = String(st.hostel || (st.room_detail as any)?.hostel_id || (st.allocations as any)?.[0]?.bed?.room?.hostel_id || '');
+        sList = rawList.filter((st: any) => {
+          const stHostelId = String(st.hostel || st.hostel_id || (st.room_detail as any)?.hostel_id || '');
           return !stHostelId || assignedIds.length === 0 || assignedIds.includes(stHostelId);
         });
       } else {
         const [sRes, hRes] = await Promise.all([
-          apiClient.get<HostelStudent[]>('/hms/students/'),
+          apiClient.get<any>('/hms/students/structured/'),
           apiClient.get<Hostel[]>('/hms/hostels/'),
         ]);
-        sList = sRes.data || [];
+        sList = sRes.data?.all || sRes.data || [];
         hList = hRes.data || [];
       }
 

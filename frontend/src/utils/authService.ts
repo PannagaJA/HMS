@@ -167,7 +167,13 @@ export const apiClient = {
       return { data: security as T };
     }
 
-    // 3. Students / Resident Directory (/hms/students/ & /warden/students/)
+    // 3. Students / Resident Directory (/hms/students/ & /warden/residents/structured/)
+    if (endpoint.includes('/warden/residents/structured/') || endpoint.includes('/hms/students/structured/')) {
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const hostelId = urlParams.get('hostel_id') || urlParams.get('hostel') || undefined;
+      const structured = await adminService.getStructuredResidents(hostelId);
+      return { data: structured as T };
+    }
     if (endpoint.includes('/warden/students/')) {
       const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
       const floorFilter = urlParams.get('floor') || 'all';
