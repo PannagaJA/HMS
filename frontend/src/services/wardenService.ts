@@ -244,6 +244,13 @@ export const wardenService = {
   },
 
   /**
+   * Fetch structured residents directory for warden view (summary, allotted, unallotted, all)
+   */
+  async getStructuredResidents(hostelId?: string | number) {
+    return adminService.getStructuredResidents(hostelId);
+  },
+
+  /**
    * Fetch gate passes scoped for warden review directly from Supabase
    */
   async getGatePasses(hostelId?: string | number): Promise<any[]> {

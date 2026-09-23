@@ -24,7 +24,7 @@ export const studentService = {
       if (isUuid) {
         const { data } = await supabase
           .from('students')
-          .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+          .select('*, allocations:room_allocations(id, bed_id, is_active, allocated_at, vacated_at, bed:beds(id, bed_number, room:hostel_rooms(id, no, floor, hostel:hostels(id, name))))')
           .eq('profile_id', userId)
           .maybeSingle();
         student = data;
@@ -34,7 +34,7 @@ export const studentService = {
     if (!student && email) {
       const { data, error } = await supabase
         .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .select('*, allocations:room_allocations(id, bed_id, is_active, allocated_at, vacated_at, bed:beds(id, bed_number, room:hostel_rooms(id, no, floor, hostel:hostels(id, name))))')
         .ilike('email', email)
         .maybeSingle();
       if (!error) student = data;
@@ -45,7 +45,7 @@ export const studentService = {
       const usnPrefix = email.split('@')[0];
       const { data, error } = await supabase
         .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .select('*, allocations:room_allocations(id, bed_id, is_active, allocated_at, vacated_at, bed:beds(id, bed_number, room:hostel_rooms(id, no, floor, hostel:hostels(id, name))))')
         .ilike('enrollment_no', usnPrefix)
         .maybeSingle();
       if (!error) student = data;
@@ -54,7 +54,7 @@ export const studentService = {
     if (!student && studentName && studentName !== 'Student' && studentName !== 'Resident') {
       const { data } = await supabase
         .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .select('*, allocations:room_allocations(id, bed_id, is_active, allocated_at, vacated_at, bed:beds(id, bed_number, room:hostel_rooms(id, no, floor, hostel:hostels(id, name))))')
         .ilike('student_name', studentName)
         .limit(1)
         .maybeSingle();
@@ -64,7 +64,7 @@ export const studentService = {
     if (!student && phone) {
       const { data } = await supabase
         .from('students')
-        .select('*, course:hostel_courses(*), allocations:room_allocations(*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*))))')
+        .select('*, allocations:room_allocations(id, bed_id, is_active, allocated_at, vacated_at, bed:beds(id, bed_number, room:hostel_rooms(id, no, floor, hostel:hostels(id, name))))')
         .eq('phone', phone)
         .limit(1)
         .maybeSingle();
