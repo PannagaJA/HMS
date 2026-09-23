@@ -828,6 +828,64 @@ export const adminService = {
   },
 
   /**
+   * Delete a single student record
+   */
+  async deleteStudent(studentId: number | string) {
+    return this.bulkDeleteStudents([studentId]);
+  },
+
+  /**
+   * Bulk delete student records and clean up associated room allocations/passes
+   */
+  async bulkDeleteStudents(studentIds: (number | string)[]) {
+    if (!studentIds || studentIds.length === 0) return true;
+
+    try {
+      // 1. Release active room allocations
+      try {
+        await supabase
+          .from('room_allocations')
+          .delete()
+          .in('student_id', studentIds);
+      } catch (ae) {
+        console.warn('Allocations cleanup warning:', ae);
+      }
+
+      // 2. Clean up gate passes
+      try {
+        await supabase
+          .from('gate_pass_requests')
+          .delete()
+          .in('student_id', studentIds);
+      } catch (gpe) {
+        console.warn('Gate passes cleanup warning:', gpe);
+      }
+
+      // 3. Clean up maintenance issues/complaints
+      try {
+        await supabase
+          .from('maintenance_issues')
+          .delete()
+          .in('student_id', studentIds);
+      } catch (me) {
+        console.warn('Issues cleanup warning:', me);
+      }
+
+      // 4. Delete students
+      const { error } = await supabase
+        .from('students')
+        .delete()
+        .in('id', studentIds);
+
+      if (error) throw error;
+      return true;
+    } catch (e: any) {
+      console.error('Failed to delete student(s):', e);
+      throw e;
+    }
+  },
+
+  /**
    * Staff: Wardens - Backed by Supabase profiles table (role = 'WARDEN')
    */
   async getWardens() {

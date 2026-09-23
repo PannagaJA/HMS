@@ -1226,6 +1226,16 @@ export const apiClient = {
       return { data: { success: true } as T };
     }
 
+    // Student Delete
+    if (endpoint.includes('/hms/students/')) {
+      const parts = endpoint.split('/').filter(Boolean);
+      const studentId = parts[parts.indexOf('students') + 1];
+      if (studentId && !isNaN(Number(studentId))) {
+        await adminService.deleteStudent(studentId);
+      }
+      return { data: { success: true } as T };
+    }
+
     return { data: { success: true } as T };
   }
 };
