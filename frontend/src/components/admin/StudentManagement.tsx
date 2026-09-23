@@ -772,7 +772,7 @@ export const StudentManagement: React.FC = () => {
         students: validRows.map(r => ({
           student_name: r.student_name,
           enrollment_no: r.enrollment_no,
-          email: r.email || `${r.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`,
+          email: r.email || `${r.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`,
           gender: r.gender,
           phone: r.phone,
           father_name: r.father_name,

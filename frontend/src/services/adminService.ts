@@ -573,7 +573,7 @@ export const adminService = {
       }
     }
 
-    return students.map((s: any) => {
+    const mappedStudents = students.map((s: any) => {
       const activeAlloc = (s.allocations || []).find((a: any) => a.is_active === true);
       const isAllotted = !!activeAlloc;
       const bed = isAllotted ? (Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed) : null;
@@ -599,6 +599,14 @@ export const adminService = {
         room_detail: isAllotted ? (room || null) : null
       };
     });
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('hms_cached_students', JSON.stringify(mappedStudents));
+      } catch (_) {}
+    }
+
+    return mappedStudents;
   },
 
   /**
@@ -810,7 +818,7 @@ export const adminService = {
     bed_number?: number | string;
   }) {
     let profileId: string | null = null;
-    const studentEmail = payload.email || `${payload.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
+    const studentEmail = payload.email || `${payload.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
 
     try {
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
@@ -895,7 +903,7 @@ export const adminService = {
 
     const defaultOrgId = '00000000-0000-0000-0000-000000000001';
     const dbPayload = students.map(s => {
-      const email = (s.email || '').trim().toLowerCase() || `${s.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
+      const email = (s.email || '').trim().toLowerCase() || `${s.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
       return {
         student_name: s.student_name.trim(),
         enrollment_no: s.enrollment_no.trim().toUpperCase(),
@@ -972,6 +980,14 @@ export const adminService = {
       }
       if (updatePromises.length > 0) {
         await Promise.all(updatePromises);
+      }
+
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const existingCache: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+          const updatedCache = [...existingCache.filter(e => !dbPayload.some(d => d.enrollment_no === e.enrollment_no)), ...dbPayload];
+          localStorage.setItem('hms_cached_students', JSON.stringify(updatedCache));
+        } catch (_) {}
       }
 
       return dbPayload;

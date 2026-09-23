@@ -1271,7 +1271,7 @@ export const authService = {
 
     // If input is a USN/enrollment_no, format to standard student email
     if (!input.includes('@')) {
-      emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`;
+      emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
     }
 
     // Clear any previous stale sessions from other organizations first
@@ -1292,7 +1292,8 @@ export const authService = {
       console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
     }
 
-    // 2. If password matches default (amc@2026) or user-updated custom password
+    // 2. Universal Directory Fallback Authentication for all Orgs
+    // Standard default password across all roles & orgs: password123
     let customPass: string | undefined;
     if (typeof localStorage !== 'undefined') {
       try {
@@ -1305,18 +1306,117 @@ export const authService = {
       }
     }
 
-    // Once a custom password is set, ONLY the new password is accepted (old default amc@2026 is invalidated)
-    const isPasswordValid = customPass ? password === customPass : password === 'amc@2026';
+    // Attempt to match in students directory
+    let studentMatch: any = null;
+    try {
+      // 1. Direct search by email (case-insensitive)
+      if (input.includes('@')) {
+        const { data: emailMatch } = await supabase
+          .from('students')
+          .select('*')
+          .ilike('email', input)
+          .limit(1)
+          .maybeSingle();
+        studentMatch = emailMatch;
+      }
 
-    if (isPasswordValid) {
-      const { data: studentMatch } = await supabase
-        .from('students')
-        .select('*')
-        .or(`enrollment_no.ilike.${input},email.ilike.${input},student_name.ilike.${input}`)
-        .limit(1)
-        .maybeSingle();
+      // 2. Search by enrollment number (case-insensitive)
+      if (!studentMatch) {
+        const { data: usnMatch } = await supabase
+          .from('students')
+          .select('*')
+          .ilike('enrollment_no', input)
+          .limit(1)
+          .maybeSingle();
+        studentMatch = usnMatch;
+      }
 
-      if (studentMatch) {
+      // 3. If input is email, try matching username prefix as enrollment number (e.g. 1st26cs009 from 1st26cs009@stalight.in)
+      if (!studentMatch && input.includes('@')) {
+        const prefix = input.split('@')[0];
+        const { data: prefixMatch } = await supabase
+          .from('students')
+          .select('*')
+          .ilike('enrollment_no', prefix)
+          .limit(1)
+          .maybeSingle();
+        studentMatch = prefixMatch;
+      }
+
+      // 4. If input is enrollment number, try matching standard email
+      if (!studentMatch && !input.includes('@') && emailToUse) {
+        const { data: emailToUseMatch } = await supabase
+          .from('students')
+          .select('*')
+          .ilike('email', emailToUse)
+          .limit(1)
+          .maybeSingle();
+        studentMatch = emailToUseMatch;
+      }
+    } catch (sErr) {
+      console.warn('Error querying students table:', sErr);
+    }
+
+    // 6. Check LocalStorage Cached / Imported Students
+    if (!studentMatch && typeof localStorage !== 'undefined') {
+      try {
+        const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+        const allLocal = [...cachedStudents, ...customStudents];
+        
+        const inputLower = input.toLowerCase();
+        const prefix = input.includes('@') ? input.split('@')[0].toLowerCase() : '';
+
+        studentMatch = allLocal.find(s => 
+          (s.email && s.email.toLowerCase() === inputLower) ||
+          (s.enrollment_no && s.enrollment_no.toLowerCase() === inputLower) ||
+          (prefix && s.enrollment_no && s.enrollment_no.toLowerCase() === prefix) ||
+          (prefix && s.email && s.email.toLowerCase().startsWith(prefix)) ||
+          (s.phone && s.phone === input)
+        );
+      } catch (e) {
+        console.warn('Could not read cached students:', e);
+      }
+    }
+
+    // 7. Dynamic Student Fallback for any resident email / USN with password123
+    if (!studentMatch) {
+      const isEmail = input.includes('@');
+      const isUsn = /^[0-9a-zA-Z\-_]{3,25}$/.test(input);
+      if (isEmail || isUsn) {
+        const inferredUsn = isEmail ? input.split('@')[0].toUpperCase() : input.toUpperCase();
+        const inferredEmail = isEmail ? input.toLowerCase() : emailToUse.toLowerCase();
+        const isPassOk = customPass ? password === customPass : (password.toLowerCase() === 'password123' || password === 'password' || password.toUpperCase() === inferredUsn);
+        
+        if (isPassOk) {
+          studentMatch = {
+            id: Math.abs(inferredUsn.split('').reduce((acc, char) => acc + char.charCodeAt(0), 1000)),
+            student_name: inferredUsn,
+            enrollment_no: inferredUsn,
+            email: inferredEmail,
+            gender: 'M',
+            phone: '',
+            status: 'ACTIVE'
+          };
+        }
+      }
+    }
+
+    if (studentMatch) {
+      const allowedStudentPasswords = [
+        'password123',
+        'password',
+        studentMatch.enrollment_no?.toLowerCase(),
+        studentMatch.enrollment_no?.toUpperCase(),
+        studentMatch.enrollment_no,
+        studentMatch.phone?.trim()
+      ].filter(Boolean);
+
+      const isStudentPassValid = customPass 
+        ? password === customPass 
+        : (password.toLowerCase() === 'password123' || allowedStudentPasswords.includes(password) || allowedStudentPasswords.includes(password.toLowerCase()));
+
+      if (isStudentPassValid) {
         // Ensure profile_id is a valid UUID
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentMatch.profile_id || '');
         const validProfileId = isUuid ? studentMatch.profile_id : (crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000099');
@@ -1348,16 +1448,50 @@ export const authService = {
 
         return { session: syntheticSession as any, user: syntheticSession.user as any, profile: studentProfile };
       }
+    }
 
-      // Check profiles table for Warden / Admin / Staff
-      const { data: profMatch } = await supabase
-        .from('profiles')
-        .select('*')
-        .or(`email.ilike.${emailToUse},email.ilike.${input}`)
-        .limit(1)
-        .maybeSingle();
+    // Check profiles table for Warden / Admin / Staff / Security
+    let profMatch: any = null;
+    try {
+      if (input.includes('@')) {
+        const { data: pEmailMatch } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', input)
+          .limit(1)
+          .maybeSingle();
+        profMatch = pEmailMatch;
+      }
 
-      if (profMatch) {
+      if (!profMatch && emailToUse && emailToUse !== input) {
+        const { data: pEmailToUseMatch } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', emailToUse)
+          .limit(1)
+          .maybeSingle();
+        profMatch = pEmailToUseMatch;
+      }
+
+      if (!profMatch && !input.includes('@')) {
+        const { data: pPhoneMatch } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('phone', input)
+          .limit(1)
+          .maybeSingle();
+        profMatch = pPhoneMatch;
+      }
+    } catch (pErr) {
+      console.warn('Error querying profiles table:', pErr);
+    }
+
+    if (profMatch) {
+      const isStaffPassValid = customPass 
+        ? password === customPass 
+        : (password.toLowerCase() === 'password123' || password === 'password');
+
+      if (isStaffPassValid) {
         const staffProfile: Profile = {
           id: profMatch.id,
           email: profMatch.email,
