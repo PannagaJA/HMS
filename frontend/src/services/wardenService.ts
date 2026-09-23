@@ -59,9 +59,7 @@ export const wardenService = {
                 bed_number,
                 allocations:room_allocations(id, is_active)
               )
-            ),
-            gate_passes(id, status),
-            issues(id, status)
+            )
           `)
           .eq('is_active', true)
           .order('id', { ascending: true });
@@ -97,9 +95,9 @@ export const wardenService = {
         let totalRooms = 0;
         let totalCap = 0;
         let occupied = 0;
-        let pendingGatePasses = 0;
-        let openIssues = 0;
         let roomsList: any[] = [];
+        let pendingPassesCount = 0;
+        let openIssuesCount = 0;
 
         if (target) {
           const rawRooms = (target.rooms || []).filter((r: any) => r.is_active);
@@ -127,13 +125,26 @@ export const wardenService = {
             };
           });
 
-          pendingGatePasses = (target.gate_passes || []).filter((gp: any) => 
-            String(gp.status || '').toLowerCase() === 'pending'
-          ).length;
+          // Fetch only lightweight counts (head: true, transferring 0 rows) for metric cards
+          try {
+            const [passesRes, issuesRes] = await Promise.all([
+              supabase
+                .from('gate_passes')
+                .select('id', { count: 'exact', head: true })
+                .eq('hostel_id', target.id)
+                .or('status.eq.PENDING,status.eq.pending,status.eq.REQUESTED,status.eq.requested'),
+              supabase
+                .from('issues')
+                .select('id', { count: 'exact', head: true })
+                .eq('hostel_id', target.id)
+                .not('status', 'in', '(COMPLETED,completed,closed,CLOSED,resolved,RESOLVED)')
+            ]);
 
-          openIssues = (target.issues || []).filter((iss: any) => 
-            !['completed', 'closed', 'resolved'].includes(String(iss.status || '').toLowerCase())
-          ).length;
+            pendingPassesCount = passesRes.count || 0;
+            openIssuesCount = issuesRes.count || 0;
+          } catch (countErr) {
+            console.warn('[wardenService.getDashboardStats] Error fetching counts:', countErr);
+          }
         }
 
         const rate = totalCap > 0 ? Math.round((occupied / totalCap) * 100) : 0;
@@ -143,8 +154,8 @@ export const wardenService = {
           total_residents: occupied,
           total_rooms: totalRooms,
           total_capacity: totalCap,
-          pending_gate_passes: pendingGatePasses,
-          open_issues: openIssues,
+          pending_gate_passes: pendingPassesCount,
+          open_issues: openIssuesCount,
           occupancy_rate: rate,
           rooms: roomsList
         };
@@ -601,7 +612,28 @@ export const wardenService = {
   async getRoomDetails(hostelId: number | string, roomId: number | string) {
     let query = supabase
       .from('hostel_rooms')
-      .select('*, hostel:hostels(id, name), beds(*, allocations:room_allocations(*, student:students(*)))')
+      .select(`
+        id,
+        no,
+        floor,
+        capacity,
+        room_type,
+        hostel_id,
+        hostel:hostels(id, name),
+        beds(
+          id,
+          bed_number,
+          allocations:room_allocations(
+            id,
+            is_active,
+            student:students(
+              id,
+              student_name,
+              enrollment_no
+            )
+          )
+        )
+      `)
       .eq('id', Number(roomId));
 
     if (hostelId) {
@@ -652,19 +684,24 @@ export const wardenService = {
       });
     });
 
+    const rData: any = r;
+    const hostelObj = Array.isArray(rData.hostel) ? rData.hostel[0] : rData.hostel;
+    const hostelName = hostelObj?.name || 'Hostel Block';
+    const hostelIdVal = hostelObj?.id || rData.hostel_id;
+
     return {
-      id: r.id,
-      room_no: r.no,
-      no: r.no,
-      floor: r.floor,
-      capacity: r.capacity,
-      room_type: r.room_type,
-      hostel_id: r.hostel_id,
+      id: rData.id,
+      room_no: rData.no,
+      no: rData.no,
+      floor: rData.floor,
+      capacity: rData.capacity,
+      room_type: rData.room_type,
+      hostel_id: rData.hostel_id,
       hostel: {
-        id: r.hostel?.id || r.hostel_id,
-        name: r.hostel?.name || 'Hostel Block'
+        id: hostelIdVal,
+        name: hostelName
       },
-      hostel_name: r.hostel?.name || 'Hostel Block',
+      hostel_name: hostelName,
       occupied_count,
       current_occupancy: occupied_count,
       beds,
