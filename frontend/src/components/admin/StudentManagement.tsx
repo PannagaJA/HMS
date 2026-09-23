@@ -25,6 +25,7 @@ interface ParsedStudentRow {
   guardian_phone?: string;
   emergency_contact?: string;
   isValid: boolean;
+  isExisting?: boolean;
   errorReason?: string;
 }
 
@@ -623,7 +624,14 @@ export const StudentManagement: React.FC = () => {
       const rawEmergency = rowObj['emergencycontact'] || rowObj['emergencyphone'] || rowObj['emergency'] || values[6] || '';
       const emergencyContact = rawEmergency.replace(/[^\d]/g, '');
 
-      const email = rowObj['email'] || rowObj['emailid'] || rowObj['mail'] || undefined;
+      const email = 
+        rowObj['email'] || 
+        rowObj['emailid'] || 
+        rowObj['studentemail'] || 
+        rowObj['emailaddress'] || 
+        rowObj['mail'] || 
+        rowObj['e-mail'] || 
+        (values[2] && values[2].includes('@') ? values[2] : undefined);
 
       let isValid = true;
       let errorReason: string | undefined = undefined;
@@ -637,10 +645,9 @@ export const StudentManagement: React.FC = () => {
       } else if (seenBatchUSNs.has(enrollmentNo)) {
         isValid = false;
         errorReason = 'Duplicate USN in CSV batch';
-      } else if (existingUSNSet.has(enrollmentNo)) {
-        // Warning / note that student already exists, but mark valid or note existing
-        // If existing, upsert will update their phone/guardian details
       }
+
+      const isExisting = existingUSNSet.has(enrollmentNo);
 
       if (enrollmentNo) {
         seenBatchUSNs.add(enrollmentNo);
@@ -656,6 +663,7 @@ export const StudentManagement: React.FC = () => {
         guardian_phone: guardianPhone || undefined,
         emergency_contact: emergencyContact || undefined,
         isValid,
+        isExisting,
         errorReason
       });
     }
@@ -701,6 +709,7 @@ export const StudentManagement: React.FC = () => {
         students: validRows.map(r => ({
           student_name: r.student_name,
           enrollment_no: r.enrollment_no,
+          email: r.email || `${r.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.amc.edu`,
           gender: r.gender,
           phone: r.phone,
           father_name: r.father_name,
@@ -709,7 +718,16 @@ export const StudentManagement: React.FC = () => {
         }))
       });
 
-      showSuccess(`Successfully imported ${validRows.length} students into the Resident Directory.`);
+      const newCount = validRows.filter(r => !r.isExisting).length;
+      const updatedCount = validRows.filter(r => r.isExisting).length;
+      if (newCount > 0 && updatedCount > 0) {
+        showSuccess(`Imported ${newCount} new students and updated ${updatedCount} existing resident profiles with latest details.`);
+      } else if (updatedCount > 0) {
+        showSuccess(`Updated ${updatedCount} existing resident profiles with latest fields (no duplicate students created).`);
+      } else {
+        showSuccess(`Successfully imported ${newCount} new students into the Resident Directory.`);
+      }
+
       setShowBulkModal(false);
       setBulkFile(null);
       setParsedRows([]);
@@ -1445,7 +1463,7 @@ export const StudentManagement: React.FC = () => {
 
       {showBulkModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-2xl rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8 max-h-[90vh] flex flex-col">
+          <div className="bg-white w-full max-w-4xl rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150 my-8 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Bulk Import Students (CSV)</h3>
@@ -1531,55 +1549,65 @@ export const StudentManagement: React.FC = () => {
                     <span className="text-xs font-bold text-slate-800">
                       Parsed Rows Preview ({parsedRows.filter(r => r.isValid).length} valid of {parsedRows.length} total)
                     </span>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      Scroll horizontally & vertically to inspect all columns
+                    </span>
                   </div>
 
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-56 overflow-y-auto">
-                    <table className="w-full text-left text-xs text-slate-600">
-                      <thead className="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200 sticky top-0">
+                  <div className="table-scroll-container border border-slate-200 rounded-2xl overflow-x-auto overflow-y-auto max-h-60 overscroll-contain transform-gpu">
+                    <table className="w-full min-w-[860px] text-left text-xs text-slate-600 border-collapse">
+                      <thead className="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200 sticky top-0 z-10">
                         <tr>
-                          <th className="px-3 py-2">Status</th>
-                          <th className="px-3 py-2">Student Name</th>
-                          <th className="px-3 py-2">USN / Enrollment</th>
-                          <th className="px-3 py-2">Gender</th>
-                          <th className="px-3 py-2">Contact & Email</th>
-                          <th className="px-3 py-2">Guardian Details</th>
-                          <th className="px-3 py-2">Emergency</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">Status</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">Student Name</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">USN / Enrollment</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">Gender</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">Contact & Email</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">Guardian Details</th>
+                          <th className="px-4 py-2.5 whitespace-nowrap bg-slate-50">Emergency</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {parsedRows.map((r, i) => (
-                          <tr key={i} className={r.isValid ? 'hover:bg-slate-50' : 'bg-rose-50/50'}>
-                            <td className="px-3 py-1.5 whitespace-nowrap">
+                          <tr key={i} className={r.isValid ? 'hover:bg-slate-50/80 transition-colors' : 'bg-rose-50/50'}>
+                            <td className="px-4 py-2 whitespace-nowrap">
                               {r.isValid ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  Valid
-                                </span>
+                                r.isExisting ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                                    Update Existing
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    New Student
+                                  </span>
+                                )
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                <span className="inline-flex items-center gap-1 text-[10px] text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 whitespace-nowrap">
                                   <AlertTriangle className="w-3 h-3" />
                                   {r.errorReason}
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 py-1.5 font-medium text-slate-900">{r.student_name || '-'}</td>
-                            <td className="px-3 py-1.5 font-mono font-semibold text-slate-800">{r.enrollment_no || '-'}</td>
-                            <td className="px-3 py-1.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            <td className="px-4 py-2 font-medium text-slate-900 whitespace-nowrap">{r.student_name || '-'}</td>
+                            <td className="px-4 py-2 font-mono font-semibold text-slate-800 whitespace-nowrap">{r.enrollment_no || '-'}</td>
+                            <td className="px-4 py-2 whitespace-nowrap">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
                                 r.gender === 'F' ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
                               }`}>
                                 {r.gender === 'F' ? 'Female' : 'Male'}
                               </span>
                             </td>
-                            <td className="px-3 py-1.5">
+                            <td className="px-4 py-2 whitespace-nowrap">
                               <div className="font-mono text-slate-800">{r.phone || '-'}</div>
-                              {r.email && <div className="text-[11px] text-slate-500 truncate">{r.email}</div>}
+                              {r.email && <div className="text-[11px] text-slate-500">{r.email}</div>}
                             </td>
-                            <td className="px-3 py-1.5">
+                            <td className="px-4 py-2 whitespace-nowrap">
                               <div className="font-medium text-slate-900">{r.father_name || 'Guardian'}</div>
                               <div className="text-[11px] font-mono text-slate-500">{r.guardian_phone || '-'}</div>
                             </td>
-                            <td className="px-3 py-1.5 font-mono">{r.emergency_contact || '-'}</td>
+                            <td className="px-4 py-2 font-mono whitespace-nowrap">{r.emergency_contact || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
