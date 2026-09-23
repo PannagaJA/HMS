@@ -54,13 +54,14 @@ export const StudentDashboard: React.FC = () => {
   });
 
   const student = profileData?.profile;
-  // Prefer AuthContext first_name (updates instantly on profile save) over student_name from DB
-  // But skip generic placeholder names like 'Student' / 'Resident' stored in auth context
+  const isUsnFormat = (val?: string) => /^[0-9]{1,2}[A-Za-z]{2,5}[0-9]{2}[A-Za-z]{2}[0-9]{2,4}$/i.test(val || '');
   const genericNames = ['student', 'resident', 'user', 'admin'];
-  const authName = user?.first_name && !genericNames.includes(user.first_name.toLowerCase())
+  const authName = user?.first_name 
+    && !genericNames.includes(user.first_name.toLowerCase()) 
+    && !isUsnFormat(user.first_name)
     ? `${user.first_name} ${user.last_name || ''}`.trim()
     : null;
-  const displayName = student?.student_name || authName || user?.first_name || 'Resident';
+  const displayName = student?.student_name || authName || (!isUsnFormat(user?.first_name) ? user?.first_name : null) || 'Resident Student';
 
   const activeApprovedPass = passes.find((p) => p.status === 'approved');
   const pendingPassesCount = passes.filter((p) => p.status === 'pending').length;

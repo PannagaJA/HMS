@@ -24,24 +24,29 @@ export const HMSProfile: React.FC = () => {
   });
 
   // Resolve best USN from context or student record
+  const isUsnFormat = (val?: string) => /^[0-9]{1,2}[A-Za-z]{2,5}[0-9]{2}[A-Za-z]{2}[0-9]{2,4}$/i.test(val || '');
+
   const studentUsn = user?.enrollment_no 
     || studentData?.profile?.enrollment_no 
     || (user?.username && !user.username.includes('@') ? user.username : null)
     || (user?.email?.includes('@') ? user.email.split('@')[0] : 'N/A');
 
-  // Resolve phone with fallback to students table
-  const resolvedPhone = user?.phone || studentData?.profile?.phone || '';
+  // Resolve phone with fallback to students table / cache
+  const resolvedPhone = studentData?.profile?.phone || user?.phone || '';
 
   // Resolve the best display name for the initial form state
   const resolveInitialName = () => {
+    if (studentData?.profile?.student_name) {
+      return studentData.profile.student_name;
+    }
     const fn = user?.first_name || '';
     const ln = user?.last_name || '';
     const genericNames = ['student', 'resident', 'user', 'admin', ''];
-    if (fn && !genericNames.includes(fn.toLowerCase())) {
+    if (fn && !genericNames.includes(fn.toLowerCase()) && (!isStudent || !isUsnFormat(fn))) {
       return `${fn} ${ln}`.trim();
     }
     // For student, fallback to student_name from studentData if already loaded
-    return user?.username || '';
+    return '';
   };
 
   const [name, setName] = useState(resolveInitialName);
@@ -152,9 +157,14 @@ export const HMSProfile: React.FC = () => {
     }
   };
 
-  const displayName = user?.first_name && !['student', 'resident', 'user', 'admin'].includes(user.first_name.toLowerCase())
-    ? `${user.first_name} ${user.last_name || ''}`.trim() 
-    : (studentData?.profile?.student_name || user?.username || name);
+  const hasValidAuthName = user?.first_name 
+    && !['student', 'resident', 'user', 'admin'].includes(user.first_name.toLowerCase())
+    && (!isStudent || !isUsnFormat(user.first_name));
+
+  const displayName = studentData?.profile?.student_name 
+    || (hasValidAuthName ? `${user.first_name} ${user.last_name || ''}`.trim() : null)
+    || (name && !isUsnFormat(name) ? name : null)
+    || (isStudent ? 'Resident Student' : (user?.username || 'User'));
 
   return (
     <div className="w-full space-y-6">
@@ -187,7 +197,7 @@ export const HMSProfile: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Email:</span>
-              <span className="truncate max-w-[140px] text-slate-700">{user?.email}</span>
+              <span className="truncate max-w-[140px] text-slate-700">{studentData?.profile?.email || user?.email}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Phone:</span>
@@ -235,7 +245,7 @@ export const HMSProfile: React.FC = () => {
                     required
                     readOnly={isStudent}
                     disabled={isStudent}
-                    value={name}
+                    value={isStudent ? (studentData?.profile?.student_name || name || (!isUsnFormat(user?.first_name) ? user?.first_name : '') || '') : name}
                     onChange={(e) => !isStudent && setName(e.target.value)}
                     className={`w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 ${isStudent ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}
                   />
@@ -254,7 +264,7 @@ export const HMSProfile: React.FC = () => {
                       required
                       readOnly={isStudent}
                       disabled={isStudent}
-                      value={email}
+                      value={isStudent ? (studentData?.profile?.email || email || user?.email || '') : email}
                       onChange={(e) => !isStudent && setEmail(e.target.value)}
                       className={`w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 ${isStudent ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}
                     />
@@ -274,7 +284,7 @@ export const HMSProfile: React.FC = () => {
                       maxLength={10}
                       pattern="^[6-9][0-9]{9}$"
                       title="Please enter a valid 10-digit Indian phone number starting with 6-9"
-                      value={phone}
+                      value={isStudent ? (studentData?.profile?.phone || phone || user?.phone || '') : phone}
                       onChange={(e) => !isStudent && setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder="9876543210"
                       className={`w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20 ${isStudent ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`}

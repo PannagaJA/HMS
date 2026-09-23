@@ -883,6 +883,17 @@ export const adminService = {
       }
     }
 
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const existingCache: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const updatedCache = [
+          ...existingCache.filter(e => e.id !== createdStudent.id && e.enrollment_no !== createdStudent.enrollment_no),
+          createdStudent
+        ];
+        localStorage.setItem('hms_cached_students', JSON.stringify(updatedCache));
+      } catch (_) {}
+    }
+
     return createdStudent;
   },
 
@@ -919,6 +930,20 @@ export const adminService = {
       };
     });
 
+    const updateLocalCache = (savedRecords: any[]) => {
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const existingCache: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+          const recordsToCache = (savedRecords && savedRecords.length > 0) ? savedRecords : dbPayload;
+          const updatedCache = [
+            ...existingCache.filter(e => !recordsToCache.some(d => d.enrollment_no === e.enrollment_no || (d.email && d.email === e.email))),
+            ...recordsToCache
+          ];
+          localStorage.setItem('hms_cached_students', JSON.stringify(updatedCache));
+        } catch (_) {}
+      }
+    };
+
     try {
       // 1. Primary Attempt: Upsert with composite key (org_id, enrollment_no)
       const { data, error } = await supabase
@@ -927,6 +952,7 @@ export const adminService = {
         .select();
       
       if (!error && data) {
+        updateLocalCache(data);
         return data;
       }
 
@@ -937,6 +963,7 @@ export const adminService = {
         .select();
       
       if (!error2 && data2) {
+        updateLocalCache(data2);
         return data2;
       }
 
@@ -982,17 +1009,11 @@ export const adminService = {
         await Promise.all(updatePromises);
       }
 
-      if (typeof localStorage !== 'undefined') {
-        try {
-          const existingCache: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
-          const updatedCache = [...existingCache.filter(e => !dbPayload.some(d => d.enrollment_no === e.enrollment_no)), ...dbPayload];
-          localStorage.setItem('hms_cached_students', JSON.stringify(updatedCache));
-        } catch (_) {}
-      }
-
+      updateLocalCache(dbPayload);
       return dbPayload;
     } catch (e: any) {
       console.warn('Bulk student insertion error:', e);
+      updateLocalCache(dbPayload);
       throw e;
     }
   },

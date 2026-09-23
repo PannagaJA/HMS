@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Menu, Bell, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import type { Role } from '../../types';
 import { Sidebar } from '../common/Sidebar';
 import { announcementService } from '../../services/announcementService';
 import { supabase } from '../../lib/supabase';
+import { apiClient } from '../../api/apiClient';
 
 interface ProtectedRouteProps {
   allowedRoles?: Role[];
@@ -16,6 +18,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
+
+  const isStudent = user?.role === 'STUDENT';
+  const { data: studentData } = useQuery<{ profile?: { student_name?: string } }>({
+    queryKey: ['studentProfile'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ profile?: { student_name?: string } }>('/student/students/my_profile/');
+      return res.data;
+    },
+    enabled: isStudent,
+    staleTime: 1000 * 60 * 5,
+  });
 
   React.useEffect(() => {
     if (!user) return;
@@ -95,6 +108,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     return <Navigate to="/student/dashboard" replace />;
   }
 
+  const isUsn = (val?: string) => /^[0-9]{1,2}[A-Za-z]{2,5}[0-9]{2}[A-Za-z]{2}[0-9]{2,4}$/i.test(val || '');
+  const isGeneric = (val?: string) => ['student', 'resident', 'user', 'admin', ''].includes((val || '').toLowerCase());
+  const rawFirstName = user.first_name || '';
+  const validAuthName = rawFirstName && !isGeneric(rawFirstName) && (!isStudent || !isUsn(rawFirstName))
+    ? `${rawFirstName} ${user.last_name || ''}`.trim()
+    : null;
+
+  const headerDisplayName = (isStudent && studentData?.profile?.student_name)
+    ? studentData.profile.student_name
+    : (validAuthName || (isStudent ? 'Resident Student' : (user.username || 'User')));
+
+  const avatarInitial = headerDisplayName && headerDisplayName !== 'Resident Student'
+    ? headerDisplayName.charAt(0).toUpperCase()
+    : (validAuthName ? validAuthName.charAt(0).toUpperCase() : (isStudent ? 'S' : 'U'));
+
   return (
     <div className="flex h-screen h-[100dvh] w-screen overflow-hidden bg-[#f0f4f8]">
       {/* Left Sidebar */}
@@ -117,13 +145,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
           </div>
 
           {/* Left Side: Welcome Text */}
-          {user?.first_name && (
+          {user && (
             <div className="flex flex-col items-start ml-2 lg:ml-2 mt-0.5 min-w-0">
               <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-1">
                 Welcome Back
               </span>
               <span className="text-[12px] sm:text-[14px] font-semibold text-slate-800 leading-none truncate max-w-[120px] sm:max-w-none">
-                {user.first_name} {user.last_name || ''}
+                {headerDisplayName}
               </span>
             </div>
           )}
@@ -162,7 +190,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
               aria-label="User Profile"
             >
               <div className="w-8 h-8 rounded-full bg-[#0B1437] text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                {user?.username ? user.username.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                {avatarInitial}
               </div>
             </button>
           </div>

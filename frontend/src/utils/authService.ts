@@ -63,8 +63,17 @@ export const apiClient = {
       if (userRole === 'STUDENT') {
         let stData: any = null;
 
+        // Strategy 0: Direct RPC lookup (works across RLS barriers)
+        const lookupIdent = effectiveEmail || stored?.enrollment_no || stored?.username || effectiveUserId;
+        if (lookupIdent) {
+          try {
+            const { data: rpcStudent } = await supabase.rpc('get_student_profile', { p_identifier: lookupIdent });
+            if (rpcStudent) stData = rpcStudent;
+          } catch (_) {}
+        }
+
         // Strategy 1: by profile_id (UUID) or id (integer)
-        if (effectiveUserId) {
+        if (!stData && effectiveUserId) {
           const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId);
           if (isUuid) {
             const { data } = await supabase
@@ -106,6 +115,26 @@ export const apiClient = {
             .limit(1)
             .maybeSingle();
           stData = data;
+        }
+
+        // Strategy 4: Fallback to LocalStorage Cached Students
+        if (!stData && typeof localStorage !== 'undefined') {
+          try {
+            const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+            const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+            const allLocal = [...cachedStudents, ...customStudents];
+            const emailLower = (effectiveEmail || '').toLowerCase().trim();
+            const usnLower = (targetEnrollment || '').toLowerCase().trim();
+            const prefixLower = effectiveEmail.includes('@') ? effectiveEmail.split('@')[0].toLowerCase().trim() : '';
+
+            stData = allLocal.find(s =>
+              (s.email && s.email.toLowerCase().trim() === emailLower) ||
+              (s.enrollment_no && s.enrollment_no.toLowerCase().trim() === usnLower) ||
+              (prefixLower && s.enrollment_no && s.enrollment_no.toLowerCase().trim() === prefixLower) ||
+              (prefixLower && s.email && s.email.toLowerCase().trim().startsWith(prefixLower)) ||
+              (stored?.phone && s.phone === stored.phone)
+            );
+          } catch (_) {}
         }
 
         if (stData) {
@@ -1315,8 +1344,19 @@ export const authService = {
     // Attempt to match in students directory
     let studentMatch: any = null;
     try {
+      // 0. Direct RPC search (bypasses RLS restrictions for student directory)
+      try {
+        const { data: rpcStudent } = await supabase.rpc('get_student_profile', { p_identifier: input });
+        if (rpcStudent) {
+          studentMatch = rpcStudent;
+        } else if (emailToUse && emailToUse !== input) {
+          const { data: rpcStudentEmail } = await supabase.rpc('get_student_profile', { p_identifier: emailToUse });
+          if (rpcStudentEmail) studentMatch = rpcStudentEmail;
+        }
+      } catch (_) {}
+
       // 1. Direct search by email (case-insensitive)
-      if (input.includes('@')) {
+      if (!studentMatch && input.includes('@')) {
         const { data: emailMatch } = await supabase
           .from('students')
           .select('*')
@@ -1370,15 +1410,16 @@ export const authService = {
         const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
         const allLocal = [...cachedStudents, ...customStudents];
         
-        const inputLower = input.toLowerCase();
-        const prefix = input.includes('@') ? input.split('@')[0].toLowerCase() : '';
+        const inputLower = input.toLowerCase().trim();
+        const prefix = input.includes('@') ? input.split('@')[0].toLowerCase().trim() : '';
 
         studentMatch = allLocal.find(s => 
-          (s.email && s.email.toLowerCase() === inputLower) ||
-          (s.enrollment_no && s.enrollment_no.toLowerCase() === inputLower) ||
-          (prefix && s.enrollment_no && s.enrollment_no.toLowerCase() === prefix) ||
-          (prefix && s.email && s.email.toLowerCase().startsWith(prefix)) ||
-          (s.phone && s.phone === input)
+          (s.email && s.email.toLowerCase().trim() === inputLower) ||
+          (s.enrollment_no && s.enrollment_no.toLowerCase().trim() === inputLower) ||
+          (prefix && s.enrollment_no && s.enrollment_no.toLowerCase().trim() === prefix) ||
+          (prefix && s.email && s.email.toLowerCase().trim().startsWith(prefix)) ||
+          (s.phone && s.phone.trim() === input.trim()) ||
+          (s.student_name && s.student_name.toLowerCase().trim() === inputLower)
         );
       } catch (e) {
         console.warn('Could not read cached students:', e);

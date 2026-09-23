@@ -18,6 +18,20 @@ export const studentService = {
     const phone = userObj?.phone;
 
     let student: any = null;
+    const identifierToLookup = email || userObj?.enrollment_no || userObj?.username || userId;
+
+    // Strategy 0: Direct RPC lookup (works across RLS barriers)
+    if (identifierToLookup) {
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_student_profile', {
+          p_identifier: identifierToLookup
+        });
+        if (!rpcError && rpcData) {
+          student = rpcData;
+          return { profile: student, roommates: [] };
+        }
+      } catch (_) {}
+    }
 
     if (userId) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
@@ -69,6 +83,31 @@ export const studentService = {
         .limit(1)
         .maybeSingle();
       student = data;
+    }
+
+    // Strategy 5: Check LocalStorage Directory Cache (for resident imported from CSV / synthetic sessions)
+    if (!student && typeof localStorage !== 'undefined') {
+      try {
+        const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
+        const allLocal = [...cachedStudents, ...customStudents];
+
+        const targetEmail = (email || '').toLowerCase().trim();
+        const targetEnrollment = (userObj?.enrollment_no || userObj?.username || (email?.includes('@') ? email.split('@')[0] : '')).toLowerCase().trim();
+        const targetPhone = (phone || '').trim();
+        const targetName = (studentName || '').toLowerCase().trim();
+
+        student = allLocal.find(s =>
+          (targetEmail && s.email && s.email.toLowerCase().trim() === targetEmail) ||
+          (targetEnrollment && s.enrollment_no && s.enrollment_no.toLowerCase().trim() === targetEnrollment) ||
+          (targetEnrollment && s.email && s.email.toLowerCase().trim().startsWith(targetEnrollment)) ||
+          (targetPhone && s.phone && s.phone.trim() === targetPhone) ||
+          (targetName && !['student', 'resident', 'user', 'admin'].includes(targetName) && s.student_name && s.student_name.toLowerCase().trim() === targetName) ||
+          (userId && String(s.id) === String(userId))
+        );
+      } catch (e) {
+        console.warn('LocalStorage student lookup warning:', e);
+      }
     }
 
     // No dangerous fallback — if no student found, return null profile
