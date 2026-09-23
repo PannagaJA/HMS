@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, Building2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Check, X, Clock, Coffee, Sun, Sunset, Moon, UtensilsCrossed, Building2, Search, Utensils } from 'lucide-react';
 import type { MealType, MenuItem, Menu, Hostel } from '../../types';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -35,6 +35,9 @@ export const MenuManagement: React.FC = () => {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [activeDay, setActiveDay] = useState<string>('0');
   const [activeTab, setActiveTab] = useState<'timetable' | 'catalog'>('timetable');
+  const [isLoading, setIsLoading] = useState(true);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogDiet, setCatalogDiet] = useState<'ALL' | 'VEG' | 'NON_VEG'>('ALL');
 
   // Modal State for Food Item
   const [showItemModal, setShowItemModal] = useState(false);
@@ -63,6 +66,7 @@ export const MenuManagement: React.FC = () => {
   }, [selectedHostelId]);
 
   const fetchHostelsAndData = async () => {
+    setIsLoading(true);
     try {
       let loadedHostels: Hostel[] = [];
       if (user?.role === 'WARDEN') {
@@ -87,6 +91,8 @@ export const MenuManagement: React.FC = () => {
       });
     } catch (err) {
       console.error('Failed to load menu planner data', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -223,6 +229,16 @@ export const MenuManagement: React.FC = () => {
     window.print();
   };
 
+  const vegItems = menuItems.filter((i) => Boolean(i.is_veg ?? i.vegetarian ?? true)).length;
+  const nonVegItems = menuItems.filter((i) => !Boolean(i.is_veg ?? i.vegetarian ?? true)).length;
+
+  const filteredMenuItems = menuItems.filter((item) => {
+    const isVeg = Boolean(item.is_veg ?? item.vegetarian ?? true);
+    const matchesDiet = catalogDiet === 'ALL' || (catalogDiet === 'VEG' && isVeg) || (catalogDiet === 'NON_VEG' && !isVeg);
+    const matchesSearch = item.name.toLowerCase().includes(catalogSearch.toLowerCase()) || (item.category && item.category.toLowerCase().includes(catalogSearch.toLowerCase()));
+    return matchesDiet && matchesSearch;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -269,35 +285,35 @@ export const MenuManagement: React.FC = () => {
           </button>
         </div>
 
-        {/* Hostel Selection & Day of Week Selectors */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          {/* Hostel Selection Dropdown */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-teal-700" />
-              <span>Select Hostel:</span>
-            </span>
-            <div className="flex-1 min-w-0 sm:w-60">
-              <Select
-                value={selectedHostelId}
-                onValueChange={(val) => setSelectedHostelId(val)}
-              >
-                <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold rounded-full h-9 px-3.5">
-                  <SelectValue placeholder="-- Select Hostel Block --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {hostels.map((hostel) => (
-                    <SelectItem key={hostel.id} value={String(hostel.id)}>
-                      {hostel.name} ({hostel.gender === 'M' ? 'Boys' : hostel.gender === 'F' ? 'Girls' : 'Co-ed'})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* Hostel Selection & Day of Week Selectors for Timetable */}
+        {activeTab === 'timetable' ? (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+            {/* Hostel Selection Dropdown */}
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <span className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-teal-700" />
+                <span>Select Hostel:</span>
+              </span>
+              <div className="flex-1 min-w-0 sm:w-60">
+                <Select
+                  value={selectedHostelId}
+                  onValueChange={(val) => setSelectedHostelId(val)}
+                >
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs font-semibold rounded-full h-9 px-3.5">
+                    <SelectValue placeholder="-- Select Hostel Block --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hostels.map((hostel) => (
+                      <SelectItem key={hostel.id} value={String(hostel.id)}>
+                        {hostel.name} ({hostel.gender === 'M' ? 'Boys' : hostel.gender === 'F' ? 'Girls' : 'Co-ed'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
 
-          {/* Select Day of Week Dropdown (Mobile view inline) */}
-          {activeTab === 'timetable' && (
+            {/* Select Day of Week Dropdown (Mobile view inline) */}
             <div className="flex items-center gap-2.5 w-full sm:w-auto block md:hidden">
               <label className="text-xs font-semibold text-slate-500 whitespace-nowrap shrink-0">
                 Select Day of Week:
@@ -317,29 +333,101 @@ export const MenuManagement: React.FC = () => {
                 </Select>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* Catalog Search and Dietary Filter Toolbar */
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search food catalog by dish name or category..."
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-1.5 bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 rounded-full border border-slate-200 focus:outline-none focus:border-slate-300 transition-colors"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                onClick={() => setCatalogDiet('ALL')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  catalogDiet === 'ALL'
+                    ? 'bg-[#0B1437] text-white shadow-sm'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                All Dishes ({menuItems.length})
+              </button>
+              <button
+                onClick={() => setCatalogDiet('VEG')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  catalogDiet === 'VEG'
+                    ? 'bg-emerald-700 text-white shadow-sm'
+                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                }`}
+              >
+                Veg Only ({vegItems})
+              </button>
+              <button
+                onClick={() => setCatalogDiet('NON_VEG')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  catalogDiet === 'NON_VEG'
+                    ? 'bg-rose-700 text-white shadow-sm'
+                    : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                }`}
+              >
+                Non-Veg ({nonVegItems})
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {activeTab === 'timetable' && (
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-[300px] bg-white rounded-3xl border border-slate-200/80">
+          <div className="w-8 h-8 rounded-full border-4 border-[#0B1437] border-t-transparent animate-spin" />
+        </div>
+      ) : activeTab === 'timetable' ? (
         <div className="space-y-5">
           {hostels.length === 0 ? (
-            <div className="bg-amber-50 p-10 rounded-3xl border border-amber-200 text-center space-y-2">
-              <Building2 className="w-8 h-8 text-amber-600 mx-auto" />
-              <h3 className="font-bold text-amber-900 text-sm">
-                {user?.role === 'WARDEN' ? 'No Hostels Assigned' : 'No Hostels Found'}
-              </h3>
-              <p className="text-xs text-amber-700">
-                {user?.role === 'WARDEN'
-                  ? 'You are not currently assigned to any hostel block. Please contact the administrator to assign your block.'
-                  : 'Please add hostel blocks first in Hostel Management.'}
-              </p>
+            <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+              <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+                <Building2 className="w-8 h-8 text-[#0B1437]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {user?.role === 'WARDEN' ? 'No Hostels Assigned' : 'No Hostels Found'}
+                </h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  {user?.role === 'WARDEN'
+                    ? 'You are not currently assigned to any hostel block. Please contact the administrator.'
+                    : 'No hostel blocks found. Please create a hostel block in Hostel Management first.'}
+                </p>
+              </div>
             </div>
           ) : !selectedHostelId ? (
-            <div className="bg-white p-10 rounded-3xl border border-dashed border-slate-200 text-center space-y-2">
-              <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
-              <h3 className="font-bold text-slate-700 text-sm">Select a Hostel Block</h3>
-              <p className="text-xs text-slate-400">Please choose a hostel block from the dropdown above to view and configure its menu.</p>
+            <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+              <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+                <Building2 className="w-8 h-8 text-[#0B1437]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Select a Hostel Block</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  Please choose a hostel block from the dropdown above to view and configure its dining timetable.
+                </p>
+              </div>
+            </div>
+          ) : mealTypes.length === 0 ? (
+            <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+              <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+                <Clock className="w-8 h-8 text-[#0B1437]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">No Meal Timing Slots Configured</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  No dining slots (Breakfast, Lunch, Snacks, Dinner) have been configured yet.
+                </p>
+              </div>
             </div>
           ) : (
             <>
@@ -360,162 +448,206 @@ export const MenuManagement: React.FC = () => {
                 ))}
               </div>
 
-              {/* Modern Minimalist Dining Schedule Cards */}
+              {/* Modern Dining Schedule Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {mealTypes.map((mealType) => {
-              const menuForSlot = menus.find(
-                (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
-              );
-              const itemsList = menuForSlot?.items_detail || menuForSlot?.items || [];
+                {mealTypes.map((mealType) => {
+                  const menuForSlot = menus.find(
+                    (m) => String(m.day_of_week) === String(activeDay) && Number(m.meal_type_id || m.meal_type?.id || m.meal_type) === Number(mealType.id)
+                  );
+                  const itemsList = menuForSlot?.items_detail || menuForSlot?.items || [];
 
-              const slotCode = mealType.name.toUpperCase();
-              const isBreakfast = slotCode === 'BR' || slotCode.includes('BREAKFAST');
-              const isLunch = slotCode === 'LN' || slotCode.includes('LUNCH');
-              const isSnacks = slotCode === 'SN' || slotCode.includes('SNACK');
-              const isDinner = slotCode === 'DN' || slotCode.includes('DINNER');
+                  const slotCode = mealType.name.toUpperCase();
+                  const isBreakfast = slotCode === 'BR' || slotCode.includes('BREAKFAST');
+                  const isLunch = slotCode === 'LN' || slotCode.includes('LUNCH');
+                  const isSnacks = slotCode === 'SN' || slotCode.includes('SNACK');
+                  const isDinner = slotCode === 'DN' || slotCode.includes('DINNER');
 
-              const slotTitle = isBreakfast ? 'Breakfast' : isLunch ? 'Lunch' : isSnacks ? 'Evening Snacks' : isDinner ? 'Dinner' : mealType.name;
-              const slotIcon = isBreakfast ? <Coffee className="w-4 h-4" /> : isLunch ? <Sun className="w-4 h-4" /> : isSnacks ? <Sunset className="w-4 h-4" /> : <Moon className="w-4 h-4 text-indigo-400" />;
+                  const slotTitle = isBreakfast ? 'Breakfast' : isLunch ? 'Lunch' : isSnacks ? 'Evening Snacks' : isDinner ? 'Dinner' : mealType.name;
+                  const slotIcon = isBreakfast ? <Coffee className="w-4 h-4" /> : isLunch ? <Sun className="w-4 h-4" /> : isSnacks ? <Sunset className="w-4 h-4" /> : <Moon className="w-4 h-4 text-indigo-400" />;
 
-              return (
-                <div
-                  key={mealType.id}
-                  className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden"
-                >
-                  {/* Card Header Bar */}
-                  <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
-                        {slotIcon}
+                  return (
+                    <div
+                      key={mealType.id}
+                      className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden"
+                    >
+                      {/* Card Header Bar */}
+                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                            {slotIcon}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-slate-900 text-base">{slotTitle}</h3>
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                {mealType.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono mt-0.5">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>{formatTimeRange12(mealType.start_time || mealType.time_from, mealType.end_time || mealType.time_to)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleOpenConfigureSlot(mealType)}
+                          className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-[#0B1437] text-slate-700 hover:text-white border border-slate-200 hover:border-transparent text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Configure</span>
+                        </button>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-slate-900 text-base">{slotTitle}</h3>
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
-                            {mealType.name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono mt-0.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>{formatTimeRange12(mealType.start_time || mealType.time_from, mealType.end_time || mealType.time_to)}</span>
-                        </div>
+
+                      {/* Card Body: Minimalist Dish List */}
+                      <div className="p-5 flex-1 space-y-2">
+                        {itemsList.length === 0 ? (
+                          <div className="py-8 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-xs text-slate-400">
+                            <UtensilsCrossed className="w-4 h-4 mx-auto mb-1.5 text-slate-300" />
+                            <span>No dishes configured for {slotTitle.toLowerCase()}</span>
+                          </div>
+                        ) : (
+                          itemsList.map((item: any, idx: number) => {
+                            const itemObj = typeof item === 'object' ? item : menuItems.find((mi) => mi.id === item);
+                            const isVegetarian = itemObj?.is_veg ?? itemObj?.vegetarian ?? true;
+                            return (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 border border-slate-100 hover:bg-white hover:border-slate-200/90 transition-all"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
+                                      isVegetarian ? 'border-emerald-600' : 'border-rose-600'
+                                    }`}
+                                    title={isVegetarian ? 'Vegetarian' : 'Non-Vegetarian'}
+                                  >
+                                    <div
+                                      className={`w-2 h-2 rounded-full ${
+                                        isVegetarian ? 'bg-emerald-600' : 'bg-rose-600'
+                                      }`}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <span className="text-xs font-bold text-slate-800 block">
+                                      {itemObj?.name || `Item #${item}`}
+                                    </span>
+                                    {itemObj?.category && (
+                                      <span className="text-[10px] font-medium text-slate-400 block">
+                                        {itemObj.category}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <span className="text-[10px] font-semibold font-mono text-slate-400 uppercase">
+                                  #{idx + 1}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Card Bottom Meta */}
+                      <div className="px-5 py-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                        <span>Menu Slot</span>
+                        <span className="font-semibold text-slate-700">
+                          {itemsList.length} {itemsList.length === 1 ? 'Dish Active' : 'Dishes Active'}
+                        </span>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        /* Catalog Tab */
+        menuItems.length === 0 ? (
+          <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+            <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+              <Utensils className="w-8 h-8 text-[#0B1437]" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">No Food Items Found</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                No food items have been created in the catalog yet. Add dishes to start configuring your meal slots.
+              </p>
+            </div>
+            <div>
+              <button
+                onClick={handleOpenAddItem}
+                className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add First Food Item</span>
+              </button>
+            </div>
+          </div>
+        ) : filteredMenuItems.length === 0 ? (
+          <div className="bg-white p-12 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-3 animate-in fade-in">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center mx-auto">
+              <Search className="w-6 h-6 text-slate-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">No Matching Food Items Found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-0.5">
+                No dishes matched your current search and dietary filter.
+              </p>
+            </div>
+            <div>
+              <button
+                onClick={() => {
+                  setCatalogSearch('');
+                  setCatalogDiet('ALL');
+                }}
+                className="px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-all cursor-pointer"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredMenuItems.map((item) => {
+              const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${isVegetarian ? 'border-emerald-500' : 'border-rose-500'}`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 leading-tight">{item.name}</h4>
+                      <p className="text-xs text-slate-400">{item.category || (isVegetarian ? 'Vegetarian' : 'Non-Vegetarian')}</p>
+                    </div>
+                  </div>
 
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => handleOpenConfigureSlot(mealType)}
-                      className="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-[#0B1437] text-slate-700 hover:text-white border border-slate-200 hover:border-transparent text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                      onClick={() => handleOpenEditItem(item)}
+                      className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                     >
-                      <Edit2 className="w-3 h-3" />
-                      <span>Configure</span>
+                      <Edit2 className="w-4 h-4" />
                     </button>
-                  </div>
-
-                  {/* Card Body: Minimalist Dish List */}
-                  <div className="p-5 flex-1 space-y-2">
-                    {itemsList.length === 0 ? (
-                      <div className="py-8 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-xs text-slate-400">
-                        <UtensilsCrossed className="w-4 h-4 mx-auto mb-1.5 text-slate-300" />
-                        <span>No dishes configured for {slotTitle.toLowerCase()}</span>
-                      </div>
-                    ) : (
-                      itemsList.map((item: any, idx: number) => {
-                        const itemObj = typeof item === 'object' ? item : menuItems.find((mi) => mi.id === item);
-                        const isVegetarian = itemObj?.is_veg ?? itemObj?.vegetarian ?? true;
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 border border-slate-100 hover:bg-white hover:border-slate-200/90 transition-all"
-                          >
-                            <div className="flex items-center gap-3">
-                              {/* Clean Veg/Non-Veg Square Stamp Indicator */}
-                              <div
-                                className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
-                                  isVegetarian ? 'border-emerald-600' : 'border-rose-600'
-                                }`}
-                                title={isVegetarian ? 'Vegetarian' : 'Non-Vegetarian'}
-                              >
-                                <div
-                                  className={`w-2 h-2 rounded-full ${
-                                    isVegetarian ? 'bg-emerald-600' : 'bg-rose-600'
-                                  }`}
-                                />
-                              </div>
-
-                              <div>
-                                <span className="text-xs font-bold text-slate-800 block">
-                                  {itemObj?.name || `Item #${item}`}
-                                </span>
-                                {itemObj?.category && (
-                                  <span className="text-[10px] font-medium text-slate-400 block">
-                                    {itemObj.category}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <span className="text-[10px] font-semibold font-mono text-slate-400 uppercase">
-                              #{idx + 1}
-                            </span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* Card Bottom Meta */}
-                  <div className="px-5 py-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-                    <span>Menu Slot</span>
-                    <span className="font-semibold text-slate-700">
-                      {itemsList.length} {itemsList.length === 1 ? 'Dish Active' : 'Dishes Active'}
-                    </span>
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
-        </>
-      )}
-    </div>
-  )}
-
-      {activeTab === 'catalog' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {menuItems.map((item) => {
-            const isVegetarian = item.is_veg ?? item.vegetarian ?? true;
-            return (
-              <div
-                key={item.id}
-                className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${isVegetarian ? 'border-emerald-500' : 'border-rose-500'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${isVegetarian ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 leading-tight">{item.name}</h4>
-                    <p className="text-xs text-slate-400">{item.category || (isVegetarian ? 'Vegetarian' : 'Non-Vegetarian')}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleOpenEditItem(item)}
-                    className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        )
       )}
 
       {/* Food Item Add/Edit Modal */}

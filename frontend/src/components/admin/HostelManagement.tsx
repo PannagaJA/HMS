@@ -225,77 +225,100 @@ export const HostelManagement: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {hostels.map((h) => (
-          <div
-            key={h.id}
-            className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
-          >
-            <div>
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 flex items-center justify-center font-bold">
-                  <Building2 className="w-6 h-6" />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                    h.gender === 'M' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                    h.gender === 'F' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                    'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}>
-                    {h.gender === 'M' ? 'BOYS HOSTEL' : h.gender === 'F' ? 'GIRLS HOSTEL' : 'CO-ED HOSTEL'}
-                  </span>
-                </div>
-              </div>
-
-              <h3 className="text-lg font-bold text-slate-900 mb-1">{h.name}</h3>
-              <p className="text-xs text-slate-400 mb-4">{h.address || 'Campus Residential Zone'}</p>
-
-              <div className="grid grid-cols-3 gap-2 py-3 border-y border-slate-100 mb-4 text-xs">
-                <div>
-                  <span className="text-slate-400 block mb-0.5">Floors</span>
-                  <span className="font-bold text-slate-800">{h.floor_count || 1} {h.floor_count === 1 ? 'Floor' : 'Floors'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">Total Rooms</span>
-                  <span className="font-bold text-slate-800">{h.total_rooms} Rooms</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">Occupancy</span>
-                  <span className="font-bold text-slate-800">{h.occupied_beds} / {h.total_capacity}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-xs text-slate-600 mb-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Chief Warden:</span>
-                  <span className="font-semibold text-slate-800">{h.warden_detail?.name || 'Unassigned'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Caretaker:</span>
-                  <span className="font-semibold text-slate-800">{h.caretaker_detail?.name || 'Unassigned'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => handleOpenEdit(h)}
-                className="p-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-                title="Edit Hostel"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(h.id)}
-                className="p-2 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
-                title="Delete Hostel"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+      {hostels.length === 0 ? (
+        <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Building2 className="w-8 h-8 text-[#0B1437]" />
           </div>
-        ))}
-      </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">No Hostels Found</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              No hostel blocks have been added yet. Add a hostel block to start managing rooms, floors, and student allocations.
+            </p>
+          </div>
+          <div>
+            <button
+              onClick={handleOpenCreate}
+              className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Hostel Block</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {hostels.map((h) => (
+            <div
+              key={h.id}
+              className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
+            >
+              <div>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-teal-950 flex items-center justify-center font-bold">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                      h.gender === 'M' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                      h.gender === 'F' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                      'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {h.gender === 'M' ? 'BOYS HOSTEL' : h.gender === 'F' ? 'GIRLS HOSTEL' : 'CO-ED HOSTEL'}
+                    </span>
+                  </div>
+                </div>
+
+                <h3 className="text-lg font-bold text-slate-900 mb-1">{h.name}</h3>
+                <p className="text-xs text-slate-400 mb-4">{h.address || 'Campus Residential Zone'}</p>
+
+                <div className="grid grid-cols-3 gap-2 py-3 border-y border-slate-100 mb-4 text-xs">
+                  <div>
+                    <span className="text-slate-400 block mb-0.5">Floors</span>
+                    <span className="font-bold text-slate-800">{h.floor_count || 1} {h.floor_count === 1 ? 'Floor' : 'Floors'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-0.5">Total Rooms</span>
+                    <span className="font-bold text-slate-800">{h.total_rooms} Rooms</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-0.5">Occupancy</span>
+                    <span className="font-bold text-slate-800">{h.occupied_beds} / {h.total_capacity}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-xs text-slate-600 mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Chief Warden:</span>
+                    <span className="font-semibold text-slate-800">{h.warden_detail?.name || 'Unassigned'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Caretaker:</span>
+                    <span className="font-semibold text-slate-800">{h.caretaker_detail?.name || 'Unassigned'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  onClick={() => handleOpenEdit(h)}
+                  className="p-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                  title="Edit Hostel"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(h.id)}
+                  className="p-2 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                  title="Delete Hostel"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">

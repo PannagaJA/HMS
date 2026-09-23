@@ -202,58 +202,83 @@ export const StaffManagement: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {(activeTab === 'wardens' ? wardens : activeTab === 'caretakers' ? caretakers : securityStaff).map((staff: any) => (
-          <div
-            key={staff.id}
-            className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
-          >
-            <div>
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-full bg-[#E0E7FF] text-indigo-950 flex items-center justify-center font-bold text-base">
-                  {staff.name ? staff.name[0] : 'S'}
-                </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-                  {staff.experience || staff.experience_years || 0} YRS EXP
-                </span>
-              </div>
-
-              <h3 className="text-base font-bold text-slate-900">{staff.name}</h3>
-              <p className="text-xs text-slate-400 mb-4">
-                {staff.designation || (activeTab === 'wardens' ? 'Hostel Warden' : activeTab === 'caretakers' ? 'Residential Caretaker' : 'Security Guard')}
-              </p>
-
-              <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{staff.email || 'No institutional email'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="font-mono">{staff.phone || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => openEditModal(staff)}
-                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-                title="Edit staff details"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(staff.id)}
-                className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
-                title="Remove staff"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+      {((activeTab === 'wardens' ? wardens : activeTab === 'caretakers' ? caretakers : securityStaff).length === 0) ? (
+        <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Plus className="w-8 h-8 text-[#0B1437]" />
           </div>
-        ))}
-      </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">
+              No {activeTab === 'wardens' ? 'Hostel Wardens' : activeTab === 'caretakers' ? 'Hostel Caretakers' : 'Security Personnel'} Found
+            </h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              No {activeTab === 'wardens' ? 'wardens' : activeTab === 'caretakers' ? 'caretakers' : 'security guards'} have been registered yet. Add staff members to assign responsibilities.
+            </p>
+          </div>
+          <div>
+            <button
+              onClick={openCreateModal}
+              className="px-6 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add {activeTab === 'wardens' ? 'Warden' : activeTab === 'caretakers' ? 'Caretaker' : 'Security Guard'}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {(activeTab === 'wardens' ? wardens : activeTab === 'caretakers' ? caretakers : securityStaff).map((staff: any) => (
+            <div
+              key={staff.id}
+              className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
+            >
+              <div>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-full bg-[#E0E7FF] text-indigo-950 flex items-center justify-center font-bold text-base">
+                    {staff.name ? staff.name[0] : 'S'}
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                    {staff.experience || staff.experience_years || 0} YRS EXP
+                  </span>
+                </div>
+
+                <h3 className="text-base font-bold text-slate-900">{staff.name}</h3>
+                <p className="text-xs text-slate-400 mb-4">
+                  {staff.designation || (activeTab === 'wardens' ? 'Hostel Warden' : activeTab === 'caretakers' ? 'Residential Caretaker' : 'Security Guard')}
+                </p>
+
+                <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{staff.email || 'No institutional email'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="font-mono">{staff.phone || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  onClick={() => openEditModal(staff)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                  title="Edit staff details"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(staff.id)}
+                  className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                  title="Remove staff"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
