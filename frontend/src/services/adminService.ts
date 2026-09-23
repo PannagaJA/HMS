@@ -57,20 +57,38 @@ export const adminService = {
               occupancy_rate: 0,
               pending_gate_passes: 0,
               active_issues: 0
-            }
+            },
+            recent_passes: [],
+            weekly_trends: [],
+            trend_stats: { peakDay: 'N/A', peakCount: 0, average: 0, trendPercent: '+0%' }
           };
         }
 
-        // Always use direct table queries for accuracy — avoids view field name inconsistencies
-        // (view may return 'open_issues' vs 'active_issues' depending on which SQL fix was run)
-        const [h, beds, a, p, iss] = await Promise.all([
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+        const fourteenDaysAgoDate = fourteenDaysAgo.split('T')[0];
+
+        // Direct table queries for tenant accuracy
+        const [h, beds, a, p, iss, recentPassesRes, trendPassesRes] = await Promise.all([
           supabase.from('hostels').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
           supabase.from('beds').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
           supabase.from('room_allocations').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('org_id', orgId),
-          // Match both PENDING (uppercase) and pending (lowercase) in case of data inconsistency
+          // Match both PENDING (uppercase) and pending (lowercase)
           supabase.from('gate_passes').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.pending').eq('org_id', orgId),
-          // Count issues that are NOT completed (handles both case variants)
+          // Count issues that are NOT completed
           supabase.from('issues').select('id', { count: 'exact', head: true }).not('status', 'in', '(COMPLETED,completed,closed,CLOSED)').eq('org_id', orgId),
+          // Top recent gate passes with student, hostel, and room metadata
+          supabase
+            .from('gate_passes')
+            .select('id, token, pass_type, reason, out_date, out_time, expected_return_date, expected_return_time, status, created_at, actual_exit_time, actual_entry_time, student:students(id, student_name, enrollment_no), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
+            .eq('org_id', orgId)
+            .order('created_at', { ascending: false })
+            .limit(10),
+          // Gate passes in the last 14 days for 7-day movement trend and week-over-week calculation
+          supabase
+            .from('gate_passes')
+            .select('id, out_date, created_at, actual_exit_time, status')
+            .eq('org_id', orgId)
+            .or(`created_at.gte.${fourteenDaysAgo},out_date.gte.${fourteenDaysAgoDate}`)
         ]);
 
         const totalCapacity = beds.count || 0;
@@ -86,8 +104,108 @@ export const adminService = {
           active_issues: iss.count || 0
         };
 
-        console.log('[adminService.getDashboardStats] orgId:', orgId, 'stats:', stats);
-        return { statistics: stats };
+        // Format recent gate passes
+        const recent_passes = (recentPassesRes.data || []).map((gp: any) => ({
+          id: gp.id,
+          token: gp.token,
+          student_name: gp.student?.student_name || 'Resident Student',
+          enrollment_no: gp.student?.enrollment_no || 'N/A',
+          hostel_name: gp.hostel?.name || 'Hostel Block',
+          room_no: gp.room?.no || 'N/A',
+          floor: gp.room?.floor !== undefined ? gp.room?.floor : null,
+          pass_type: gp.pass_type || 'DAY_OUT',
+          out_date: gp.out_date || (gp.created_at ? gp.created_at.split('T')[0] : 'N/A'),
+          out_time: gp.out_time || 'N/A',
+          expected_return_date: gp.expected_return_date,
+          expected_return_time: gp.expected_return_time,
+          status: gp.status?.toLowerCase() || 'pending',
+          reason: gp.reason || 'N/A',
+          purpose: gp.reason || 'N/A',
+          actual_exit_time: gp.actual_exit_time,
+          actual_entry_time: gp.actual_entry_time,
+          created_at: gp.created_at
+        }));
+
+        // Compute 7-day weekly movement trends
+        const now = new Date();
+        const days7: { day: string; dateStr: string; fullDay: string }[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          const dateStr = d.toISOString().split('T')[0];
+          const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+          const fullDay = d.toLocaleDateString('en-US', { weekday: 'long' });
+          days7.push({ day, dateStr, fullDay });
+        }
+
+        const priorDateStrs = new Set<string>();
+        for (let i = 13; i >= 7; i--) {
+          const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          priorDateStrs.add(d.toISOString().split('T')[0]);
+        }
+
+        const allTrendPasses = trendPassesRes.data || [];
+
+        const dailyCounts = days7.map(({ dateStr }) => {
+          return allTrendPasses.filter((gp: any) => {
+            const exitDate = gp.actual_exit_time ? gp.actual_exit_time.split('T')[0] : null;
+            const createDate = gp.created_at ? gp.created_at.split('T')[0] : null;
+            return exitDate === dateStr || gp.out_date === dateStr || createDate === dateStr;
+          }).length;
+        });
+
+        const prior7Count = allTrendPasses.filter((gp: any) => {
+          const exitDate = gp.actual_exit_time ? gp.actual_exit_time.split('T')[0] : null;
+          const createDate = gp.created_at ? gp.created_at.split('T')[0] : null;
+          return (exitDate && priorDateStrs.has(exitDate)) || (gp.out_date && priorDateStrs.has(gp.out_date)) || (createDate && priorDateStrs.has(createDate));
+        }).length;
+
+        const maxCount = Math.max(...dailyCounts, 0);
+        const total7Days = dailyCounts.reduce((sum, c) => sum + c, 0);
+
+        const weekly_trends = days7.map((d, index) => {
+          const count = dailyCounts[index];
+          const heightPercent = maxCount > 0 && count > 0 
+            ? Math.max(15, Math.round((count / maxCount) * 100)) 
+            : 8;
+          return {
+            day: d.day,
+            count,
+            height: `${heightPercent}%`
+          };
+        });
+
+        let peakDay = 'N/A';
+        let peakCount = 0;
+        if (maxCount > 0) {
+          const peakIndex = dailyCounts.indexOf(maxCount);
+          peakDay = days7[peakIndex].fullDay;
+          peakCount = maxCount;
+        }
+
+        const average = total7Days > 0 ? +(total7Days / 7).toFixed(1) : 0;
+
+        let trendPercent = '+0%';
+        if (prior7Count > 0) {
+          const diff = Math.round(((total7Days - prior7Count) / prior7Count) * 100);
+          trendPercent = diff >= 0 ? `+${diff}%` : `${diff}%`;
+        } else if (total7Days > 0) {
+          trendPercent = '+100%';
+        }
+
+        const trend_stats = {
+          peakDay,
+          peakCount,
+          average,
+          trendPercent
+        };
+
+        console.log('[adminService.getDashboardStats] orgId:', orgId, 'stats:', stats, 'recentPasses:', recent_passes.length, 'trends:', weekly_trends);
+        return {
+          statistics: stats,
+          recent_passes,
+          weekly_trends,
+          trend_stats
+        };
       } finally {
         inFlightDashboardStatsPromise = null;
       }

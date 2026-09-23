@@ -3,19 +3,48 @@ import { Building2, BedDouble, AlertCircle, Clock, Eye, X } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import type { DashboardStats, GatePassRequest } from '../../types';
 import { apiClient } from '../../api/apiClient';
+import { supabase } from '../../lib/supabase';
 import { formatTime12 } from '../../lib/utils';
 import { formatFloorRoom } from '../../utils/formatters';
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPasses, setRecentPasses] = useState<GatePassRequest[]>([]);
-  const [weeklyTrends, setWeeklyTrends] = useState<{ day: string; count: number; height: string }[]>([]);
+  const [weeklyTrends, setWeeklyTrends] = useState<{ day: string; count: number; height: string }[]>(() => {
+    // Initial 7-day placeholder skeleton
+    const days: { day: string; count: number; height: string }[] = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      days.push({
+        day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        count: 0,
+        height: '8%'
+      });
+    }
+    return days;
+  });
   const [trendStats, setTrendStats] = useState({ peakDay: 'N/A', peakCount: 0, average: 0, trendPercent: '+0%' });
   const [selectedReasonPass, setSelectedReasonPass] = useState<GatePassRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Subscribe to realtime updates for gate passes and issues
+    const channel = supabase
+      .channel('public:admin-dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gate_passes' }, () => {
+        fetchDashboardData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
+        fetchDashboardData(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchDashboardData = async (isBackground = false) => {
@@ -34,7 +63,7 @@ export const AdminDashboard: React.FC = () => {
       }
 
       // 7-day movement trend analytics
-      if (Array.isArray(data.weekly_trends)) {
+      if (Array.isArray(data.weekly_trends) && data.weekly_trends.length > 0) {
         setWeeklyTrends(data.weekly_trends);
       }
       if (data.trend_stats) {
