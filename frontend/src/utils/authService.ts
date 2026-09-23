@@ -1318,9 +1318,28 @@ export const authService = {
     const input = usernameOrEmail.trim();
     let emailToUse = input;
 
-    // If input is a USN/enrollment_no, format to standard student email
+    // If input is a USN/enrollment_no, resolve registered email from students table / RPC
     if (!input.includes('@')) {
-      emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
+      try {
+        const { data: rpcStudent } = await supabase.rpc('get_student_profile', { p_identifier: input });
+        if (rpcStudent?.email) {
+          emailToUse = rpcStudent.email;
+        } else {
+          const { data: stRecord } = await supabase
+            .from('students')
+            .select('email')
+            .ilike('enrollment_no', input)
+            .limit(1)
+            .maybeSingle();
+          if (stRecord?.email) {
+            emailToUse = stRecord.email;
+          } else {
+            emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
+          }
+        }
+      } catch (_) {
+        emailToUse = `${input.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
+      }
     }
 
     // Clear any previous stale sessions from other organizations first
@@ -1328,6 +1347,42 @@ export const authService = {
       await supabase.auth.signOut();
       localStorage.removeItem('hms_user');
       localStorage.removeItem('hms_token');
+    } catch (_) {}
+
+    // 0. Direct Cloud Password Verification RPC (Verifies against auth.users on Supabase Cloud for all devices)
+    try {
+      const { data: verifyData, error: verifyErr } = await supabase.rpc('verify_user_login', {
+        p_identifier: input,
+        p_password: password
+      });
+      if (!verifyErr && verifyData?.user_id) {
+        const verifiedProfile: User = {
+          id: verifyData.user_id,
+          email: verifyData.email,
+          role: verifyData.role || 'STUDENT',
+          first_name: verifyData.first_name,
+          last_name: '',
+          username: verifyData.enrollment_no || (verifyData.email ? verifyData.email.split('@')[0] : 'user'),
+          enrollment_no: verifyData.enrollment_no,
+          phone: verifyData.phone || '',
+          is_active: true,
+          org_id: verifyData.org_id || undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const syntheticSession = {
+          access_token: `hms-session-${verifyData.user_id}-${Date.now()}`,
+          token_type: 'bearer',
+          user: {
+            id: verifiedProfile.id,
+            email: verifiedProfile.email,
+            role: 'authenticated'
+          }
+        };
+
+        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: verifiedProfile };
+      }
     } catch (_) {}
 
     // 1. First attempt standard Supabase Auth
