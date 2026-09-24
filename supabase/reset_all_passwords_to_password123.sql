@@ -301,18 +301,34 @@ BEGIN
 
     -- Return full profile
     SELECT * INTO v_profile FROM public.profiles WHERE id = v_user.id LIMIT 1;
-    SELECT * INTO v_student FROM public.students WHERE profile_id = v_user.id OR LOWER(email) = LOWER(v_user.email) LIMIT 1;
 
-    RETURN jsonb_build_object(
-      'success', true,
-      'user_id', v_user.id,
-      'email', v_user.email,
-      'role', COALESCE(v_profile.role, 'STUDENT'),
-      'first_name', COALESCE(v_student.student_name, v_profile.first_name, ''),
-      'phone', COALESCE(v_student.phone, v_profile.phone, ''),
-      'enrollment_no', v_student.enrollment_no,
-      'org_id', COALESCE(v_profile.org_id, v_student.org_id)
-    );
+    IF v_profile.role IS NOT NULL AND v_profile.role != 'STUDENT' THEN
+      RETURN jsonb_build_object(
+        'success', true,
+        'user_id', v_user.id,
+        'email', v_user.email,
+        'role', v_profile.role,
+        'first_name', COALESCE(v_profile.first_name, ''),
+        'last_name', COALESCE(v_profile.last_name, ''),
+        'phone', COALESCE(v_profile.phone, ''),
+        'enrollment_no', NULL,
+        'org_id', v_profile.org_id
+      );
+    ELSE
+      SELECT * INTO v_student FROM public.students WHERE profile_id = v_user.id OR LOWER(email) = LOWER(v_user.email) LIMIT 1;
+
+      RETURN jsonb_build_object(
+        'success', true,
+        'user_id', v_user.id,
+        'email', v_user.email,
+        'role', 'STUDENT',
+        'first_name', COALESCE(v_student.student_name, v_profile.first_name, ''),
+        'last_name', COALESCE(v_profile.last_name, ''),
+        'phone', COALESCE(v_student.phone, v_profile.phone, ''),
+        'enrollment_no', v_student.enrollment_no,
+        'org_id', COALESCE(v_profile.org_id, v_student.org_id)
+      );
+    END IF;
   END IF;
 
   RETURN jsonb_build_object('success', false, 'reason', 'USER_NOT_FOUND_IN_AUTH');
