@@ -68,8 +68,19 @@ export const HMSProfile: React.FC = () => {
       if (studentData.profile.email) {
         setEmail(studentData.profile.email);
       }
+    } else if (!isStudent && user) {
+      const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+      if (fullName) {
+        setName(fullName);
+      }
+      if (user.email) {
+        setEmail(user.email);
+      }
+      if (user.phone !== undefined && user.phone !== null) {
+        setPhone(user.phone || '');
+      }
     }
-  }, [studentData, isStudent]);
+  }, [studentData, isStudent, user]);
 
 
   // Password Change State
@@ -161,10 +172,9 @@ export const HMSProfile: React.FC = () => {
     && !['student', 'resident', 'user', 'admin'].includes(user.first_name.toLowerCase())
     && (!isStudent || !isUsnFormat(user.first_name));
 
-  const displayName = studentData?.profile?.student_name 
-    || (hasValidAuthName ? `${user.first_name} ${user.last_name || ''}`.trim() : null)
-    || (name && !isUsnFormat(name) ? name : null)
-    || (isStudent ? 'Resident Student' : (user?.username || 'User'));
+  const displayName = isStudent 
+    ? (studentData?.profile?.student_name || (hasValidAuthName ? `${user?.first_name} ${user?.last_name || ''}`.trim() : 'Resident Student'))
+    : ((user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : null) || (name && !isUsnFormat(name) ? name : null) || user?.username || 'User');
 
   return (
     <div className="w-full space-y-6">
@@ -197,11 +207,11 @@ export const HMSProfile: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Email:</span>
-              <span className="truncate max-w-[140px] text-slate-700">{studentData?.profile?.email || user?.email}</span>
+              <span className="truncate max-w-[140px] text-slate-700">{isStudent ? (studentData?.profile?.email || user?.email) : user?.email}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Phone:</span>
-              <span className="font-mono text-slate-700">{resolvedPhone || 'Not set'}</span>
+              <span className="font-mono text-slate-700">{(isStudent ? resolvedPhone : user?.phone) || 'Not set'}</span>
             </div>
             {isStudent && studentData?.profile?.hostel_name && (
               <div className="flex items-center justify-between">
