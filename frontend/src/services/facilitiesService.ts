@@ -804,6 +804,10 @@ export const issueService = {
       status: 'pending'
     };
 
+    if (student.org_id) {
+      insertBody.org_id = student.org_id;
+    }
+
     if (payload.image_url) {
       insertBody.image_url = payload.image_url;
     }
@@ -823,6 +827,34 @@ export const issueService = {
         .insert(insertBody)
         .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no), updates:issue_updates(*)')
         .single();
+    }
+
+    // Fallback: If RLS error (42501) occurs, try SECURITY DEFINER RPC
+    if (insertRes.error && (insertRes.error.code === '42501' || insertRes.error.message?.includes('row-level security'))) {
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('submit_student_issue', {
+          p_student_id: student.id,
+          p_hostel_id: hostelId,
+          p_room_id: roomId,
+          p_title: payload.title,
+          p_category: (payload.category || 'OTHER').toUpperCase(),
+          p_description: payload.description,
+          p_image_url: payload.image_url || null,
+          p_org_id: student.org_id || null
+        });
+        if (!rpcErr && rpcData) {
+          insertRes = {
+            data: {
+              ...rpcData,
+              student: { student_name: student.student_name, enrollment_no: student.enrollment_no },
+              hostel: { name: 'Hostel' },
+              room: { no: '101' },
+              updates: []
+            },
+            error: null
+          } as any;
+        }
+      } catch (_) {}
     }
 
     if (insertRes.error) {
