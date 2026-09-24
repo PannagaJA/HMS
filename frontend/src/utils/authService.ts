@@ -883,15 +883,26 @@ export const apiClient = {
       }
 
       // 2. Direct Cloud Password RPC (Updates auth.users directly on Supabase PostgreSQL for all devices)
-      const identToUpdate = effectiveEmail || stored?.enrollment_no || stored?.username || stored?.id;
+      const identToUpdate = stored?.enrollment_no || effectiveEmail || stored?.username || stored?.id;
       if (identToUpdate) {
         try {
-          await supabase.rpc('change_user_password', {
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('change_user_password', {
             p_identifier: identToUpdate,
             p_new_password: newPassword
           });
-        } catch (rpcErr) {
-          console.warn('RPC change_user_password warning:', rpcErr);
+          if (rpcErr) {
+            console.warn('RPC change_user_password error:', rpcErr);
+            if (!authUpdated) {
+              throw new Error(rpcErr.message || 'Failed to update password in cloud database');
+            }
+          }
+          if (rpcRes && rpcRes.success === false && !authUpdated) {
+            throw new Error(rpcRes.message || 'Failed to update password');
+          }
+        } catch (rpcErr: any) {
+          if (!authUpdated) {
+            throw rpcErr;
+          }
         }
       }
 
@@ -1557,17 +1568,7 @@ export const authService = {
     }
 
     if (studentMatch) {
-      const allowedStudentPasswords = [
-        'password123',
-        studentMatch.enrollment_no?.toLowerCase(),
-        studentMatch.enrollment_no?.toUpperCase(),
-        studentMatch.enrollment_no,
-        studentMatch.phone?.trim()
-      ].filter(Boolean);
-
-      const isStudentPassValid = password.toLowerCase() === 'password123' 
-        || allowedStudentPasswords.includes(password) 
-        || allowedStudentPasswords.includes(password.toLowerCase());
+      const isStudentPassValid = password.toLowerCase() === 'password123';
 
       if (isStudentPassValid) {
         // Ensure profile_id is a valid UUID
