@@ -1,96 +1,75 @@
 -- =============================================================================
--- SAFELY DELETE USER: student@amc.edu (AND FIX ALL DELETION CASCADE CONSTRAINTS)
+-- COMPLETE & CLEAN REMOVAL OF ORPHANED USER: student@amc.edu
 -- Run this in your Supabase SQL Editor
 -- =============================================================================
 
 DO $$
 DECLARE
-  v_user_id UUID;
-  v_student_id BIGINT;
+  v_rec RECORD;
+  v_st_id BIGINT;
 BEGIN
-  -- 1. Locate the user by email or specific UID
-  SELECT id INTO v_user_id 
-  FROM auth.users 
-  WHERE LOWER(email) = 'student@amc.edu' OR id = '72bfe61a-276b-42a3-ac2b-993172a4c083'::UUID
-  LIMIT 1;
+  -- Loop through any auth user matching 'student@amc.edu' or known test UIDs
+  FOR v_rec IN (
+    SELECT id, email 
+    FROM auth.users 
+    WHERE LOWER(email) = 'student@amc.edu' 
+       OR id IN ('72bfe61a-276b-42a3-ac2b-993172a4c083'::uuid, 'c9fabe92-0e0f-4c43-a54b-2c84a8b8a469'::uuid)
+  ) LOOP
 
-  IF v_user_id IS NOT NULL THEN
-    -- Find corresponding student record if any
-    SELECT id INTO v_student_id FROM public.students WHERE profile_id = v_user_id;
+    RAISE NOTICE 'Cleaning up user: % (ID: %)', v_rec.email, v_rec.id;
 
-    -- Clean up student-related records in correct dependency order
-    IF v_student_id IS NOT NULL THEN
-      -- Delete issue updates linked to this student's issues first
-      DELETE FROM public.issue_updates WHERE issue_id IN (SELECT id FROM public.issues WHERE student_id = v_student_id);
+    -- 1. If linked to any student record in public.students, clean up student child tables first
+    FOR v_st_id IN (SELECT id FROM public.students WHERE profile_id = v_rec.id) LOOP
+      -- Clean issue updates on this student's issues
+      DELETE FROM public.issue_updates WHERE issue_id IN (SELECT id FROM public.issues WHERE student_id = v_st_id);
       
-      -- Delete issues
-      DELETE FROM public.issues WHERE student_id = v_student_id;
+      -- Clean issues
+      DELETE FROM public.issues WHERE student_id = v_st_id;
       
-      -- Delete gate passes
-      DELETE FROM public.gate_passes WHERE student_id = v_student_id;
+      -- Clean gate passes
+      DELETE FROM public.gate_passes WHERE student_id = v_st_id;
       
-      -- Delete room allocations
-      DELETE FROM public.room_allocations WHERE student_id = v_student_id;
+      -- Clean room allocations
+      DELETE FROM public.room_allocations WHERE student_id = v_st_id;
       
-      -- Delete dining attendance/tokens if table exists
-      BEGIN
-        DELETE FROM public.dining_qr_tokens WHERE student_id = v_student_id;
-      EXCEPTION WHEN undefined_table THEN NULL; END;
+      -- Clean optional dining/mess records
+      BEGIN DELETE FROM public.dining_qr_tokens WHERE student_id = v_st_id; EXCEPTION WHEN OTHERS THEN NULL; END;
+      BEGIN DELETE FROM public.mess_attendance WHERE student_id = v_st_id; EXCEPTION WHEN OTHERS THEN NULL; END;
+      BEGIN DELETE FROM public.visitor_logs WHERE student_id = v_st_id; EXCEPTION WHEN OTHERS THEN NULL; END;
 
-      -- Delete student record
-      DELETE FROM public.students WHERE id = v_student_id;
-    END IF;
+      -- Delete student row
+      DELETE FROM public.students WHERE id = v_st_id;
+    END LOOP;
 
-    -- Clean up any remaining direct profile/user references in issue_updates / gate_passes / issues
-    BEGIN
-      DELETE FROM public.issue_updates WHERE updated_by = v_user_id;
-    EXCEPTION WHEN undefined_column THEN NULL; END;
+    -- 2. Clean up any other references where this user acted as updater/admin/creator
+    BEGIN DELETE FROM public.issue_updates WHERE updated_by = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM public.gate_passes WHERE approved_by = v_rec.id OR action_by = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM public.issues WHERE resolved_by = v_rec.id OR assigned_to = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM public.room_allocations WHERE allocated_by = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM public.announcements WHERE created_by = v_rec.id OR author_id = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
 
-    BEGIN
-      DELETE FROM public.gate_passes WHERE approved_by = v_user_id;
-    EXCEPTION WHEN undefined_column THEN NULL; END;
+    -- 3. Delete from public.profiles
+    DELETE FROM public.profiles WHERE id = v_rec.id OR LOWER(email) = 'student@amc.edu';
 
-    BEGIN
-      DELETE FROM public.issues WHERE resolved_by = v_user_id;
-    EXCEPTION WHEN undefined_column THEN NULL; END;
+    -- 4. Delete from auth schema child tables
+    BEGIN DELETE FROM auth.mfa_amr_claims WHERE session_id IN (SELECT id FROM auth.sessions WHERE user_id = v_rec.id); EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM auth.mfa_challenges WHERE factor_id IN (SELECT id FROM auth.mfa_factors WHERE user_id = v_rec.id); EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM auth.mfa_factors WHERE user_id = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM auth.sessions WHERE user_id = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DELETE FROM auth.identities WHERE user_id = v_rec.id; EXCEPTION WHEN OTHERS THEN NULL; END;
 
-    -- Delete profile record
-    DELETE FROM public.profiles WHERE id = v_user_id;
+    -- 5. Finally delete the auth user
+    DELETE FROM auth.users WHERE id = v_rec.id;
 
-    -- Clean up auth tables
-    DELETE FROM auth.identities WHERE user_id = v_user_id;
-    DELETE FROM auth.sessions WHERE user_id = v_user_id;
-    
-    BEGIN
-      DELETE FROM auth.mfa_factors WHERE user_id = v_user_id;
-    EXCEPTION WHEN undefined_table THEN NULL; END;
-    
-    DELETE FROM auth.users WHERE id = v_user_id;
-
-    RAISE NOTICE 'Successfully deleted user student@amc.edu (UID: %)', v_user_id;
-  ELSE
-    RAISE NOTICE 'User student@amc.edu was not found in auth.users.';
-  END IF;
+    RAISE NOTICE 'Successfully and permanently deleted: %', v_rec.email;
+  END LOOP;
 END $$;
 
--- 2. Add ON DELETE CASCADE to foreign keys so deleting issues/profiles/users cascades automatically
-DO $$
-BEGIN
-  -- Fix issue_updates -> issues cascade
-  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'issue_updates_issue_id_fkey') THEN
-    ALTER TABLE public.issue_updates DROP CONSTRAINT issue_updates_issue_id_fkey;
-    ALTER TABLE public.issue_updates ADD CONSTRAINT issue_updates_issue_id_fkey FOREIGN KEY (issue_id) REFERENCES public.issues(id) ON DELETE CASCADE;
-  END IF;
-
-  -- Fix profiles -> auth.users cascade
-  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'profiles_id_fkey') THEN
-    ALTER TABLE public.profiles DROP CONSTRAINT profiles_id_fkey;
-    ALTER TABLE public.profiles ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-
-  -- Fix students -> profiles cascade
-  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'students_profile_id_fkey') THEN
-    ALTER TABLE public.students DROP CONSTRAINT students_profile_id_fkey;
-    ALTER TABLE public.students ADD CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
-  END IF;
-END $$;
+-- Verify it is completely gone from both auth.users and profiles
+SELECT 'Remaining in auth.users:' as check_type, COUNT(*) as count 
+FROM auth.users 
+WHERE LOWER(email) = 'student@amc.edu'
+UNION ALL
+SELECT 'Remaining in profiles:' as check_type, COUNT(*) as count 
+FROM public.profiles 
+WHERE LOWER(email) = 'student@amc.edu';
