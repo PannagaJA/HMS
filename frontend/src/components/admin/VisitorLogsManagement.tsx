@@ -28,6 +28,7 @@ export const VisitorLogsManagement: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // Form State
+  const [checkInTab, setCheckInTab] = useState<'STUDENT' | 'ENQUIRY'>('STUDENT');
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
   const [studentName, setStudentName] = useState('');
@@ -76,16 +77,23 @@ export const VisitorLogsManagement: React.FC = () => {
 
   const handleCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isEnquiry = checkInTab === 'ENQUIRY';
+    const effectiveHostelId = modalHostelId || (hostels.length > 0 ? String(hostels[0].id) : undefined);
+    if (!isEnquiry && !effectiveHostelId) {
+      showError('Please select a hostel block.');
+      return;
+    }
     try {
       await apiClient.post('/hms/visitor-logs/', {
-        hostel: Number(modalHostelId),
+        hostel: effectiveHostelId ? Number(effectiveHostelId) : null,
+        hostel_id: effectiveHostelId ? Number(effectiveHostelId) : null,
         visitor_name: visitorName,
         visitor_phone: visitorPhone,
-        student_name: studentName,
-        student_room: studentRoom,
-        enrollment_no: enrollmentNo,
-        relation,
-        purpose,
+        student_name: isEnquiry ? 'General / Campus Enquiry' : studentName,
+        student_room: isEnquiry ? 'Reception / Office' : studentRoom,
+        enrollment_no: isEnquiry ? 'N/A' : enrollmentNo,
+        relation: isEnquiry ? 'Enquiry' : relation,
+        purpose: purpose || (isEnquiry ? 'General Enquiry' : 'Visit'),
         status: 'CHECKED_IN',
       });
       showSuccess(`Visitor ${visitorName} checked in successfully.`);
@@ -127,6 +135,11 @@ export const VisitorLogsManagement: React.FC = () => {
   const hostelFilteredLogs = logs.filter((l) => {
     if (!selectedHostelId) return false;
     if (selectedHostelId === 'ALL') return true;
+
+    // General enquiries belong to campus level, so display them across blocks
+    if (l.relation === 'Enquiry' || (l.student_name || '').includes('Enquiry')) {
+      return true;
+    }
 
     const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
     return (
@@ -419,76 +432,189 @@ export const VisitorLogsManagement: React.FC = () => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">Check In Visitor</h3>
-            <p className="text-xs text-slate-500 mb-5">Record visitor details and destination student.</p>
+            <p className="text-xs text-slate-500 mb-3">
+              {checkInTab === 'STUDENT' ? 'Record visitor details and destination student.' : 'Record visitor details for campus and general enquiries.'}
+            </p>
 
-            <form onSubmit={handleCheckIn} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visitor Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={visitorName}
-                    onChange={(e) => setVisitorName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    required
-                    value={visitorPhone}
-                    onChange={(e) => setVisitorPhone(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-              </div>
+            {/* Category Tabs: Student Visit vs General Enquiry */}
+            <div className="flex rounded-2xl bg-slate-100 p-1 mb-4">
+              <button
+                type="button"
+                onClick={() => setCheckInTab('STUDENT')}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  checkInTab === 'STUDENT'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Student Visit
+              </button>
+              <button
+                type="button"
+                onClick={() => setCheckInTab('ENQUIRY')}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  checkInTab === 'ENQUIRY'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                General Enquiry
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCheckIn} className="space-y-3.5">
+              {/* Select Hostel Dropdown (Only for Student Visit) */}
+              {checkInTab === 'STUDENT' && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Student Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Select Hostel *</label>
+                  <Select
+                    value={modalHostelId}
+                    onValueChange={(val) => setModalHostelId(val)}
+                  >
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 text-xs">
+                      <SelectValue placeholder="-- Select Hostel Block --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hostels.map((h) => (
+                        <SelectItem key={h.id} value={String(h.id)}>
+                          {h.name} ({h.gender === 'M' ? 'Boys' : h.gender === 'F' ? 'Girls' : 'Co-ed'})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Room No</label>
-                  <input
-                    type="text"
-                    value={studentRoom}
-                    onChange={(e) => setStudentRoom(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Relation</label>
-                  <input
-                    type="text"
-                    value={relation}
-                    onChange={(e) => setRelation(e.target.value)}
-                    placeholder="e.g. Father / Guardian"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Purpose of Visit</label>
-                  <input
-                    type="text"
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
-                    placeholder="e.g. Document delivery"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm"
-                  />
-                </div>
-              </div>
+              {/* General Enquiry View: only Visitor Name, Contact Phone, Purpose */}
+              {checkInTab === 'ENQUIRY' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Visitor Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ramesh Kumar"
+                        value={visitorName}
+                        onChange={(e) => setVisitorName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone *</label>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="9876543210"
+                        value={visitorPhone}
+                        onChange={(e) => setVisitorPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Purpose of Visit *</label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={purpose}
+                      onChange={(e) => setPurpose(e.target.value)}
+                      placeholder="e.g. Admission enquiry, campus tour, official visit, maintenance..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* Student Resident Visit View */
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Visitor Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ramesh Kumar"
+                        value={visitorName}
+                        onChange={(e) => setVisitorName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone *</label>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="9876543210"
+                        value={visitorPhone}
+                        onChange={(e) => setVisitorPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Student Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Rahul Kumar"
+                        value={studentName}
+                        onChange={(e) => setStudentName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Room No</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 101"
+                        value={studentRoom}
+                        onChange={(e) => setStudentRoom(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Relation</label>
+                      <Select
+                        value={relation}
+                        onValueChange={(val) => setRelation(val)}
+                      >
+                        <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 text-xs">
+                          <SelectValue placeholder="Select Relation" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Parent">Parent</SelectItem>
+                          <SelectItem value="Father">Father</SelectItem>
+                          <SelectItem value="Mother">Mother</SelectItem>
+                          <SelectItem value="Guardian">Guardian</SelectItem>
+                          <SelectItem value="Sibling">Sibling</SelectItem>
+                          <SelectItem value="Relative">Relative</SelectItem>
+                          <SelectItem value="Friend">Friend</SelectItem>
+                          <SelectItem value="Delivery / Service">Delivery / Service</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Purpose of Visit</label>
+                      <input
+                        type="text"
+                        value={purpose}
+                        onChange={(e) => setPurpose(e.target.value)}
+                        placeholder="e.g. Document delivery"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button

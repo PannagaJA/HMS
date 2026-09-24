@@ -34,6 +34,8 @@ export const WardenVisitorLogs: React.FC = () => {
   const [selectedHostelId, setSelectedHostelId] = useState<string>('');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [checkInTab, setCheckInTab] = useState<'STUDENT' | 'ENQUIRY'>('STUDENT');
+  const [modalHostelId, setModalHostelId] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [formData, setFormData] = useState({
@@ -69,6 +71,9 @@ export const WardenVisitorLogs: React.FC = () => {
       }
       setHostels(hostList);
       setSelectedHostelId('');
+      if (hostList.length > 0 && !modalHostelId) {
+        setModalHostelId(String(hostList[0].id));
+      }
     } catch (err) {
       console.error('Failed to load hostels', err);
     }
@@ -97,6 +102,11 @@ export const WardenVisitorLogs: React.FC = () => {
   };
 
   const handleOpenAddModal = () => {
+    if (selectedHostelId && selectedHostelId !== 'ALL') {
+      setModalHostelId(selectedHostelId);
+    } else if (hostels.length > 0 && !modalHostelId) {
+      setModalHostelId(String(hostels[0].id));
+    }
     setShowAddModal(true);
     if (students.length === 0) {
       fetchStudents();
@@ -106,19 +116,24 @@ export const WardenVisitorLogs: React.FC = () => {
   const handleCreateLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const isEnquiry = checkInTab === 'ENQUIRY';
       const st = students.find((s: any) => String(s.id) === String(formData.student));
-      const studentId = Number(formData.student);
-      const hostelId = (st as any)?.hostel_id || (st as any)?.hostel || (st as any)?.room_detail?.hostel_id || 1;
+      const studentId = isEnquiry ? undefined : Number(formData.student);
+      const targetHostelId = modalHostelId ? Number(modalHostelId) : ((st as any)?.hostel_id || (st as any)?.hostel || (st as any)?.room_detail?.hostel_id || 1);
 
       await apiClient.post('/hms/visitor-logs/', {
         student_id: studentId,
-        student_name: st?.student_name,
-        enrollment_no: st?.enrollment_no,
-        student_room: (st as any)?.room_no || (st as any)?.room_number,
-        hostel_id: hostelId,
+        student_name: isEnquiry ? 'General / Campus Enquiry' : st?.student_name,
+        enrollment_no: isEnquiry ? 'N/A' : st?.enrollment_no,
+        student_room: isEnquiry ? 'Reception / Office' : ((st as any)?.room_no || (st as any)?.room_number),
+        hostel: targetHostelId,
+        hostel_id: targetHostelId,
         visitor_name: formData.visitor_name,
+        visitor_phone: formData.mobile_number,
         mobile_number: formData.mobile_number,
-        purpose: formData.purpose,
+        relation: isEnquiry ? 'Enquiry' : 'Parent',
+        purpose: formData.purpose || (isEnquiry ? 'General Enquiry' : 'Visit'),
+        status: 'CHECKED_IN'
       });
 
       showSuccess(`Visitor ${formData.visitor_name} check-in registered.`);
@@ -158,7 +173,9 @@ export const WardenVisitorLogs: React.FC = () => {
   const filteredLogs = logs.filter((log: any) => {
     // 1. Filter by Hostel Block
     let matchesHostel = true;
-    if (selectedHostelId && selectedHostelId !== 'ALL') {
+    if (log.relation === 'Enquiry' || (log.student_name || '').includes('Enquiry')) {
+      matchesHostel = true;
+    } else if (selectedHostelId && selectedHostelId !== 'ALL') {
       const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
       const selectedName = selectedHostelObj?.name ? selectedHostelObj.name.toLowerCase().trim() : '';
       const logHostelName = (log.hostel_name || (log.hostel && typeof log.hostel === 'object' ? log.hostel.name : '') || '').toLowerCase().trim();
@@ -436,61 +453,115 @@ export const WardenVisitorLogs: React.FC = () => {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl animate-in fade-in zoom-in duration-150">
-            <h3 className="text-base font-bold text-slate-900 mb-1">Register New Visitor</h3>
-            <p className="text-xs text-slate-500 mb-4">Record guest check-in at hostel gate</p>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Check In Visitor</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              {checkInTab === 'STUDENT' ? 'Record visitor details and destination student.' : 'Record visitor details for campus and general enquiries.'}
+            </p>
+
+            {/* Category Tabs: Student Visit vs General Enquiry */}
+            <div className="flex rounded-2xl bg-slate-100 p-1 mb-4">
+              <button
+                type="button"
+                onClick={() => setCheckInTab('STUDENT')}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  checkInTab === 'STUDENT'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Student Visit
+              </button>
+              <button
+                type="button"
+                onClick={() => setCheckInTab('ENQUIRY')}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  checkInTab === 'ENQUIRY'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                General Enquiry
+              </button>
+            </div>
 
             <form onSubmit={handleCreateLog} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Visiting Student *</label>
-                <Select 
-                  value={formData.student} 
-                  onValueChange={(val) => setFormData({ ...formData, student: val })}
-                  disabled={isLoadingStudents}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={isLoadingStudents ? "Loading resident students..." : "Select Resident Student"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {isLoadingStudents ? (
-                      <div className="p-4 text-xs text-slate-500 text-center">Loading students...</div>
-                    ) : students.length === 0 ? (
-                      <div className="p-4 text-xs text-slate-500 text-center">No resident students found</div>
-                    ) : (
-                      students.map((st: any) => (
-                        <SelectItem key={st.id} value={String(st.id)}>
-                          {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor, st.room_no)}
+              {/* Select Hostel Dropdown (Only for Student Visit) */}
+              {checkInTab === 'STUDENT' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Select Hostel *</label>
+                  <Select
+                    value={modalHostelId}
+                    onValueChange={(val) => setModalHostelId(val)}
+                  >
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 text-xs">
+                      <SelectValue placeholder="-- Select Hostel Block --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hostels.map((h) => (
+                        <SelectItem key={h.id} value={String(h.id)}>
+                          {h.name} ({h.gender === 'M' ? 'Boys' : h.gender === 'F' ? 'Girls' : 'Co-ed'})
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Visitor Full Name *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Ramesh Kumar"
-                  value={formData.visitor_name}
-                  onChange={(e) => setFormData({ ...formData, visitor_name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
-                />
-              </div>
+              {/* Student Visit: select student */}
+              {checkInTab === 'STUDENT' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visiting Student *</label>
+                  <Select 
+                    value={formData.student} 
+                    onValueChange={(val) => setFormData({ ...formData, student: val })}
+                    disabled={isLoadingStudents}
+                  >
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs">
+                      <SelectValue placeholder={isLoadingStudents ? "Loading resident students..." : "Select Resident Student"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isLoadingStudents ? (
+                        <div className="p-4 text-xs text-slate-500 text-center">Loading students...</div>
+                      ) : students.length === 0 ? (
+                        <div className="p-4 text-xs text-slate-500 text-center">No resident students found</div>
+                      ) : (
+                        students.map((st: any) => (
+                          <SelectItem key={st.id} value={String(st.id)}>
+                            {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor, st.room_no)}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Mobile Number (10 Digits) *</label>
-                <input
-                  required
-                  type="tel"
-                  maxLength={10}
-                  pattern="^[6-9][0-9]{9}$"
-                  title="Enter a valid 10-digit Indian mobile number starting with 6-9"
-                  placeholder="9876543210"
-                  value={formData.mobile_number}
-                  onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visitor Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={formData.visitor_name}
+                    onChange={(e) => setFormData({ ...formData, visitor_name: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone *</label>
+                  <input
+                    required
+                    type="tel"
+                    maxLength={10}
+                    pattern="^[6-9][0-9]{9}$"
+                    title="Enter a valid 10-digit Indian mobile number starting with 6-9"
+                    placeholder="9876543210"
+                    value={formData.mobile_number}
+                    onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  />
+                </div>
               </div>
 
               <div>
@@ -498,10 +569,10 @@ export const WardenVisitorLogs: React.FC = () => {
                 <textarea
                   required
                   rows={2}
-                  placeholder="e.g. Parents visiting, delivering documents"
+                  placeholder="e.g. Parents visiting, delivering documents, admission enquiry..."
                   value={formData.purpose}
                   onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0B1437]/20"
                 />
               </div>
 
@@ -517,7 +588,7 @@ export const WardenVisitorLogs: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] shadow-xs cursor-pointer"
                 >
-                  Check In Visitor
+                  Register Check-In
                 </button>
               </div>
             </form>

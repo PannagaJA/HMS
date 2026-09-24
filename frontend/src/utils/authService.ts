@@ -851,6 +851,7 @@ export const apiClient = {
         hostel_id: body?.hostel || body?.hostel_id,
         visitor_name: body?.visitor_name,
         mobile_number: body?.mobile_number || body?.visitor_phone,
+        relation: body?.relation,
         purpose: body?.purpose
       });
       return { data: data as T };

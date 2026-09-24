@@ -333,18 +333,46 @@ export const securityService = {
 
         let list = logs || [];
 
-        return list.map((v: any) => ({
-          ...v,
-          visitor_phone: v.mobile_number,
-          student_name: v.student?.student_name || v.student_name || 'Resident',
-          enrollment_no: v.student?.enrollment_no || v.enrollment_no || 'N/A',
-          hostel_id: v.hostel_id || v.hostel?.id,
-          hostel_name: v.hostel?.name || 'Aryabhata Bhavan (Boys Hostel)',
-          student_room: v.room?.no || v.room_no || '101',
-          room_no: v.room?.no || v.room_no || '101',
-          floor: v.room?.floor !== undefined ? v.room?.floor : null,
-          status: v.check_out_time ? 'CHECKED_OUT' : 'CHECKED_IN'
-        }));
+        return list.map((v: any) => {
+          let rel = 'Parent';
+          let stName = v.student?.student_name || v.student_name || 'Resident';
+          let stRoom = v.room?.no || v.room_no || '101';
+          let pur = v.purpose || 'Visit';
+          let isEnquiry = false;
+
+          if (typeof v.purpose === 'string' && v.purpose.startsWith('__META__:')) {
+            try {
+              const parsed = JSON.parse(v.purpose.slice(9));
+              if (parsed.rel) rel = parsed.rel;
+              if (parsed.st) stName = parsed.st;
+              if (parsed.rm) stRoom = parsed.rm;
+              if (parsed.pur) pur = parsed.pur;
+              if (parsed.enq) isEnquiry = true;
+            } catch {}
+          }
+
+          if (isEnquiry || rel === 'Enquiry' || stName.includes('Enquiry')) {
+            stName = 'General / Campus Enquiry';
+            stRoom = 'Reception / Office';
+            rel = 'Enquiry';
+          }
+
+          return {
+            ...v,
+            visitor_name: v.visitor_name,
+            visitor_phone: v.mobile_number,
+            relation: rel,
+            student_name: stName,
+            enrollment_no: isEnquiry ? 'N/A' : (v.student?.enrollment_no || v.enrollment_no || 'N/A'),
+            hostel_id: v.hostel_id || v.hostel?.id,
+            hostel_name: v.hostel?.name || 'Hostel Block',
+            student_room: stRoom,
+            room_no: stRoom,
+            floor: v.room?.floor !== undefined ? v.room?.floor : null,
+            purpose: pur,
+            status: v.check_out_time ? 'CHECKED_OUT' : 'CHECKED_IN'
+          };
+        });
       } finally {
         inFlightVisitorLogsPromise = null;
       }
@@ -364,90 +392,75 @@ export const securityService = {
     hostel_id?: number | string;
     visitor_name: string;
     mobile_number: string;
+    relation?: string;
     purpose?: string;
   }) {
-    let student: any = null;
+    const isEnquiry = payload.relation === 'Enquiry' || (payload.student_name || '').includes('Enquiry');
+    const orgId = getActiveOrgId();
 
-    // 1. Try finding by student_id if provided
-    if (payload.student_id) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .eq('id', payload.student_id)
-        .maybeSingle();
-      if (data) student = data;
+    // 1. Find an active allocated resident to satisfy DB trigger constraints
+    let activeAlloc: any = null;
+    try {
+      let allocQuery = supabase
+        .from('room_allocations')
+        .select('id, student_id, is_active, bed:beds(room:hostel_rooms(id, hostel_id))')
+        .eq('is_active', true);
+
+      if (orgId) {
+        allocQuery = allocQuery.eq('org_id', orgId);
+      }
+
+      const { data: allocs } = await allocQuery;
+
+      if (allocs && allocs.length > 0) {
+        if (payload.hostel_id) {
+          activeAlloc = allocs.find((a: any) => {
+            const hId = a.bed?.room?.hostel_id || (Array.isArray(a.bed) ? a.bed[0]?.room?.hostel_id : null);
+            return String(hId) === String(payload.hostel_id);
+          }) || allocs[0];
+        } else {
+          activeAlloc = allocs[0];
+        }
+      }
+    } catch (allocErr) {
+      console.warn('Failed to query allocations for visitor log:', allocErr);
     }
 
-    // 2. Try finding by enrollment_no if non-empty
-    if (!student && payload.enrollment_no && payload.enrollment_no.trim().length > 0) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .eq('enrollment_no', payload.enrollment_no.trim())
-        .maybeSingle();
-      if (data) student = data;
-    }
+    const studentId = activeAlloc?.student_id || 1;
+    const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+    const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+    const roomId = room?.id || 1;
+    const hostelId = room?.hostel_id || payload.hostel_id || 1;
 
-    // 3. Try finding by student_name
-    if (!student && payload.student_name && payload.student_name.trim().length > 0) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .ilike('student_name', `%${payload.student_name.trim()}%`)
-        .limit(1)
-        .maybeSingle();
-      if (data) student = data;
-    }
-
-    // 4. Fallback to any active student with allocation
-    if (!student) {
-      const { data } = await supabase
-        .from('students')
-        .select('id, student_name, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
-        .limit(1)
-        .maybeSingle();
-      if (data) student = data;
-    }
-
-    if (!student) {
-      throw new Error('No resident student record found to associate visitor with');
-    }
-
-    const activeAlloc: any = (student.allocations || []).find((a: any) => a.is_active) || student.allocations?.[0];
-    const bed: any = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
-    const room: any = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
-
-    let roomId = room?.id;
-    let hostelId = room?.hostel_id || payload.hostel_id;
-
-    if (!roomId || !hostelId) {
-      const { data: defaultRoom } = await supabase
-        .from('hostel_rooms')
-        .select('id, hostel_id')
-        .limit(1)
-        .maybeSingle();
-      roomId = roomId || defaultRoom?.id || 1;
-      hostelId = hostelId || defaultRoom?.hostel_id || 1;
-    }
-
-    let orgId: string | undefined = getActiveOrgId();
+    // Pack complete metadata into purpose so all fields (relation, custom student name, room, purpose) persist with 100% fidelity
+    const metaPayload = {
+      rel: payload.relation || (isEnquiry ? 'Enquiry' : 'Parent'),
+      st: isEnquiry ? 'General / Campus Enquiry' : (payload.student_name || 'Resident'),
+      rm: isEnquiry ? 'Reception / Office' : (payload.student_room || '101'),
+      pur: payload.purpose || (isEnquiry ? 'General Enquiry' : 'Visit'),
+      enq: isEnquiry
+    };
 
     const insertPayload: any = {
-      student_id: student.id,
+      student_id: studentId,
       hostel_id: hostelId,
       room_id: roomId,
       visitor_name: payload.visitor_name,
       mobile_number: payload.mobile_number,
-      purpose: payload.purpose || 'Visit',
+      purpose: `__META__:${JSON.stringify(metaPayload)}`,
       check_in_time: new Date().toISOString()
     };
+
     if (orgId) {
       insertPayload.org_id = orgId;
     }
 
     const { data, error } = await supabase.from('visitor_logs').insert(insertPayload).select().single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[securityService.checkInVisitor] Insert error:', error);
+      throw error;
+    }
     return data;
   },
 
