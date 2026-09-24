@@ -1349,7 +1349,25 @@ export const authService = {
       localStorage.removeItem('hms_token');
     } catch (_) {}
 
-    // 0. Direct Cloud Password Verification RPC (Verifies against auth.users on Supabase Cloud for all devices)
+    // 1. Read custom / updated password for this user if they changed it
+    let customPass: string | undefined;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
+        customPass = customPasswords[emailToUse.toLowerCase()] 
+          || customPasswords[input.toLowerCase()] 
+          || (input.includes('@') ? customPasswords[input.split('@')[0].toLowerCase()] : undefined);
+      } catch (e) {
+        console.warn('Could not read custom passwords:', e);
+      }
+    }
+
+    // If the user changed their password, strictly require the new password (never accept outdated old passwords)
+    if (customPass && password !== customPass) {
+      throw new Error('Invalid username or password. Please check your credentials.');
+    }
+
+    // 2. Direct Cloud Password Verification RPC (Verifies against auth.users on Supabase Cloud for all devices)
     try {
       const { data: verifyData, error: verifyErr } = await supabase.rpc('verify_user_login', {
         p_identifier: input,
@@ -1385,32 +1403,94 @@ export const authService = {
       }
     } catch (_) {}
 
-    // 1. First attempt standard Supabase Auth
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
-      if (!error && data?.session) {
-        const profile = await this.getCurrentProfile();
-        return { session: data.session, user: data.user, profile };
-      }
-    } catch (err) {
-      console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
-    }
-
-    // 2. Universal Directory Fallback Authentication for all Orgs
-    // Standard default password across all roles & orgs: password123
-    let customPass: string | undefined;
-    if (typeof localStorage !== 'undefined') {
+    // 3. Attempt standard Supabase Auth (only if no custom password override or if password matches)
+    if (!customPass) {
       try {
-        const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
-        customPass = customPasswords[emailToUse.toLowerCase()] 
-          || customPasswords[input.toLowerCase()] 
-          || (input.includes('@') ? customPasswords[input.split('@')[0].toLowerCase()] : undefined);
-      } catch (e) {
-        console.warn('Could not read custom passwords:', e);
+        const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
+        if (!error && data?.session) {
+          const profile = await this.getCurrentProfile();
+          return { session: data.session, user: data.user, profile };
+        }
+      } catch (err) {
+        console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
       }
     }
 
-    // Attempt to match in students directory
+    // 4. Universal Directory Authentication for all Orgs
+    // Standard default password across all roles & orgs: password123
+
+    // Step A: Priority check profiles table for Warden / Admin / Staff / Security
+    let profMatch: any = null;
+    try {
+      if (input.includes('@')) {
+        const { data: pEmailMatch } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', input)
+          .limit(1)
+          .maybeSingle();
+        profMatch = pEmailMatch;
+      }
+
+      if (!profMatch && emailToUse && emailToUse !== input) {
+        const { data: pEmailToUseMatch } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', emailToUse)
+          .limit(1)
+          .maybeSingle();
+        profMatch = pEmailToUseMatch;
+      }
+
+      if (!profMatch && !input.includes('@')) {
+        const { data: pPhoneMatch } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('phone', input)
+          .limit(1)
+          .maybeSingle();
+        profMatch = pPhoneMatch;
+      }
+    } catch (pErr) {
+      console.warn('Error querying profiles table:', pErr);
+    }
+
+    if (profMatch) {
+      const isStaffPassValid = customPass 
+        ? password === customPass 
+        : password.toLowerCase() === 'password123';
+
+      if (isStaffPassValid) {
+        const staffProfile: Profile = {
+          id: profMatch.id,
+          email: profMatch.email,
+          role: profMatch.role,
+          first_name: profMatch.first_name,
+          last_name: profMatch.last_name || '',
+          phone: profMatch.phone || '',
+          is_active: true,
+          org_id: profMatch.org_id || undefined,
+          created_at: profMatch.created_at || new Date().toISOString(),
+          updated_at: profMatch.updated_at || new Date().toISOString()
+        };
+
+        const syntheticSession = {
+          access_token: `hms-session-profile-${profMatch.id}-${Date.now()}`,
+          token_type: 'bearer',
+          user: {
+            id: profMatch.id,
+            email: profMatch.email,
+            role: 'authenticated'
+          }
+        };
+
+        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: staffProfile };
+      } else {
+        throw new Error('Invalid username or password. Please check your credentials.');
+      }
+    }
+
+    // Step B: Check students directory for Students (by USN, email, or phone)
     let studentMatch: any = null;
     try {
       // 0. Direct RPC search (bypasses RLS restrictions for student directory)
@@ -1446,7 +1526,7 @@ export const authService = {
         studentMatch = usnMatch;
       }
 
-      // 3. If input is email, try matching username prefix as enrollment number (e.g. 1st26cs009 from 1st26cs009@stalight.in)
+      // 3. If input is email, try matching username prefix as enrollment number
       if (!studentMatch && input.includes('@')) {
         const prefix = input.split('@')[0];
         const { data: prefixMatch } = await supabase
@@ -1472,7 +1552,7 @@ export const authService = {
       console.warn('Error querying students table:', sErr);
     }
 
-    // 6. Check LocalStorage Cached / Imported Students
+    // Check LocalStorage Cached / Imported Students
     if (!studentMatch && typeof localStorage !== 'undefined') {
       try {
         const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
@@ -1495,33 +1575,9 @@ export const authService = {
       }
     }
 
-    // 7. Dynamic Student Fallback for any resident email / USN with password123
-    if (!studentMatch) {
-      const isEmail = input.includes('@');
-      const isUsn = /^[0-9a-zA-Z\-_]{3,25}$/.test(input);
-      if (isEmail || isUsn) {
-        const inferredUsn = isEmail ? input.split('@')[0].toUpperCase() : input.toUpperCase();
-        const inferredEmail = isEmail ? input.toLowerCase() : emailToUse.toLowerCase();
-        const isPassOk = customPass ? password === customPass : (password.toLowerCase() === 'password123' || password === 'password' || password.toUpperCase() === inferredUsn);
-        
-        if (isPassOk) {
-          studentMatch = {
-            id: Math.abs(inferredUsn.split('').reduce((acc, char) => acc + char.charCodeAt(0), 1000)),
-            student_name: inferredUsn,
-            enrollment_no: inferredUsn,
-            email: inferredEmail,
-            gender: 'M',
-            phone: '',
-            status: 'ACTIVE'
-          };
-        }
-      }
-    }
-
     if (studentMatch) {
       const allowedStudentPasswords = [
         'password123',
-        'password',
         studentMatch.enrollment_no?.toLowerCase(),
         studentMatch.enrollment_no?.toUpperCase(),
         studentMatch.enrollment_no,
@@ -1563,78 +1619,12 @@ export const authService = {
         };
 
         return { session: syntheticSession as any, user: syntheticSession.user as any, profile: studentProfile };
+      } else {
+        throw new Error('Invalid username or password. Please check your credentials.');
       }
     }
 
-    // Check profiles table for Warden / Admin / Staff / Security
-    let profMatch: any = null;
-    try {
-      if (input.includes('@')) {
-        const { data: pEmailMatch } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', input)
-          .limit(1)
-          .maybeSingle();
-        profMatch = pEmailMatch;
-      }
-
-      if (!profMatch && emailToUse && emailToUse !== input) {
-        const { data: pEmailToUseMatch } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', emailToUse)
-          .limit(1)
-          .maybeSingle();
-        profMatch = pEmailToUseMatch;
-      }
-
-      if (!profMatch && !input.includes('@')) {
-        const { data: pPhoneMatch } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('phone', input)
-          .limit(1)
-          .maybeSingle();
-        profMatch = pPhoneMatch;
-      }
-    } catch (pErr) {
-      console.warn('Error querying profiles table:', pErr);
-    }
-
-    if (profMatch) {
-      const isStaffPassValid = customPass 
-        ? password === customPass 
-        : (password.toLowerCase() === 'password123' || password === 'password');
-
-      if (isStaffPassValid) {
-        const staffProfile: Profile = {
-          id: profMatch.id,
-          email: profMatch.email,
-          role: profMatch.role,
-          first_name: profMatch.first_name,
-          last_name: profMatch.last_name || '',
-          phone: profMatch.phone || '',
-          is_active: true,
-          org_id: profMatch.org_id || undefined,
-          created_at: profMatch.created_at || new Date().toISOString(),
-          updated_at: profMatch.updated_at || new Date().toISOString()
-        };
-
-        const syntheticSession = {
-          access_token: `hms-session-profile-${profMatch.id}-${Date.now()}`,
-          token_type: 'bearer',
-          user: {
-            id: profMatch.id,
-            email: profMatch.email,
-            role: 'authenticated'
-          }
-        };
-
-        return { session: syntheticSession as any, user: syntheticSession.user as any, profile: staffProfile };
-      }
-    }
-
+    // Step C: If not found in profiles or students, reject authentication
     throw new Error('Invalid username or password. Please check your credentials.');
   },
 
@@ -1665,7 +1655,7 @@ export const logoutUser = async () => {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith('hms_') && k !== 'hms_theme')) {
+      if (k && (k.startsWith('hms_') && k !== 'hms_theme' && k !== 'hms_custom_passwords')) {
         keysToRemove.push(k);
       }
     }

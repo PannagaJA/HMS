@@ -13,10 +13,10 @@ This document lists the pre-configured credentials for all 4 primary application
 
 | Role | Email | Password | Assigned Scope & Permissions |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin@amc.edu` | `amc@2026` | **Full System Access**<br>• Create/decommission rooms & resize capacities<br>• View all hostels, operational stats, and audit logs<br>• Direct database governance & user management |
-| **Warden** | `warden@amc.edu` | `amc@2026` | **Aryabhata Bhavan (Boys Hostel)**<br>• View rooms, beds & resident directory for assigned hostel<br>• Approve or reject gate passes<br>• Allocate & vacate resident rooms<br>• Update maintenance tickets |
-| **Security Guard**| `security@amc.edu` | `amc@2026` | **Main Campus Gate Checkpoint**<br>• Check in and check out visitors<br>• Scan QR / token identifiers for gate movements<br>• Log physical EXIT and ENTRY timestamps |
-| **Student Resident**| `student@amc.edu` | `amc@2026` | **Rahul Sharma (Room A-101, Bed 1)**<br>• Apply for DAY_OUT / NIGHT_OUT gate passes<br>• Report room/facility maintenance tickets<br>• View dining schedules & request meal skips<br>• Update self-service profile information |
+| **Admin** | `admin@amc.edu` | `password123` | **Full System Access**<br>• Create/decommission rooms & resize capacities<br>• View all hostels, operational stats, and audit logs<br>• Direct database governance & user management |
+| **Warden** | `warden@amc.edu` | `password123` | **Aryabhata Bhavan (Boys Hostel)**<br>• View rooms, beds & resident directory for assigned hostel<br>• Approve or reject gate passes<br>• Allocate & vacate resident rooms<br>• Update maintenance tickets |
+| **Security Guard**| `security@amc.edu` | `password123` | **Main Campus Gate Checkpoint**<br>• Check in and check out visitors<br>• Scan QR / token identifiers for gate movements<br>• Log physical EXIT and ENTRY timestamps |
+| **Student Resident**| `student@amc.edu` | `password123` | **Rahul Sharma (Room A-101, Bed 1)**<br>• Apply for DAY_OUT / NIGHT_OUT gate passes<br>• Report room/facility maintenance tickets<br>• View dining schedules & request meal skips<br>• Update self-service profile information |
 
 ---
 

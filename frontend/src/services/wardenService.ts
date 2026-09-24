@@ -610,7 +610,7 @@ export const wardenService = {
     // Resolve updater name & profile ID from current session
     let updaterName = '';
     let updaterProfileId: string | null = null;
-    let orgId: string = getActiveOrgId() || '00000000-0000-0000-0000-000000000001';
+    let orgId: string | undefined = getActiveOrgId();
 
     try {
       const storedUser = localStorage.getItem('hms_user');

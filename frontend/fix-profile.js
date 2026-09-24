@@ -7,7 +7,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 async function fix() {
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
     email: 'pannagaja@gmail.com',
-    password: 'amc@2026'
+    password: 'password123'
   })
   if (authError) {
     console.error("Login failed:", authError.message)

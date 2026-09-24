@@ -43,13 +43,8 @@ export const diningService = {
         inFlightMealTypes = null;
       }
 
-      // Fallback hardcoded defaults when DB has no data
-      return [
-        { id: 1, name: 'BR', description: 'Breakfast', time_from: '07:30:00', time_to: '09:30:00', start_time: '07:30', end_time: '09:30' },
-        { id: 2, name: 'LN', description: 'Lunch', time_from: '12:30:00', time_to: '14:30:00', start_time: '12:30', end_time: '14:30' },
-        { id: 3, name: 'SN', description: 'Evening Snacks & Tea', time_from: '17:00:00', time_to: '18:30:00', start_time: '17:00', end_time: '18:30' },
-        { id: 4, name: 'DN', description: 'Dinner', time_from: '20:00:00', time_to: '22:00:00', start_time: '20:00', end_time: '22:00' },
-      ] as any;
+      // Return empty array when DB has no data
+      return [];
     })();
 
     inFlightMealTypes = promise;

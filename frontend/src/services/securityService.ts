@@ -430,7 +430,7 @@ export const securityService = {
       hostelId = hostelId || defaultRoom?.hostel_id || 1;
     }
 
-    let orgId: string = getActiveOrgId() || '00000000-0000-0000-0000-000000000001';
+    let orgId: string | undefined = getActiveOrgId();
 
     const insertPayload: any = {
       student_id: student.id,

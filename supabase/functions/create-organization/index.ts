@@ -44,8 +44,8 @@ serve(async (req: Request) => {
 
     const org_id = orgData.id;
 
-    // Use standard password instead of temporary
-    const tempPassword = 'amc@2026';
+    // Use standard password across all organizations
+    const tempPassword = 'password123';
 
     // 2. Create Auth User
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
