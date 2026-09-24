@@ -874,8 +874,12 @@ export const apiClient = {
       if (user) {
         try {
           const { error } = await supabase.auth.updateUser({ password: newPassword });
-          if (!error) authUpdated = true;
-        } catch (_) {}
+          if (error) throw error;
+          authUpdated = true;
+        } catch (err: any) {
+          console.warn('Supabase auth.updateUser error:', err);
+          throw new Error(err.message || 'Failed to update password');
+        }
       }
 
       // 2. Direct Cloud Password RPC (Updates auth.users directly on Supabase PostgreSQL for all devices)
