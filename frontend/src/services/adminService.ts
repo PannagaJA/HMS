@@ -1,9 +1,7 @@
-/**
- * Admin Role Service
- * Handles system-wide operations, hostel configurations, room matrix, resident directory, and staff management.
- */
 import { supabase } from '../lib/supabase';
 import type { Hostel, HostelRoom, HostelStudent } from '../types';
+import { getActiveOrgId } from '../utils/authService';
+
 
 let inFlightDashboardStatsPromise: Promise<any> | null = null;
 let inFlightWardensPromise: Promise<any[]> | null = null;
@@ -221,12 +219,18 @@ export const adminService = {
    */
   async getHostels(passedWardens?: any[], passedCaretakers?: any[]): Promise<Hostel[]> {
     let hostels: any[] = [];
+    const orgId = getActiveOrgId();
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('hostels')
         .select('id, name, gender, floor_count, address, warden_id, caretaker_id, is_active, rooms:hostel_rooms(id, capacity, is_active)')
         .eq('is_active', true)
         .order('id', { ascending: true });
+      
+      if (orgId) {
+        query = query.eq('org_id', orgId);
+      }
+      const { data, error } = await query;
       if (!error && data) {
         hostels = data;
       }
@@ -241,7 +245,9 @@ export const adminService = {
     const [wardensList, caretakersList, activeAllocsRes] = await Promise.all([
       passedWardens ? Promise.resolve(passedWardens) : adminService.getWardens(),
       passedCaretakers ? Promise.resolve(passedCaretakers) : adminService.getCaretakers(),
-      supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true)
+      orgId 
+        ? supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true).eq('org_id', orgId)
+        : supabase.from('room_allocations').select('id, bed:beds(room:hostel_rooms(hostel_id))').eq('is_active', true)
     ]);
 
     const activeAllocs = activeAllocsRes.data || [];
@@ -277,6 +283,7 @@ export const adminService = {
 
   async createHostel(payload: { name: string; gender: 'M' | 'F' | 'C'; floor_count: number; address?: string; warden?: any; caretaker?: any }) {
     let createdHostel: any = null;
+    const orgId = getActiveOrgId();
     const { data, error } = await supabase
       .from('hostels')
       .insert({
@@ -286,7 +293,8 @@ export const adminService = {
         address: payload.address || '',
         warden_id: payload.warden || null,
         caretaker_id: payload.caretaker || null,
-        is_active: true
+        is_active: true,
+        ...(orgId ? { org_id: orgId } : {})
       })
       .select()
       .single();
@@ -301,7 +309,8 @@ export const adminService = {
       try {
         await supabase.from('warden_hostel_assignments').insert({
           warden_profile_id: payload.warden,
-          hostel_id: createdHostel.id
+          hostel_id: createdHostel.id,
+          ...(orgId ? { org_id: orgId } : {})
         });
       } catch (we) {
         console.warn('Warden assignment insert failed:', we);
@@ -330,12 +339,14 @@ export const adminService = {
       }).eq('id', id);
 
       const isUuid = typeof payload.warden === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.warden);
+      const orgId = getActiveOrgId();
       if (isUuid) {
         try {
           await supabase.from('warden_hostel_assignments').delete().eq('hostel_id', id);
           await supabase.from('warden_hostel_assignments').insert({
             warden_profile_id: payload.warden,
-            hostel_id: id
+            hostel_id: id,
+            ...(orgId ? { org_id: orgId } : {})
           });
         } catch (we) {
           console.warn('Warden assignment update failed:', we);
@@ -369,18 +380,23 @@ export const adminService = {
    * Fetch rooms with bed slots and assigned occupants
    */
   async getRooms(hostelId?: string | number): Promise<HostelRoom[]> {
+    const orgId = getActiveOrgId();
     let query = supabase
       .from('hostel_rooms')
       .select('*, hostel:hostels(name), beds(*, allocations:room_allocations(*, student:students(*)))')
       .eq('is_active', true)
       .order('no', { ascending: true });
 
+    if (orgId) {
+      query = query.eq('org_id', orgId);
+    }
     if (hostelId) {
       query = query.eq('hostel_id', hostelId);
     }
 
     const { data: rooms, error } = await query;
     if (error) throw error;
+
 
     return (rooms || []).map((r: any) => {
       const activeOccupants: any[] = [];
@@ -495,9 +511,10 @@ export const adminService = {
    */
   async getStudents(): Promise<HostelStudent[]> {
     let students: any[] = [];
+    const orgId = getActiveOrgId();
     try {
       // 1. Clean query with only required student fields and active allocation hierarchy
-      const { data, error } = await supabase
+      let query = supabase
         .from('students')
         .select(`
           id,
@@ -511,6 +528,7 @@ export const adminService = {
           emergency_contact,
           no_dues,
           status,
+          org_id,
           allocations:room_allocations(
             id,
             bed_id,
@@ -531,6 +549,12 @@ export const adminService = {
         `)
         .order('student_name', { ascending: true, nullsFirst: false });
 
+      if (orgId) {
+        query = query.eq('org_id', orgId);
+      }
+
+      const { data, error } = await query;
+
       if (!error && data && data.length > 0) {
         students = data;
       } else {
@@ -538,19 +562,29 @@ export const adminService = {
           console.warn('Student query error, attempting resilient fallback:', error.message || error);
         }
         // Fallback: Direct select from students table
-        const { data: rawData, error: rawError } = await supabase
+        let rawQuery = supabase
           .from('students')
           .select('*')
           .order('student_name', { ascending: true, nullsFirst: false });
+
+        if (orgId) {
+          rawQuery = rawQuery.eq('org_id', orgId);
+        }
+
+        const { data: rawData, error: rawError } = await rawQuery;
 
         if (!rawError && rawData) {
           students = rawData;
           // Enrich active allocations if possible
           try {
-            const { data: allocData } = await supabase
+            let allocQuery = supabase
               .from('room_allocations')
               .select('*, bed:beds(*, room:hostel_rooms(*, hostel:hostels(*)))')
               .eq('is_active', true);
+            if (orgId) {
+              allocQuery = allocQuery.eq('org_id', orgId);
+            }
+            const { data: allocData } = await allocQuery;
 
             if (allocData && allocData.length > 0) {
               students = students.map((st: any) => ({
@@ -566,7 +600,9 @@ export const adminService = {
     } catch (e) {
       console.warn('Failed to load students from supabase:', e);
       try {
-        const { data: simpleData } = await supabase.from('students').select('*');
+        let simpleQuery = supabase.from('students').select('*');
+        if (orgId) simpleQuery = simpleQuery.eq('org_id', orgId);
+        const { data: simpleData } = await simpleQuery;
         if (simpleData) students = simpleData;
       } catch (fe) {
         console.warn('Simple fallback failed:', fe);
@@ -602,7 +638,8 @@ export const adminService = {
 
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem('hms_cached_students', JSON.stringify(mappedStudents));
+        const cacheKey = orgId ? `hms_cached_students_${orgId}` : 'hms_cached_students';
+        localStorage.setItem(cacheKey, JSON.stringify(mappedStudents));
       } catch (_) {}
     }
 
@@ -614,8 +651,9 @@ export const adminService = {
    */
   async getStructuredResidents(hostelId?: string | number) {
     let rawStudents: any[] = [];
+    const orgId = getActiveOrgId();
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('students')
         .select(`
           id,
@@ -629,6 +667,7 @@ export const adminService = {
           emergency_contact,
           no_dues,
           status,
+          org_id,
           allocations:room_allocations(
             id,
             bed_id,
@@ -649,6 +688,12 @@ export const adminService = {
         `)
         .order('student_name', { ascending: true, nullsFirst: false });
 
+      if (orgId) {
+        query = query.eq('org_id', orgId);
+      }
+
+      const { data, error } = await query;
+
       if (!error && data) {
         rawStudents = data;
       } else {
@@ -659,6 +704,7 @@ export const adminService = {
       console.warn('Failed to load structured residents from Supabase:', e);
       rawStudents = await this.getStudents();
     }
+
 
     const allotted: any[] = [];
     const unallotted: any[] = [];
@@ -819,6 +865,7 @@ export const adminService = {
   }) {
     let profileId: string | null = null;
     const studentEmail = payload.email || `${payload.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
+    const orgId = getActiveOrgId();
 
     try {
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
@@ -826,7 +873,8 @@ export const adminService = {
           name: payload.student_name,
           email: studentEmail,
           phone: payload.phone || '',
-          role: 'STUDENT'
+          role: 'STUDENT',
+          org_id: orgId
         }
       });
       if (!edgeError && edgeData?.userId) {
@@ -849,7 +897,8 @@ export const adminService = {
         emergency_contact: payload.emergency_contact || '',
         profile_id: profileId,
         no_dues: true,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        ...(orgId ? { org_id: orgId } : {})
       })
       .select()
       .single();
@@ -885,12 +934,13 @@ export const adminService = {
 
     if (typeof localStorage !== 'undefined') {
       try {
-        const existingCache: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const cacheKey = orgId ? `hms_cached_students_${orgId}` : 'hms_cached_students';
+        const existingCache: any[] = JSON.parse(localStorage.getItem(cacheKey) || '[]');
         const updatedCache = [
           ...existingCache.filter(e => e.id !== createdStudent.id && e.enrollment_no !== createdStudent.enrollment_no),
           createdStudent
         ];
-        localStorage.setItem('hms_cached_students', JSON.stringify(updatedCache));
+        localStorage.setItem(cacheKey, JSON.stringify(updatedCache));
       } catch (_) {}
     }
 
@@ -912,7 +962,7 @@ export const adminService = {
   }>) {
     if (!students || students.length === 0) return [];
 
-    const defaultOrgId = '00000000-0000-0000-0000-000000000001';
+    const activeOrgId = getActiveOrgId();
     const dbPayload = students.map(s => {
       const email = (s.email || '').trim().toLowerCase() || `${s.enrollment_no.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.hms.edu`;
       return {
@@ -924,7 +974,7 @@ export const adminService = {
         father_name: (s.father_name || '').trim(),
         guardian_phone: (s.guardian_phone || '').trim(),
         emergency_contact: (s.emergency_contact || '').trim(),
-        org_id: defaultOrgId,
+        ...(activeOrgId ? { org_id: activeOrgId } : {}),
         no_dues: true,
         status: 'ACTIVE'
       };
@@ -933,13 +983,14 @@ export const adminService = {
     const updateLocalCache = (savedRecords: any[]) => {
       if (typeof localStorage !== 'undefined') {
         try {
-          const existingCache: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+          const cacheKey = activeOrgId ? `hms_cached_students_${activeOrgId}` : 'hms_cached_students';
+          const existingCache: any[] = JSON.parse(localStorage.getItem(cacheKey) || '[]');
           const recordsToCache = (savedRecords && savedRecords.length > 0) ? savedRecords : dbPayload;
           const updatedCache = [
             ...existingCache.filter(e => !recordsToCache.some(d => d.enrollment_no === e.enrollment_no || (d.email && d.email === e.email))),
             ...recordsToCache
           ];
-          localStorage.setItem('hms_cached_students', JSON.stringify(updatedCache));
+          localStorage.setItem(cacheKey, JSON.stringify(updatedCache));
         } catch (_) {}
       }
     };
@@ -970,10 +1021,14 @@ export const adminService = {
       // 3. Bulletproof Fallback: Query existing USNs, update existing and insert new records
       console.warn('Upsert fallback triggered, performing smart split update/insert');
       const usns = dbPayload.map(p => p.enrollment_no);
-      const { data: existingRecords } = await supabase
+      let existingQuery = supabase
         .from('students')
         .select('id, enrollment_no')
         .in('enrollment_no', usns);
+      if (activeOrgId) {
+        existingQuery = existingQuery.eq('org_id', activeOrgId);
+      }
+      const { data: existingRecords } = await existingQuery;
       
       const existingMap = new Map((existingRecords || []).map(r => [r.enrollment_no, r.id]));
       const toInsert: any[] = [];
@@ -1045,7 +1100,7 @@ export const adminService = {
       // 2. Clean up gate passes
       try {
         await supabase
-          .from('gate_pass_requests')
+          .from('gate_passes')
           .delete()
           .in('student_id', studentIds);
       } catch (gpe) {
@@ -1055,7 +1110,7 @@ export const adminService = {
       // 3. Clean up maintenance issues/complaints
       try {
         await supabase
-          .from('maintenance_issues')
+          .from('issues')
           .delete()
           .in('student_id', studentIds);
       } catch (me) {
@@ -1086,21 +1141,27 @@ export const adminService = {
 
     inFlightWardensPromise = (async () => {
       try {
+        const orgId = getActiveOrgId();
         // Fetch manually added wardens
-        const { data: customWardens } = await supabase
+        let customQuery = supabase
           .from('hostel_wardens')
-          .select('id, name, email, phone, designation, experience, is_active')
+          .select('id, name, email, phone, designation, experience, is_active, org_id')
           .eq('is_active', true)
           .order('id', { ascending: true });
+        if (orgId) customQuery = customQuery.eq('org_id', orgId);
         
+        const { data: customWardens } = await customQuery;
         let combined: any[] = customWardens || [];
 
         // Fetch registered warden profiles
         try {
-          const { data: profileWardens } = await supabase
+          let profQuery = supabase
             .from('profiles')
-            .select('id, first_name, last_name, email, phone, role')
+            .select('id, first_name, last_name, email, phone, role, org_id')
             .eq('role', 'WARDEN');
+          if (orgId) profQuery = profQuery.eq('org_id', orgId);
+
+          const { data: profileWardens } = await profQuery;
           if (profileWardens && profileWardens.length > 0) {
             const mapped = profileWardens.map((w: any) => {
               const matchedCustom = (customWardens || []).find((cw: any) => 
@@ -1135,13 +1196,13 @@ export const adminService = {
   },
 
   async createWarden(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
+    const orgId = getActiveOrgId();
     if (payload.email) {
       try {
         const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
-          body: { ...payload, role: 'WARDEN' }
+          body: { ...payload, role: 'WARDEN', org_id: orgId }
         });
         if (!edgeError && edgeData?.success) {
-          // Fallback to fetch the newly created warden just to return it in the format the UI expects
           return { id: edgeData.userId, name: payload.name, email: payload.email, phone: payload.phone };
         }
         if (edgeData && !edgeData.success) {
@@ -1152,7 +1213,11 @@ export const adminService = {
         console.warn("Could not invoke edge function:", e);
       }
     }
-    const { data, error } = await supabase.from('hostel_wardens').insert(payload).select().single();
+    const { data, error } = await supabase
+      .from('hostel_wardens')
+      .insert({ ...payload, ...(orgId ? { org_id: orgId } : {}) })
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },
@@ -1191,6 +1256,7 @@ export const adminService = {
 
       if (targetEmail) {
         try {
+          const orgId = getActiveOrgId();
           const { data: existingWarden } = await supabase
             .from('hostel_wardens')
             .select('id')
@@ -1211,7 +1277,8 @@ export const adminService = {
               phone: payload.phone || '',
               designation: payload.designation || 'Hostel Warden',
               experience: Number(payload.experience) || 5,
-              is_active: true
+              is_active: true,
+              ...(orgId ? { org_id: orgId } : {})
             });
           }
         } catch (we) {
@@ -1274,19 +1341,25 @@ export const adminService = {
 
     inFlightCaretakersPromise = (async () => {
       try {
-        const { data: customCaretakers } = await supabase
+        const orgId = getActiveOrgId();
+        let query = supabase
           .from('hostel_caretakers')
-          .select('id, name, email, phone, experience, is_active')
+          .select('id, name, email, phone, experience, is_active, org_id')
           .eq('is_active', true)
           .order('id', { ascending: true });
-        
+        if (orgId) query = query.eq('org_id', orgId);
+
+        const { data: customCaretakers } = await query;
         let combined: any[] = customCaretakers || [];
 
         try {
-          const { data: profileCaretakers } = await supabase
+          let profQuery = supabase
             .from('profiles')
-            .select('id, first_name, last_name, email, phone, role')
+            .select('id, first_name, last_name, email, phone, role, org_id')
             .eq('role', 'CARETAKER');
+          if (orgId) profQuery = profQuery.eq('org_id', orgId);
+
+          const { data: profileCaretakers } = await profQuery;
           if (profileCaretakers && profileCaretakers.length > 0) {
             const mapped = profileCaretakers.map((c: any) => {
               const matched = (customCaretakers || []).find((cd: any) => 
@@ -1318,10 +1391,11 @@ export const adminService = {
   },
 
   async createCaretaker(payload: { name: string; email?: string; phone: string; experience?: number }) {
+    const orgId = getActiveOrgId();
     if (payload.email) {
       try {
         const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
-          body: { ...payload, role: 'CARETAKER' }
+          body: { ...payload, role: 'CARETAKER', org_id: orgId }
         });
         if (!edgeError && edgeData?.success) {
           return { id: edgeData.userId, name: payload.name, email: payload.email, phone: payload.phone };
@@ -1330,7 +1404,11 @@ export const adminService = {
         console.warn("Could not invoke edge function:", e);
       }
     }
-    const { data, error } = await supabase.from('hostel_caretakers').insert(payload).select().single();
+    const { data, error } = await supabase
+      .from('hostel_caretakers')
+      .insert({ ...payload, ...(orgId ? { org_id: orgId } : {}) })
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },
@@ -1369,6 +1447,7 @@ export const adminService = {
 
       if (targetEmail) {
         try {
+          const orgId = getActiveOrgId();
           const { data: existingCaretaker } = await supabase
             .from('hostel_caretakers')
             .select('id')
@@ -1387,7 +1466,8 @@ export const adminService = {
               email: targetEmail,
               phone: payload.phone || '',
               experience: Number(payload.experience) || 3,
-              is_active: true
+              is_active: true,
+              ...(orgId ? { org_id: orgId } : {})
             });
           }
         } catch (ce) {
@@ -1450,18 +1530,24 @@ export const adminService = {
 
     inFlightSecurityStaffPromise = (async () => {
       try {
+        const orgId = getActiveOrgId();
         // Fetch manually added security staff
-        const { data: customSecurity } = await supabase
+        let query = supabase
           .from('security_staff')
-          .select('*')
+          .select('id, name, email, phone, designation, experience, is_active, org_id')
           .eq('is_active', true)
           .order('id', { ascending: true });
+        if (orgId) query = query.eq('org_id', orgId);
         
+        const { data: customSecurity } = await query;
         let combined: any[] = customSecurity || [];
 
         // Fetch registered security profiles
         try {
-          const { data: profileSecurity } = await supabase.from('profiles').select('*').eq('role', 'SECURITY');
+          let profQuery = supabase.from('profiles').select('*').eq('role', 'SECURITY');
+          if (orgId) profQuery = profQuery.eq('org_id', orgId);
+
+          const { data: profileSecurity } = await profQuery;
           if (profileSecurity && profileSecurity.length > 0) {
             const mapped = profileSecurity.map((w: any) => {
               const matched = (customSecurity || []).find((cs: any) => 
@@ -1495,10 +1581,11 @@ export const adminService = {
   },
 
   async createSecurityStaff(payload: { name: string; email?: string; phone: string; designation?: string; experience?: number }) {
+    const orgId = getActiveOrgId();
     if (payload.email) {
       try {
         const { data: edgeData, error: edgeError } = await supabase.functions.invoke('enroll-staff', {
-          body: { ...payload, role: 'SECURITY' }
+          body: { ...payload, role: 'SECURITY', org_id: orgId }
         });
         if (!edgeError && edgeData?.success) {
           return { id: edgeData.userId, name: payload.name, email: payload.email, phone: payload.phone };
@@ -1507,7 +1594,11 @@ export const adminService = {
         console.warn("Could not invoke edge function:", e);
       }
     }
-    const { data, error } = await supabase.from('security_staff').insert(payload).select().single();
+    const { data, error } = await supabase
+      .from('security_staff')
+      .insert({ ...payload, ...(orgId ? { org_id: orgId } : {}) })
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },

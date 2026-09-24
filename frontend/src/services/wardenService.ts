@@ -5,6 +5,7 @@
 import { supabase } from '../lib/supabase';
 import type { HostelStudent, HostelIssue } from '../types';
 import { adminService } from './adminService';
+import { getActiveOrgId } from '../utils/authService';
 
 const inFlightGatePasses = new Map<string, Promise<any[]>>();
 const inFlightIssues = new Map<string, Promise<HostelIssue[]>>();
@@ -37,7 +38,8 @@ export const wardenService = {
 
     const promise = (async () => {
       try {
-        const { data: hostelData, error } = await supabase
+        const orgId = getActiveOrgId();
+        let query = supabase
           .from('hostels')
           .select(`
             id,
@@ -63,6 +65,12 @@ export const wardenService = {
           `)
           .eq('is_active', true)
           .order('id', { ascending: true });
+
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
+
+        const { data: hostelData, error } = await query;
 
         if (error) {
           console.error('[wardenService.getDashboardStats] Error querying hostels:', error);
@@ -90,7 +98,7 @@ export const wardenService = {
 
         const target = (hostelId 
           ? managed.find((h: any) => String(h.id) === String(hostelId)) 
-          : managed[0]) || managed[0] || allHostels[0];
+          : managed[0]) || managed[0] || (allHostels.length > 0 ? allHostels[0] : null);
 
         let totalRooms = 0;
         let totalCap = 0;
@@ -127,18 +135,24 @@ export const wardenService = {
 
           // Fetch only lightweight counts (head: true, transferring 0 rows) for metric cards
           try {
-            const [passesRes, issuesRes] = await Promise.all([
-              supabase
-                .from('gate_passes')
-                .select('id', { count: 'exact', head: true })
-                .eq('hostel_id', target.id)
-                .or('status.eq.PENDING,status.eq.pending,status.eq.REQUESTED,status.eq.requested'),
-              supabase
-                .from('issues')
-                .select('id', { count: 'exact', head: true })
-                .eq('hostel_id', target.id)
-                .not('status', 'in', '(COMPLETED,completed,closed,CLOSED,resolved,RESOLVED)')
-            ]);
+            let passesQuery = supabase
+              .from('gate_passes')
+              .select('id', { count: 'exact', head: true })
+              .eq('hostel_id', target.id)
+              .or('status.eq.PENDING,status.eq.pending,status.eq.REQUESTED,status.eq.requested');
+
+            let issuesQuery = supabase
+              .from('issues')
+              .select('id', { count: 'exact', head: true })
+              .eq('hostel_id', target.id)
+              .not('status', 'in', '(COMPLETED,completed,closed,CLOSED,resolved,RESOLVED)');
+
+            if (orgId) {
+              passesQuery = passesQuery.eq('org_id', orgId);
+              issuesQuery = issuesQuery.eq('org_id', orgId);
+            }
+
+            const [passesRes, issuesRes] = await Promise.all([passesQuery, issuesQuery]);
 
             pendingPassesCount = passesRes.count || 0;
             openIssuesCount = issuesRes.count || 0;
@@ -194,20 +208,33 @@ export const wardenService = {
 
     const promise = (async () => {
       try {
+        const orgId = getActiveOrgId();
         // 1. Primary: Check authoritative assignments table
-        const { data: assignments } = await supabase
+        let assignQuery = supabase
           .from('warden_hostel_assignments')
           .select('hostel_id, hostel:hostels(*)')
           .eq('warden_profile_id', resolvedUserId);
 
+        if (orgId) {
+          assignQuery = assignQuery.eq('org_id', orgId);
+        }
+
+        const { data: assignments } = await assignQuery;
+
         let managedHostels = (assignments || []).map((a: any) => a.hostel).filter(Boolean);
 
         // 2. Secondary: Check direct warden_id on hostels table in Supabase
-        const { data: directHostels } = await supabase
+        let dhQuery = supabase
           .from('hostels')
           .select('*')
           .eq('is_active', true)
           .eq('warden_id', resolvedUserId);
+
+        if (orgId) {
+          dhQuery = dhQuery.eq('org_id', orgId);
+        }
+
+        const { data: directHostels } = await dhQuery;
 
         if (directHostels && directHostels.length > 0) {
           for (const dh of directHostels) {
@@ -256,7 +283,8 @@ export const wardenService = {
    */
   async getStudentVisitorLookup(hostelId?: string | number) {
     try {
-      const { data, error } = await supabase
+      const orgId = getActiveOrgId();
+      let query = supabase
         .from('students')
         .select(`
           id,
@@ -275,6 +303,12 @@ export const wardenService = {
           )
         `)
         .order('student_name', { ascending: true, nullsFirst: false });
+
+      if (orgId) {
+        query = query.eq('org_id', orgId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -321,10 +355,15 @@ export const wardenService = {
 
     const promise = (async () => {
       try {
+        const orgId = getActiveOrgId();
         let query = supabase
           .from('gate_passes')
           .select('*, student:students(*), hostel:hostels(*), room:hostel_rooms(id, no, floor)')
           .order('created_at', { ascending: false });
+
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
 
         if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
           query = query.eq('hostel_id', hostelId);
@@ -502,10 +541,15 @@ export const wardenService = {
 
     const promise = (async () => {
       try {
+        const orgId = getActiveOrgId();
         let query = supabase
           .from('issues')
           .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
           .order('created_at', { ascending: false });
+
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
 
         if (hostelId && hostelId !== 'ALL' && hostelId !== 'all') {
           query = query.eq('hostel_id', hostelId);
@@ -566,7 +610,7 @@ export const wardenService = {
     // Resolve updater name & profile ID from current session
     let updaterName = '';
     let updaterProfileId: string | null = null;
-    let orgId: string = '00000000-0000-0000-0000-000000000001';
+    let orgId: string = getActiveOrgId() || '00000000-0000-0000-0000-000000000001';
 
     try {
       const storedUser = localStorage.getItem('hms_user');

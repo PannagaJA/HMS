@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Announcement } from '../types';
+import { getActiveOrgId } from '../utils/authService';
 
 let inFlightUnreadCountPromise: Promise<number> | null = null;
 
@@ -33,7 +34,12 @@ export const announcementService = {
 
     inFlightHostelsPromise = (async () => {
       try {
-        const { data, error } = await supabase.from('hostels').select('id, name').eq('is_active', true);
+        const orgId = getActiveOrgId();
+        let query = supabase.from('hostels').select('id, name').eq('is_active', true);
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         cachedHostels = data || [];
         return cachedHostels;
@@ -112,11 +118,16 @@ export const announcementService = {
         const userRole = (role || '').toUpperCase();
         const userHostelId = await this.getUserHostelId(role, userId);
         const now = Date.now();
+        const orgId = getActiveOrgId();
 
         let query = supabase
           .from('announcements')
           .select('*')
           .order('created_at', { ascending: false });
+
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
 
         const { data: allData, error } = await query;
 
@@ -195,11 +206,16 @@ export const announcementService = {
       try {
         const from = (page - 1) * limit;
         const to = from + limit - 1;
+        const orgId = getActiveOrgId();
 
         let query = supabase
           .from('announcements')
           .select('*', { count: 'exact' })
           .order('created_at', { ascending: false });
+
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
 
         if (role) {
           query = query.eq('created_by_role', role);
@@ -236,6 +252,7 @@ export const announcementService = {
 
   async createAnnouncement(data: Partial<Announcement>): Promise<Announcement> {
     const id = data.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+    const orgId = getActiveOrgId();
     const insertData: any = {
       id,
       title: data.title,
@@ -248,6 +265,10 @@ export const announcementService = {
       target_hostel_id: data.target_hostel_id || null,
       expires_at: data.expires_at || null,
     };
+
+    if (orgId) {
+      insertData.org_id = orgId;
+    }
 
     if (data.circular_number) insertData.circular_number = data.circular_number;
     if (data.file_url) insertData.file_url = data.file_url;
@@ -289,10 +310,17 @@ export const announcementService = {
       try {
         const userRole = (role || '').toUpperCase();
         const nowIso = new Date().toISOString();
+        const orgId = getActiveOrgId();
 
-        const { data: targeted, error: targetError } = await supabase
+        let targetQuery = supabase
           .from('announcements')
           .select('id, target_roles, target_hostel_id, expires_at, created_by_role');
+
+        if (orgId) {
+          targetQuery = targetQuery.eq('org_id', orgId);
+        }
+
+        const { data: targeted, error: targetError } = await targetQuery;
           
         if (targetError) {
           console.warn('Error querying targeted announcements for unread count:', targetError);

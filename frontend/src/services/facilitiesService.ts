@@ -5,6 +5,7 @@
 import { supabase } from '../lib/supabase';
 import type { MealType, MenuItem, Menu, HostelIssue } from '../types';
 import { wardenService } from './wardenService';
+import { getActiveOrgId } from '../utils/authService';
 
 let inFlightMealTypes: Promise<MealType[]> | null = null;
 let inFlightMenuItems: Promise<MenuItem[]> | null = null;
@@ -17,7 +18,12 @@ export const diningService = {
     }
     const promise = (async () => {
       try {
-        const { data, error } = await supabase.from('meal_types').select('*').order('id', { ascending: true });
+        const orgId = getActiveOrgId();
+        let query = supabase.from('meal_types').select('*').order('id', { ascending: true });
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
+        const { data, error } = await query;
         if (error) {
           console.error('[diningService.getMealTypes] Supabase error:', error.code, error.message);
         }
@@ -56,7 +62,12 @@ export const diningService = {
     }
     const promise = (async () => {
       try {
-        const { data, error } = await supabase.from('menu_items').select('*').order('name', { ascending: true });
+        const orgId = getActiveOrgId();
+        let query = supabase.from('menu_items').select('*').order('name', { ascending: true });
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         return data || [];
       } finally {
@@ -69,11 +80,15 @@ export const diningService = {
   },
 
   async createMenuItem(payload: { name: string; category?: string; description?: string; is_veg?: boolean }) {
+    const orgId = getActiveOrgId();
     const insertObj: any = {
       name: payload.name,
       description: payload.description || '',
       vegetarian: payload.is_veg ?? true
     };
+    if (orgId) {
+      insertObj.org_id = orgId;
+    }
     if (payload.category) {
       insertObj.category = payload.category;
     }
@@ -141,9 +156,13 @@ export const diningService = {
     }
     const promise = (async () => {
       try {
+        const orgId = getActiveOrgId();
         let query = supabase
           .from('menus')
           .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))');
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
         if (hostelId) {
           query = query.eq('hostel_id', Number(hostelId));
         }
@@ -192,10 +211,17 @@ export const diningService = {
       // RPC may not exist in some environments, continue to direct query
     }
 
-    const { data, error } = await supabase
+    const orgId = getActiveOrgId();
+    let menuQuery = supabase
       .from('menus')
       .select('*, meal_type:meal_types(*), links:menu_item_links(item:menu_items(*))')
       .eq('day_of_week', appDayId);
+
+    if (orgId) {
+      menuQuery = menuQuery.eq('org_id', orgId);
+    }
+
+    const { data, error } = await menuQuery;
 
     if (error) {
       console.error('[diningService.getTodayMenu] Supabase error:', error.code, error.message);
@@ -416,24 +442,35 @@ export const diningService = {
     let hostelId = room?.hostel_id;
 
     if (!hostelId) {
-      const { data: defaultHostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      const orgId = getActiveOrgId() || student.org_id;
+      let hostelQuery = supabase.from('hostels').select('id');
+      if (orgId) {
+        hostelQuery = hostelQuery.eq('org_id', orgId);
+      }
+      const { data: defaultHostel } = await hostelQuery.limit(1).maybeSingle();
       hostelId = defaultHostel?.id || 1;
     }
 
     const todayStr = payload.date || new Date().toISOString().split('T')[0];
     const mealTypeId = Number(payload.meal_type);
+    const orgIdForSkip = getActiveOrgId() || student.org_id;
+
+    const skipPayload: any = {
+      student_id: student.id,
+      hostel_id: hostelId,
+      date: todayStr,
+      meal_type_id: mealTypeId,
+      skip_type: payload.skip_type || 'SKIP',
+      reason: payload.reason || 'Opted out from portal',
+      approved: true
+    };
+    if (orgIdForSkip) {
+      skipPayload.org_id = orgIdForSkip;
+    }
 
     const { data, error } = await supabase
       .from('student_meal_skips')
-      .upsert({
-        student_id: student.id,
-        hostel_id: hostelId,
-        date: todayStr,
-        meal_type_id: mealTypeId,
-        skip_type: payload.skip_type || 'SKIP',
-        reason: payload.reason || 'Opted out from portal',
-        approved: true
-      }, { onConflict: 'student_id,date,meal_type_id' })
+      .upsert(skipPayload, { onConflict: 'student_id,date,meal_type_id' })
       .select()
       .single();
 
@@ -521,10 +558,14 @@ export const diningService = {
       }
     }
 
-    // Now find the FIRST meal_type row matching this code — this picks the one used by existing menus
+    // Now find the meal_type row matching this code for this org
+    const activeOrg = getActiveOrgId();
     if (targetCode) {
-      const { data: allByCode } = await supabase
-        .from('meal_types').select('id, name').eq('name', targetCode).order('id', { ascending: true });
+      let mtQuery = supabase.from('meal_types').select('id, name').eq('name', targetCode).order('id', { ascending: true });
+      if (activeOrg) {
+        mtQuery = mtQuery.eq('org_id', activeOrg);
+      }
+      const { data: allByCode } = await mtQuery;
       if (allByCode && allByCode.length > 0) {
         // Prefer the ID already in use by existing menus for this hostel
         if (hostelId) {
@@ -537,10 +578,12 @@ export const diningService = {
           resolvedMealTypeId = allByCode[0].id;
         }
       } else {
-        // Insert missing meal type
+        // Insert missing meal type for this org
         const descMap: Record<string, string> = { BR: 'Breakfast', LN: 'Lunch', SN: 'Evening Snacks & Tea', DN: 'Dinner' };
+        const mtInsert: any = { name: targetCode, description: descMap[targetCode] };
+        if (activeOrg) mtInsert.org_id = activeOrg;
         const { data: created } = await supabase
-          .from('meal_types').insert({ name: targetCode, description: descMap[targetCode] }).select().single();
+          .from('meal_types').insert(mtInsert).select().single();
         if (created) resolvedMealTypeId = created.id;
       }
     }
@@ -549,7 +592,9 @@ export const diningService = {
 
     let targetHostelId = hostelId ? Number(hostelId) : null;
     if (!targetHostelId) {
-      const { data: hostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      let hQuery = supabase.from('hostels').select('id');
+      if (activeOrg) hQuery = hQuery.eq('org_id', activeOrg);
+      const { data: hostel } = await hQuery.limit(1).maybeSingle();
       targetHostelId = hostel?.id || 1;
     }
 
@@ -570,14 +615,17 @@ export const diningService = {
     if (existing) {
       menuId = existing.id;
     } else {
+      const menuUpsertObj: any = {
+        hostel_id: targetHostelId,
+        day_of_week: dayStr,
+        meal_type_id: mealIdNum,
+        is_recurring: true
+      };
+      if (activeOrg) menuUpsertObj.org_id = activeOrg;
+
       const { data: upserted, error: upsertErr } = await supabase
         .from('menus')
-        .upsert({
-          hostel_id: targetHostelId,
-          day_of_week: dayStr,
-          meal_type_id: mealIdNum,
-          is_recurring: true
-        }, { onConflict: 'hostel_id,day_of_week,meal_type_id' })
+        .upsert(menuUpsertObj, { onConflict: 'hostel_id,day_of_week,meal_type_id' })
         .select('id')
         .single();
 
@@ -635,10 +683,15 @@ export const issueService = {
       return [];
     }
 
+    const orgId = getActiveOrgId();
     let query = supabase
       .from('issues')
       .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
       .order('created_at', { ascending: false });
+
+    if (orgId) {
+      query = query.eq('org_id', orgId);
+    }
 
     if (resolvedStudentId) {
       query = query.eq('student_id', resolvedStudentId);

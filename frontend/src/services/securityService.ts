@@ -4,6 +4,7 @@
  */
 import { supabase } from '../lib/supabase';
 import type { GatePassRequest, VisitorLog } from '../types';
+import { getActiveOrgId } from '../utils/authService';
 
 let inFlightVisitorLogsPromise: Promise<VisitorLog[]> | null = null;
 
@@ -12,10 +13,17 @@ export const securityService = {
    * Fetch gate pass movements
    */
   async getGatePasses(): Promise<GatePassRequest[]> {
-    const { data, error } = await supabase
+    const orgId = getActiveOrgId();
+    let query = supabase
       .from('gate_passes')
       .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(no, floor)')
       .order('created_at', { ascending: false });
+
+    if (orgId) {
+      query = query.eq('org_id', orgId);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
 
     return (data || []).map((gp: any) => ({
@@ -40,34 +48,40 @@ export const securityService = {
 
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
     const isNum = /^\d+$/.test(trimmed);
+    const orgId = getActiveOrgId();
 
     let passes: any[] = [];
     let resolvedStudent: any = null;
 
     // 1. If UUID, check gate_passes.token first (exact match, avoiding invalid operator error on UUID columns)
     if (isUUID) {
-      const { data: byToken } = await supabase
+      let tokenQuery = supabase
         .from('gate_passes')
         .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
         .eq('token', trimmed);
+      if (orgId) tokenQuery = tokenQuery.eq('org_id', orgId);
+      const { data: byToken } = await tokenQuery;
 
       if (byToken && byToken.length > 0) {
         passes = byToken;
       } else {
         // Check if this UUID belongs to a student's profile_id or id
-        const { data: stByProfile } = await supabase
+        let stQuery = supabase
           .from('students')
           .select('id, student_name, enrollment_no')
-          .eq('profile_id', trimmed)
-          .maybeSingle();
+          .eq('profile_id', trimmed);
+        if (orgId) stQuery = stQuery.eq('org_id', orgId);
+        const { data: stByProfile } = await stQuery.maybeSingle();
 
         if (stByProfile) {
           resolvedStudent = stByProfile;
-          const { data: stPasses } = await supabase
+          let stPassesQuery = supabase
             .from('gate_passes')
             .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no)')
             .eq('student_id', stByProfile.id)
             .order('created_at', { ascending: false });
+          if (orgId) stPassesQuery = stPassesQuery.eq('org_id', orgId);
+          const { data: stPasses } = await stPassesQuery;
           if (stPasses) passes = stPasses;
         }
       }
@@ -305,10 +319,17 @@ export const securityService = {
 
     inFlightVisitorLogsPromise = (async () => {
       try {
-        const { data: logs, error } = await supabase
+        const orgId = getActiveOrgId();
+        let query = supabase
           .from('visitor_logs')
           .select('*, student:students(*), hostel:hostels(id, name), room:hostel_rooms(id, no, floor)')
           .order('check_in_time', { ascending: false });
+
+        if (orgId) {
+          query = query.eq('org_id', orgId);
+        }
+
+        const { data: logs, error } = await query;
 
         let list = logs || [];
 
@@ -409,14 +430,7 @@ export const securityService = {
       hostelId = hostelId || defaultRoom?.hostel_id || 1;
     }
 
-    let orgId: string | null = null;
-    const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', (await supabase.auth.getUser()).data.user?.id || '').maybeSingle();
-    orgId = profile?.org_id || null;
-
-    if (!orgId) {
-      const { data: org } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
-      orgId = org?.id || '00000000-0000-0000-0000-000000000001';
-    }
+    let orgId: string = getActiveOrgId() || '00000000-0000-0000-0000-000000000001';
 
     const insertPayload: any = {
       student_id: student.id,

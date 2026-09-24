@@ -5,6 +5,7 @@
 import { supabase } from '../lib/supabase';
 import { diningService } from './facilitiesService';
 import type { GatePassRequest, HostelStudent } from '../types';
+import { getActiveOrgId } from '../utils/authService';
 
 export const studentService = {
   /**
@@ -32,7 +33,8 @@ export const studentService = {
           // If RPC didn't return roommates or returned empty, check local cache for same room
           if (rpcRoommates.length === 0 && rpcData.room_no && typeof localStorage !== 'undefined') {
             try {
-              const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+              const activeOrg = getActiveOrgId();
+              const cachedStudents: any[] = JSON.parse(localStorage.getItem(activeOrg ? `hms_cached_students_${activeOrg}` : 'hms_cached_students') || localStorage.getItem('hms_cached_students') || '[]');
               const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
               const allLocal = [...cachedStudents, ...customStudents];
               rpcRoommates = allLocal
@@ -114,7 +116,8 @@ export const studentService = {
     // Strategy 5: Check LocalStorage Directory Cache (for resident imported from CSV / synthetic sessions)
     if (!student && typeof localStorage !== 'undefined') {
       try {
-        const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const activeOrg = getActiveOrgId();
+        const cachedStudents: any[] = JSON.parse(localStorage.getItem(activeOrg ? `hms_cached_students_${activeOrg}` : 'hms_cached_students') || localStorage.getItem('hms_cached_students') || '[]');
         const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
         const allLocal = [...cachedStudents, ...customStudents];
 
@@ -208,7 +211,8 @@ export const studentService = {
     // If roommates still empty, check localStorage cached students
     if (roommates.length === 0 && profile?.room_no && typeof localStorage !== 'undefined') {
       try {
-        const cachedStudents: any[] = JSON.parse(localStorage.getItem('hms_cached_students') || '[]');
+        const activeOrg = getActiveOrgId();
+        const cachedStudents: any[] = JSON.parse(localStorage.getItem(activeOrg ? `hms_cached_students_${activeOrg}` : 'hms_cached_students') || localStorage.getItem('hms_cached_students') || '[]');
         const customStudents: any[] = JSON.parse(localStorage.getItem('hms_custom_students') || '[]');
         const allLocal = [...cachedStudents, ...customStudents];
         roommates = allLocal
@@ -285,11 +289,18 @@ export const studentService = {
       return [];
     }
 
-    const { data: passes, error } = await supabase
+    const orgId = getActiveOrgId();
+    let query = supabase
       .from('gate_passes')
       .select('*, student:students(*), hostel:hostels(name), room:hostel_rooms(no, floor)')
       .eq('student_id', resolvedStudentId)
       .order('created_at', { ascending: false });
+
+    if (orgId) {
+      query = query.eq('org_id', orgId);
+    }
+
+    const { data: passes, error } = await query;
 
     if (error) {
       console.warn('Error fetching gate passes:', error);
@@ -400,9 +411,14 @@ export const studentService = {
 
     // Resolve fallback hostel/room from DB if allocation wasn't found
     if (roomId === 1 || hostelId === 1) {
-      const { data: defaultHostel } = await supabase.from('hostels').select('id').limit(1).maybeSingle();
+      const activeOrg = getActiveOrgId();
+      let hQuery = supabase.from('hostels').select('id');
+      if (activeOrg) hQuery = hQuery.eq('org_id', activeOrg);
+      const { data: defaultHostel } = await hQuery.limit(1).maybeSingle();
       if (hostelId === 1 && defaultHostel?.id) hostelId = defaultHostel.id;
-      const { data: defaultRoom } = await supabase.from('hostel_rooms').select('id').eq('hostel_id', hostelId).limit(1).maybeSingle();
+      let rQuery = supabase.from('hostel_rooms').select('id').eq('hostel_id', hostelId);
+      if (activeOrg) rQuery = rQuery.eq('org_id', activeOrg);
+      const { data: defaultRoom } = await rQuery.limit(1).maybeSingle();
       if (roomId === 1 && defaultRoom?.id) roomId = defaultRoom.id;
     }
 
@@ -444,7 +460,7 @@ export const studentService = {
     };
 
     const storedUser = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('hms_user') || 'null') : null;
-    const orgId = storedUser?.org_id || undefined;
+    const orgId = getActiveOrgId() || storedUser?.org_id;
     if (orgId) {
       insertPayload.org_id = orgId;
     }

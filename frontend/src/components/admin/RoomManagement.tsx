@@ -136,6 +136,10 @@ export const RoomManagement: React.FC = () => {
   };
 
   const handleOpenAddSingleRoom = () => {
+    if (hostels.length === 0) {
+      showWarning('No hostel blocks found. Please create a hostel block in Hostel Management first.');
+      return;
+    }
     const targetHostel = selectedHostelId || '';
     setSingleHostelId(targetHostel);
     const defaultFloor = selectedFloor && selectedFloor !== 'all' && selectedFloor !== 'ALL' ? selectedFloor : '';
@@ -279,11 +283,15 @@ export const RoomManagement: React.FC = () => {
   };
 
   const handleOpenBulkModal = () => {
-    setBulkHostelId(selectedHostelId || '');
+    if (hostels.length === 0) {
+      showWarning('No hostel blocks found. Please create a hostel block in Hostel Management first.');
+      return;
+    }
+    setBulkHostelId(selectedHostelId || (hostels.length > 0 ? String(hostels[0].id) : ''));
     setBulkFloor(selectedFloor && selectedFloor !== 'ALL' && selectedFloor !== 'all' ? Number(selectedFloor) : 1);
     setBulkCount(10);
-    setBulkRoomType('');
-    setBulkCapacity(1);
+    setBulkRoomType('D');
+    setBulkCapacity(2);
     setShowBulkModal(true);
   };
 
@@ -421,7 +429,23 @@ export const RoomManagement: React.FC = () => {
         </div>
       </div>
 
-      {!selectedHostelId ? (
+      {hostels.length === 0 ? (
+        <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
+            <Building2 className="w-8 h-8 text-[#0B1437]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">
+              {user?.role === 'WARDEN' ? 'No Hostels Assigned' : 'No Hostels Created Yet'}
+            </h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+              {user?.role === 'WARDEN'
+                ? 'You are not currently assigned to any hostel block. Please contact the administrator.'
+                : 'No hostel blocks found for your organization. Please create a hostel block in Hostel Management before configuring rooms.'}
+            </p>
+          </div>
+        </div>
+      ) : !selectedHostelId ? (
         <div className="bg-white p-14 rounded-3xl border border-slate-200/80 shadow-sm text-center space-y-4 animate-in fade-in">
           <div className="w-16 h-16 rounded-3xl bg-blue-100 text-teal-950 flex items-center justify-center mx-auto shadow-inner">
             <Building2 className="w-8 h-8 text-[#0B1437]" />

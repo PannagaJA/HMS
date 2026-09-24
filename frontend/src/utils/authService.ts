@@ -1643,6 +1643,11 @@ export const authService = {
   }
 };
 
+export const getActiveOrgId = (): string | undefined => {
+  const stored = getStoredUser();
+  return stored?.org_id;
+};
+
 export const loginUser = async (u: string, p: string) => {
   const res = await authService.login(u, p);
   const token = res.session?.access_token || '';
@@ -1656,8 +1661,19 @@ export const loginUser = async (u: string, p: string) => {
 };
 
 export const logoutUser = async () => {
-  localStorage.removeItem('hms_user');
-  localStorage.removeItem('hms_token');
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('hms_') && k !== 'hms_theme')) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (_) {
+    localStorage.removeItem('hms_user');
+    localStorage.removeItem('hms_token');
+  }
   await authService.logout();
 };
 
@@ -1678,3 +1694,4 @@ export const saveAuthSession = (token?: string, _b?: any, user?: any): void => {
   if (token) localStorage.setItem('hms_token', token);
   if (user) localStorage.setItem('hms_user', JSON.stringify(user));
 };
+
