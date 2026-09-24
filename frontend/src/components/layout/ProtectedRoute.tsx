@@ -32,7 +32,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
 
   React.useEffect(() => {
     if (!user) return;
-    
+
     // Initial and dynamic fetch
     const refreshCount = () => {
       if (user?.role && user?.id) {
@@ -109,19 +109,27 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   }
 
   const isUsn = (val?: string) => /^[0-9]{1,2}[A-Za-z]{2,5}[0-9]{2}[A-Za-z]{2}[0-9]{2,4}$/i.test(val || '');
-  const isGeneric = (val?: string) => ['student', 'resident', 'user', 'admin', ''].includes((val || '').toLowerCase());
-  const rawFirstName = user.first_name || '';
-  const validAuthName = rawFirstName && !isGeneric(rawFirstName) && (!isStudent || !isUsn(rawFirstName))
-    ? `${rawFirstName} ${user.last_name || ''}`.trim()
-    : null;
 
-  const headerDisplayName = (isStudent && studentData?.profile?.student_name)
-    ? studentData.profile.student_name
-    : (validAuthName || (isStudent ? 'Resident Student' : (user.username || 'User')));
+  const formatRoleDefault = (role?: string) => {
+    if (!role) return 'Hostel Member';
+    switch (role.toUpperCase()) {
+      case 'ADMIN': return 'Admin';
+      case 'WARDEN': return 'Hostel Warden';
+      case 'SECURITY': return 'Security';
+      case 'STUDENT': return 'Resident Student';
+      default: return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+    }
+  };
 
-  const avatarInitial = headerDisplayName && headerDisplayName !== 'Resident Student'
+  const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+
+  const headerDisplayName = isStudent
+    ? (studentData?.profile?.student_name || (fullName && !isUsn(user.first_name) ? fullName : 'Resident Student'))
+    : (fullName || user.username || (user.email ? user.email.split('@')[0] : '') || formatRoleDefault(user.role));
+
+  const avatarInitial = (headerDisplayName && headerDisplayName !== 'Resident Student' && headerDisplayName !== 'Hostel Member')
     ? headerDisplayName.charAt(0).toUpperCase()
-    : (validAuthName ? validAuthName.charAt(0).toUpperCase() : (isStudent ? 'S' : 'U'));
+    : (user.first_name ? user.first_name.charAt(0).toUpperCase() : (isStudent ? 'S' : user.role ? user.role.charAt(0).toUpperCase() : 'U'));
 
   return (
     <div className="flex h-screen h-[100dvh] w-screen overflow-hidden bg-[#f0f4f8]">
@@ -132,7 +140,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
       <div className="flex-1 flex flex-col min-w-0 h-screen h-[100dvh] overflow-hidden">
         {/* Unified Top App Bar */}
         <div className="sticky top-0 h-16 px-4 sm:px-6 lg:px-8 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between shrink-0 z-40">
-          
+
           {/* Left Side: Mobile Menu & Logo */}
           <div className="flex items-center gap-3 lg:hidden">
             <button
@@ -170,9 +178,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
             <div className="w-px h-6 bg-slate-200 hidden sm:block"></div>
 
             {/* Notification Bell */}
-            <button 
+            <button
               onClick={() => navigate(`/${user?.role?.toLowerCase() || 'student'}/announcements`)}
-              className="relative p-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer" 
+              className="relative p-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
@@ -184,9 +192,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
             </button>
 
             {/* User Profile */}
-            <button 
+            <button
               onClick={() => navigate(`/${user?.role?.toLowerCase() || 'student'}/profile`)}
-              className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-200" 
+              className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-200"
               aria-label="User Profile"
             >
               <div className="w-8 h-8 rounded-full bg-[#0B1437] text-white flex items-center justify-center font-bold text-sm shadow-sm">
