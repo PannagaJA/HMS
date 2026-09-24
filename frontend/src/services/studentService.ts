@@ -346,7 +346,9 @@ export const studentService = {
       return { student, roomId: room?.id || null, hostelId: room?.hostel_id || null };
     };
 
-    const allocSelect = 'id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
+    const allocSelect = 'id, org_id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
+
+    let studentOrgId: string | null = null;
 
     // Strategy 1: profile_id (Supabase auth)
     if (userId) {
@@ -355,6 +357,7 @@ export const studentService = {
       );
       if (result?.student) {
         studentId = result.student.id;
+        studentOrgId = result.student.org_id || null;
         if (result.roomId) roomId = result.roomId;
         if (result.hostelId) hostelId = result.hostelId;
       }
@@ -371,6 +374,7 @@ export const studentService = {
         );
         if (result?.student) {
           studentId = result.student.id;
+          studentOrgId = result.student.org_id || null;
           if (result.roomId) roomId = result.roomId;
           if (result.hostelId) hostelId = result.hostelId;
         }
@@ -383,6 +387,7 @@ export const studentService = {
           );
           if (result2?.student) {
             studentId = result2.student.id;
+            studentOrgId = result2.student.org_id || null;
             if (result2.roomId) roomId = result2.roomId;
             if (result2.hostelId) hostelId = result2.hostelId;
           }
@@ -398,6 +403,7 @@ export const studentService = {
           );
           if (result?.student) {
             studentId = result.student.id;
+            studentOrgId = result.student.org_id || null;
             if (result.roomId) roomId = result.roomId;
             if (result.hostelId) hostelId = result.hostelId;
           }
@@ -411,7 +417,7 @@ export const studentService = {
 
     // Resolve fallback hostel/room from DB if allocation wasn't found
     if (roomId === 1 || hostelId === 1) {
-      const activeOrg = getActiveOrgId();
+      const activeOrg = getActiveOrgId() || studentOrgId;
       let hQuery = supabase.from('hostels').select('id');
       if (activeOrg) hQuery = hQuery.eq('org_id', activeOrg);
       const { data: defaultHostel } = await hQuery.limit(1).maybeSingle();
@@ -460,7 +466,7 @@ export const studentService = {
     };
 
     const storedUser = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('hms_user') || 'null') : null;
-    const orgId = getActiveOrgId() || storedUser?.org_id;
+    const orgId = studentOrgId || getActiveOrgId() || storedUser?.org_id;
     if (orgId) {
       insertPayload.org_id = orgId;
     }

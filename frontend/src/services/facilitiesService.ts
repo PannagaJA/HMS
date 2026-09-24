@@ -789,7 +789,7 @@ export const issueService = {
 
     // Find student record — try multiple strategies for students without profile_id
     let student: any = null;
-    const allocSelect = 'id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
+    const allocSelect = 'id, org_id, allocations:room_allocations(id, is_active, bed:beds(room:hostel_rooms(id, hostel_id)))';
 
     // Strategy 1: profile_id
     if (userId) {
@@ -837,10 +837,16 @@ export const issueService = {
     let hostelId = room?.hostel_id;
 
     if (!roomId || !hostelId) {
-      const { data: defaultRoom } = await supabase.from('hostel_rooms').select('id, hostel_id').limit(1).maybeSingle();
+      const activeOrg = getActiveOrgId();
+      let rQuery = supabase.from('hostel_rooms').select('id, hostel_id');
+      if (activeOrg) rQuery = rQuery.eq('org_id', activeOrg);
+      const { data: defaultRoom } = await rQuery.limit(1).maybeSingle();
       roomId = roomId || defaultRoom?.id || 1;
       hostelId = hostelId || defaultRoom?.hostel_id || 1;
     }
+
+    const activeOrg = getActiveOrgId();
+    const effectiveOrgId = student.org_id || activeOrg;
 
     const insertBody: any = {
       student_id: student.id,
@@ -852,8 +858,8 @@ export const issueService = {
       status: 'pending'
     };
 
-    if (student.org_id) {
-      insertBody.org_id = student.org_id;
+    if (effectiveOrgId) {
+      insertBody.org_id = effectiveOrgId;
     }
 
     if (payload.image_url) {
