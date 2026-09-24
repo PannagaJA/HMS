@@ -895,25 +895,6 @@ export const apiClient = {
         }
       }
 
-      // 3. Save updated password in custom passwords map for directory/fallback sessions
-      if (typeof localStorage !== 'undefined') {
-        try {
-          const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
-          if (effectiveEmail) {
-            customPasswords[effectiveEmail.toLowerCase()] = newPassword;
-            const emailPrefix = effectiveEmail.split('@')[0].toLowerCase();
-            customPasswords[emailPrefix] = newPassword;
-          }
-          if (effectiveUsername) customPasswords[effectiveUsername.toLowerCase()] = newPassword;
-          if (stored?.enrollment_no) customPasswords[stored.enrollment_no.toLowerCase()] = newPassword;
-          if (stored?.username) customPasswords[stored.username.toLowerCase()] = newPassword;
-          if (stored?.id) customPasswords[String(stored.id).toLowerCase()] = newPassword;
-          localStorage.setItem('hms_custom_passwords', JSON.stringify(customPasswords));
-        } catch (storageErr) {
-          console.warn('Could not save custom password to localStorage:', storageErr);
-        }
-      }
-
       return { data: { success: true, message: 'Password changed successfully!' } as T };
     }
 
@@ -1353,33 +1334,22 @@ export const authService = {
       localStorage.removeItem('hms_token');
     } catch (_) {}
 
-    // 1. Read custom / updated password for this user if they changed it
-    let customPass: string | undefined;
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const customPasswords: Record<string, string> = JSON.parse(localStorage.getItem('hms_custom_passwords') || '{}');
-        customPass = customPasswords[emailToUse.toLowerCase()] 
-          || customPasswords[input.toLowerCase()] 
-          || (input.includes('@') ? customPasswords[input.split('@')[0].toLowerCase()] : undefined);
-      } catch (e) {
-        console.warn('Could not read custom passwords:', e);
-      }
-    }
-
-    // If the user changed their password, strictly require the new password (never accept outdated old passwords)
-    if (customPass && password !== customPass) {
-      throw new Error('Invalid username or password. Please check your credentials.');
-    }
-
-    // 2. Direct Cloud Password Verification RPC (Verifies against auth.users on Supabase Cloud for all devices)
+    // 1. Direct Cloud Password Verification RPC (Verifies against auth.users on Supabase Cloud for all devices)
     try {
       const { data: verifyData, error: verifyErr } = await supabase.rpc('verify_user_login', {
         p_identifier: input,
         p_password: password
       });
-      if (!verifyErr && verifyData?.user_id) {
+
+      // If cloud verification confirmed the password is wrong for an existing account, fail immediately
+      if (!verifyErr && verifyData?.reason === 'INVALID_PASSWORD') {
+        throw new Error('Invalid username or password. Please check your credentials.');
+      }
+
+      if (!verifyErr && (verifyData?.user_id || verifyData?.success === true)) {
+        const userId = verifyData.user_id;
         const verifiedProfile: User = {
-          id: verifyData.user_id,
+          id: userId,
           email: verifyData.email,
           role: verifyData.role || 'STUDENT',
           first_name: verifyData.first_name,
@@ -1394,7 +1364,7 @@ export const authService = {
         };
 
         const syntheticSession = {
-          access_token: `hms-session-${verifyData.user_id}-${Date.now()}`,
+          access_token: `hms-session-${userId}-${Date.now()}`,
           token_type: 'bearer',
           user: {
             id: verifiedProfile.id,
@@ -1405,23 +1375,32 @@ export const authService = {
 
         return { session: syntheticSession as any, user: syntheticSession.user as any, profile: verifiedProfile };
       }
-    } catch (_) {}
-
-    // 3. Attempt standard Supabase Auth (only if no custom password override or if password matches)
-    if (!customPass) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
-        if (!error && data?.session) {
-          const profile = await this.getCurrentProfile();
-          return { session: data.session, user: data.user, profile };
-        }
-      } catch (err) {
-        console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
+    } catch (vErr: any) {
+      if (vErr?.message?.includes('Invalid username or password')) {
+        throw vErr;
       }
     }
 
-    // 4. Universal Directory Authentication for all Orgs
-    // Standard default password across all roles & orgs: password123
+    // 2. Attempt standard Supabase Auth
+    let authFailedWithInvalidCreds = false;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
+      if (!error && data?.session) {
+        const profile = await this.getCurrentProfile();
+        return { session: data.session, user: data.user, profile };
+      }
+      if (error && (error.message?.toLowerCase().includes('invalid login credentials') || error.status === 400)) {
+        authFailedWithInvalidCreds = true;
+      }
+    } catch (err) {
+      console.warn('Supabase signInWithPassword failed, checking directory fallback:', err);
+    }
+
+    // 3. Universal Directory Authentication
+    // If Supabase Auth confirmed invalid credentials for this email, do not fall back to default passwords
+    if (authFailedWithInvalidCreds) {
+      throw new Error('Invalid username or password. Please check your credentials.');
+    }
 
     // Step A: Priority check profiles table for Warden / Admin / Staff / Security
     let profMatch: any = null;
@@ -1460,9 +1439,7 @@ export const authService = {
     }
 
     if (profMatch) {
-      const isStaffPassValid = customPass 
-        ? password === customPass 
-        : password.toLowerCase() === 'password123';
+      const isStaffPassValid = password.toLowerCase() === 'password123';
 
       if (isStaffPassValid) {
         const staffProfile: Profile = {
@@ -1588,9 +1565,9 @@ export const authService = {
         studentMatch.phone?.trim()
       ].filter(Boolean);
 
-      const isStudentPassValid = customPass 
-        ? password === customPass 
-        : (password.toLowerCase() === 'password123' || allowedStudentPasswords.includes(password) || allowedStudentPasswords.includes(password.toLowerCase()));
+      const isStudentPassValid = password.toLowerCase() === 'password123' 
+        || allowedStudentPasswords.includes(password) 
+        || allowedStudentPasswords.includes(password.toLowerCase());
 
       if (isStudentPassValid) {
         // Ensure profile_id is a valid UUID
@@ -1659,11 +1636,12 @@ export const logoutUser = async () => {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith('hms_') && k !== 'hms_theme' && k !== 'hms_custom_passwords')) {
+      if (k && k.startsWith('hms_') && k !== 'hms_theme') {
         keysToRemove.push(k);
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem('hms_custom_passwords');
   } catch (_) {
     localStorage.removeItem('hms_user');
     localStorage.removeItem('hms_token');
