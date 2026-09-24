@@ -182,12 +182,7 @@ export const WardenGatePassManagement: React.FC = () => {
                   <SelectValue placeholder="-- Select Hostel Block --" />
                 </SelectTrigger>
                 <SelectContent>
-                  {user?.role === 'ADMIN' && (
-                    <SelectItem value="ALL">All Hostel Blocks</SelectItem>
-                  )}
-                  {user?.role === 'WARDEN' && hostels.length > 1 && (
-                    <SelectItem value="ALL">All My Assigned Hostels</SelectItem>
-                  )}
+                  <SelectItem value="ALL">All Hostel Blocks</SelectItem>
                   {hostels.map((h) => (
                     <SelectItem key={h.id} value={String(h.id)}>
                       {h.name} ({h.gender === 'M' ? 'Boys' : h.gender === 'F' ? 'Girls' : 'Co-ed'})
@@ -296,7 +291,7 @@ export const WardenGatePassManagement: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold text-slate-900">Select a Hostel Block</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-              Choose one of your assigned hostel blocks from the dropdown above to review student gate pass approvals.
+              Choose one of your assigned hostel blocks or select "All Hostel Blocks" from the dropdown above to review student gate pass approvals.
             </p>
           </div>
         </div>
@@ -348,30 +343,33 @@ export const WardenGatePassManagement: React.FC = () => {
         )
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Mobile Card View (< 768px) */}
+          <div className="grid grid-cols-1 gap-4 md:hidden">
             {paginatedPasses.map((pass) => (
               <div
                 key={pass.id}
-                className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
+                className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
               >
                 <div>
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 text-teal-950 font-bold flex items-center justify-center text-sm">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 text-[#0B1437] font-bold flex items-center justify-center text-sm">
                         {pass.student_name?.[0] || 'S'}
                       </div>
                       <div>
-                        <h4 className="text-base font-bold text-slate-900">{pass.student_name}</h4>
-                        <p className="text-xs text-slate-400">{pass.enrollment_no} · {formatFloorRoom(pass.floor, pass.room_no || '101')}</p>
+                        <h4 className="text-sm font-bold text-slate-900">{pass.student_name}</h4>
+                        <p className="text-xs text-slate-400">
+                          {pass.enrollment_no} · {pass.hostel_name || 'Block'} · {formatFloorRoom(pass.floor, pass.room_no || '101')}
+                        </p>
                       </div>
                     </div>
                     <StatusBadge status={pass.status} />
                   </div>
 
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2 mb-4">
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-2 mb-4">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400 font-medium">Leave Type:</span>
-                      <span className="font-semibold text-slate-800">{pass.pass_type.replace(/_/g, ' ')}</span>
+                      <span className="font-semibold text-slate-800">{pass.pass_type?.replace(/_/g, ' ')}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400 font-medium">Out Time:</span>
@@ -389,13 +387,13 @@ export const WardenGatePassManagement: React.FC = () => {
                 </div>
 
                 {pass.status === 'pending' ? (
-                  <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2.5 pt-3 border-t border-slate-100">
                     <button
                       onClick={() => {
                         setActionModalPass(pass);
                         setActionType('reject');
                       }}
-                      className="flex-1 py-2.5 rounded-full border border-rose-200 text-rose-700 bg-rose-50 text-xs font-semibold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 py-2 rounded-full border border-rose-200 text-rose-700 bg-rose-50 text-xs font-semibold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1.5"
                     >
                       <X className="w-3.5 h-3.5" /> Reject
                     </button>
@@ -404,14 +402,131 @@ export const WardenGatePassManagement: React.FC = () => {
                         setActionModalPass(pass);
                         setActionType('approve');
                       }}
-                      className="flex-1 py-2.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                      className="flex-1 py-2 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                     >
-                      <Check className="w-3.5 h-3.5" /> Approve Pass
+                      <Check className="w-3.5 h-3.5" /> Approve
                     </button>
                   </div>
                 ) : null}
               </div>
             ))}
+          </div>
+
+          {/* Desktop Table View (>= 768px) */}
+          <div className="hidden md:block bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/90 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-4 pl-6">Student</th>
+                    <th className="py-4 px-4">Hostel / Room</th>
+                    <th className="py-4 px-4">Leave Type</th>
+                    <th className="py-4 px-4">Out Schedule</th>
+                    <th className="py-4 px-4">Expected Return</th>
+                    <th className="py-4 px-4">Reason</th>
+                    <th className="py-4 px-4">Status</th>
+                    <th className="py-4 pr-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                  {paginatedPasses.map((pass) => {
+                    const passTypeClass = 
+                      pass.pass_type === 'EMERGENCY' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                      pass.pass_type === 'NIGHT_OUT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                      pass.pass_type === 'HOME_VISIT' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                      'bg-sky-50 text-sky-700 border-sky-200';
+
+                    return (
+                      <tr key={pass.id} className="hover:bg-slate-50/70 transition-colors">
+                        {/* Student Name & USN */}
+                        <td className="py-3.5 pl-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-blue-100 text-[#0B1437] font-bold flex items-center justify-center text-xs shrink-0">
+                              {pass.student_name?.[0] || 'S'}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 truncate">{pass.student_name}</div>
+                              <div className="text-[11px] font-mono text-slate-400 truncate">{pass.enrollment_no}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Hostel & Room */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-800">{pass.hostel_name || 'Block'}</div>
+                          <div className="text-[11px] text-slate-400 font-medium">
+                            {formatFloorRoom(pass.floor, pass.room_no || '101')}
+                          </div>
+                        </td>
+
+                        {/* Leave Type Badge */}
+                        <td className="py-3.5 px-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${passTypeClass}`}>
+                            {pass.pass_type?.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+
+                        {/* Out Schedule */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-800">{pass.out_date}</div>
+                          <div className="text-[11px] text-slate-400">{formatTime12(pass.out_time)}</div>
+                        </td>
+
+                        {/* Expected Return */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-800">{pass.expected_return_date}</div>
+                          <div className="text-[11px] text-slate-400">{formatTime12(pass.expected_return_time)}</div>
+                        </td>
+
+                        {/* Reason */}
+                        <td className="py-3.5 px-4 max-w-[200px]">
+                          <p className="text-slate-600 truncate italic text-xs" title={pass.reason}>
+                            "{pass.reason}"
+                          </p>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-4">
+                          <StatusBadge status={pass.status} />
+                        </td>
+
+                        {/* Action Buttons */}
+                        <td className="py-3.5 pr-6 text-right">
+                          {pass.status === 'pending' ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setActionModalPass(pass);
+                                  setActionType('reject');
+                                }}
+                                title="Reject Gate Pass"
+                                className="px-3 py-1.5 rounded-full border border-rose-200 text-rose-700 bg-rose-50 text-xs font-semibold hover:bg-rose-100 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" /> Reject
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActionModalPass(pass);
+                                  setActionType('approve');
+                                }}
+                                title="Approve Gate Pass"
+                                className="px-3.5 py-1.5 rounded-full bg-[#0B1437] text-white text-xs font-semibold hover:bg-[#111f54] transition-colors inline-flex items-center gap-1 shadow-sm cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Approve
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 font-semibold uppercase">
+                              {pass.status === 'approved' ? 'Authorized' : pass.status === 'rejected' ? 'Declined' : 'Logged'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Pagination Controls */}
