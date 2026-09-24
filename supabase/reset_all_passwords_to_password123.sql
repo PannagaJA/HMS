@@ -108,7 +108,11 @@ BEGIN
   END LOOP;
 END $$;
 
--- 3. Create or Replace Cloud Password Change RPC (Universal for Students & Staff)
+-- 3. Drop existing function signatures if their return types changed
+DROP FUNCTION IF EXISTS public.change_user_password(TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.verify_user_login(TEXT, TEXT);
+
+-- Create or Replace Cloud Password Change RPC (Universal for Students & Staff)
 CREATE OR REPLACE FUNCTION public.change_user_password(
   p_identifier TEXT,
   p_new_password TEXT
