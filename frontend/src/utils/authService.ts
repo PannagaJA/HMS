@@ -558,18 +558,21 @@ export const apiClient = {
         .eq('hostel_id', hostelId)
         .eq('floor', floor);
 
-      const existingNos = new Set((existingRooms || []).map(r => r.no));
+      const existingNos = new Set((existingRooms || []).map(r => String(r.no || '').trim().toUpperCase()));
       const createdRooms: any[] = [];
 
-      for (let i = 1; i <= roomCount; i++) {
+      let seq = 1;
+      for (let created = 0; created < roomCount; created++) {
         // e.g., floor 1 -> 101, 102, ...; floor 0 (Ground) -> G01, G02, ...
-        let roomNumber = floor === 0 ? `G${String(i).padStart(2, '0')}` : `${floor}${String(i).padStart(2, '0')}`;
-        let suffix = 1;
-        while (existingNos.has(roomNumber)) {
-          roomNumber = floor === 0 ? `G${String(i).padStart(2, '0')}-${suffix}` : `${floor}${String(i).padStart(2, '0')}-${suffix}`;
-          suffix++;
+        let roomNumber = '';
+        while (true) {
+          roomNumber = floor === 0 ? `G${String(seq).padStart(2, '0')}` : `${floor}${String(seq).padStart(2, '0')}`;
+          seq++;
+          if (!existingNos.has(roomNumber.toUpperCase())) {
+            break;
+          }
         }
-        existingNos.add(roomNumber);
+        existingNos.add(roomNumber.toUpperCase());
 
         // Try RPC first
         let newRoomId: any = null;
