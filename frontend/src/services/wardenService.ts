@@ -378,12 +378,13 @@ export const wardenService = {
         console.log(`[wardenService.getGatePasses] Fetched ${data?.length ?? 0} gate passes`);
         return (data || []).map((gp: any) => ({
           ...gp,
-          student_name: gp.student?.student_name || 'Resident Student',
-          enrollment_no: gp.student?.enrollment_no || 'N/A',
-          hostel_name: gp.hostel?.name || 'Hostel Block',
-          room_no: gp.room?.no || '101',
-          floor: gp.room?.floor !== undefined ? gp.room?.floor : null,
-          hostel_id: gp.hostel_id || gp.hostel?.id
+          student_name: gp.student?.student_name || gp.student_name || 'Resident Student',
+          enrollment_no: gp.student?.enrollment_no || gp.enrollment_no || 'N/A',
+          hostel_name: gp.hostel?.name || gp.hostel_name || 'Hostel Block',
+          room_no: gp.room?.no || gp.room_no || '101',
+          floor: gp.room?.floor !== undefined ? gp.room?.floor : (gp.floor !== undefined ? gp.floor : null),
+          hostel_id: gp.hostel_id || gp.hostel?.id || gp.room?.hostel_id,
+          status: (gp.status || 'pending').toLowerCase().trim()
         }));
       } finally {
         inFlightGatePasses.delete(cacheKey);

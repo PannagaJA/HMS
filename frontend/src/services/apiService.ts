@@ -156,10 +156,11 @@ export const gatePassService = {
     return data;
   },
 
-  async logMovement(passId: number, movementType: 'EXIT' | 'ENTRY') {
+  async logMovement(passId: number, movementType: 'EXIT' | 'ENTRY' | 'OUT' | 'IN') {
+    const rpcMovement = (movementType === 'EXIT' || movementType === 'OUT') ? 'OUT' : 'IN';
     const { data, error } = await supabase.rpc('log_gate_movement', {
       p_pass_id: passId,
-      p_movement_type: movementType,
+      p_movement_type: rpcMovement,
     });
     if (error) throw error;
     return data;

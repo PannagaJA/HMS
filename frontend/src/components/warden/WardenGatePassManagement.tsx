@@ -26,7 +26,7 @@ export const WardenGatePassManagement: React.FC = () => {
   const [passes, setPasses] = useState<GatePassRequest[]>([]);
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [selectedHostelId, setSelectedHostelId] = useState<string>('ALL');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [actionModalPass, setActionModalPass] = useState<GatePassRequest | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
@@ -62,7 +62,7 @@ export const WardenGatePassManagement: React.FC = () => {
       }
       setHostels(hostList);
       setSelectedHostelId((prev) => {
-        if (prev) return prev;
+        if (prev && prev !== 'ALL') return prev;
         if (user?.role === 'ADMIN') return 'ALL';
         if (user?.role === 'WARDEN') return hostList.length === 1 ? String(hostList[0].id) : 'ALL';
         return hostList.length > 0 ? String(hostList[0].id) : 'ALL';
@@ -76,19 +76,10 @@ export const WardenGatePassManagement: React.FC = () => {
     setLoading(true);
     try {
       const allPasses = await wardenService.getGatePasses();
-      let scopedPasses = allPasses;
-      if (user?.role === 'WARDEN' && hostels.length > 0) {
-        const assignedIds = hostels.map((h) => String(h.id));
-        const assignedNames = hostels.map((h) => h.name.toLowerCase().trim());
-        scopedPasses = allPasses.filter((p: any) => {
-          const passHostelId = String(p.hostel_id || (p.hostel && typeof p.hostel === 'object' ? p.hostel.id : p.hostel) || '');
-          const passHostelName = (p.hostel_name || (p.hostel && typeof p.hostel === 'object' ? p.hostel.name : '') || '').toLowerCase().trim();
-          return assignedIds.includes(passHostelId) || assignedNames.some(name => passHostelName.includes(name) || name.includes(passHostelName));
-        });
-      }
-      setPasses(scopedPasses);
+      setPasses(allPasses || []);
     } catch (err) {
       console.error('Failed to load gate passes', err);
+      setPasses([]);
     } finally {
       setLoading(false);
     }
@@ -111,29 +102,34 @@ export const WardenGatePassManagement: React.FC = () => {
 
   // 1. Filter by Selected Hostel first
   const hostelFilteredPasses = passes.filter((p: any) => {
-    if (!selectedHostelId || selectedHostelId === 'ALL') {
+    if (!selectedHostelId || selectedHostelId === 'ALL' || selectedHostelId === 'all') {
       return true;
     }
 
-    const passHostelId = String(p.hostel_id || (p.hostel && typeof p.hostel === 'object' ? p.hostel.id : p.hostel) || '');
+    const passHostelId = String(p.hostel_id || (p.hostel && typeof p.hostel === 'object' ? p.hostel.id : p.hostel) || (p.room && typeof p.room === 'object' ? p.room.hostel_id : '') || '');
     const passHostelName = (p.hostel_name || (p.hostel && typeof p.hostel === 'object' ? p.hostel.name : '') || '').toLowerCase().trim();
     const selectedHostelObj = hostels.find((h) => String(h.id) === selectedHostelId);
     const selectedName = (selectedHostelObj?.name || '').toLowerCase().trim();
 
     return (
       passHostelId === selectedHostelId ||
-      (selectedName && (passHostelName.includes(selectedName) || selectedName.includes(passHostelName)))
+      (selectedName && passHostelName && (passHostelName.includes(selectedName) || selectedName.includes(passHostelName)))
     );
   });
 
   // 2. Filter by Status and Search
   const filteredPasses = hostelFilteredPasses.filter((p) => {
-    const matchesStatus = activeFilter === 'all' || p.status === activeFilter;
+    const rawStatus = (p.status || '').toLowerCase().trim();
+    const normalizedStatus = (rawStatus === 'requested' || rawStatus === 'pending') ? 'pending' : rawStatus;
+    const currentTab = activeFilter.toLowerCase().trim();
+    const matchesStatus = currentTab === 'all' || normalizedStatus === currentTab;
+
     const term = searchTerm.toLowerCase().trim();
     const matchesSearch = !term ||
       (p.student_name || '').toLowerCase().includes(term) ||
       (p.enrollment_no || '').toLowerCase().includes(term) ||
       (p.reason || '').toLowerCase().includes(term);
+
     return matchesStatus && matchesSearch;
   });
 
@@ -150,7 +146,10 @@ export const WardenGatePassManagement: React.FC = () => {
   const endIndex = Math.min(startIndex + pageSize, totalItems);
   const paginatedPasses = filteredPasses.slice(startIndex, startIndex + pageSize);
 
-  const pendingCount = hostelFilteredPasses.filter((p) => p.status === 'pending').length;
+  const pendingCount = hostelFilteredPasses.filter((p) => {
+    const s = (p.status || '').toLowerCase().trim();
+    return s === 'pending' || s === 'requested';
+  }).length;
 
   return (
     <div className="space-y-6">

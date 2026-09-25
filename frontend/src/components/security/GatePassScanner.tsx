@@ -157,9 +157,9 @@ export const GatePassScanner: React.FC = () => {
     setIsCameraActive(false);
   };
 
-  const handleConfirmMovementExecution = async () => {
-    if (!scannedPass || !pendingConfirmAction) return;
-    const movementType = pendingConfirmAction;
+  const handleConfirmMovementExecution = async (overrideMovement?: 'EXIT' | 'ENTRY') => {
+    const movementType = overrideMovement || pendingConfirmAction;
+    if (!scannedPass || !movementType) return;
     setPendingConfirmAction(null);
 
     setActionLoading(true);
@@ -170,9 +170,19 @@ export const GatePassScanner: React.FC = () => {
       const res = await apiClient.post(`/security/gate-passes/${scannedPass.id}/log_movement/`, {
         movement_type: movementType,
       });
-      setSuccessMsg(res.data.message);
-      setScannedPass(res.data.pass);
-      fetchGatePassRecords();
+      const message = res.data?.message || (movementType === 'EXIT' ? 'Gate Exit Verified & Stamped Successfully' : 'Gate Return Entry Verified & Stamped');
+      setSuccessMsg(message);
+      if (res.data?.pass) {
+        setScannedPass(res.data.pass);
+      } else {
+        setScannedPass((prev) => prev ? {
+          ...prev,
+          actual_exit_time: movementType === 'EXIT' ? new Date().toISOString() : prev.actual_exit_time,
+          actual_entry_time: movementType === 'ENTRY' ? new Date().toISOString() : prev.actual_entry_time,
+          status: movementType === 'ENTRY' ? 'completed' : prev.status
+        } : null);
+      }
+      await fetchGatePassRecords();
     } catch (err: any) {
       setErrorMsg(err.message || err.response?.data?.error || err.response?.data?.message || 'Failed to log gate movement');
     } finally {
@@ -484,19 +494,24 @@ export const GatePassScanner: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row items-center gap-2.5">
                 <button
-                  onClick={() => setPendingConfirmAction('EXIT')}
+                  type="button"
+                  onClick={() => handleConfirmMovementExecution('EXIT')}
                   disabled={isExitDone || isPassExpired || actionLoading}
                   className={`w-full sm:flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
                     isPassExpired
                       ? 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'
                       : isExitDone
                       ? 'bg-[#0D3833]/10 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : actionLoading
+                      ? 'bg-slate-300 text-slate-500 cursor-wait'
                       : 'bg-[#0B1437] text-white hover:bg-[#111f54] shadow-md hover:shadow-lg cursor-pointer'
                   }`}
                 >
-                  <ArrowRight className="w-4 h-4" />
+                  {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
                   <span>
-                    {isPassExpired
+                    {actionLoading
+                      ? 'Stamping Exit...'
+                      : isPassExpired
                       ? '⛔ Departure Expired'
                       : isExitDone 
                       ? `Exit Done` 
@@ -505,17 +520,22 @@ export const GatePassScanner: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setPendingConfirmAction('ENTRY')}
+                  type="button"
+                  onClick={() => handleConfirmMovementExecution('ENTRY')}
                   disabled={!isExitDone || isEntryDone || actionLoading}
                   className={`w-full sm:flex-1 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     !isExitDone || isEntryDone
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : actionLoading
+                      ? 'bg-slate-300 text-slate-500 cursor-wait'
                       : 'bg-emerald-700 text-white hover:bg-emerald-800 shadow-md hover:shadow-lg'
                   }`}
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowLeft className="w-4 h-4" />}
                   <span>
-                    {isEntryDone 
+                    {actionLoading
+                      ? 'Stamping Entry...'
+                      : isEntryDone 
                       ? `Returned` 
                       : 'Check In (Entry)'}
                   </span>
@@ -839,8 +859,8 @@ export const GatePassScanner: React.FC = () => {
       )}
 
       {/* CONFIRMATION POPUP MODAL FOR CHECK OUT & CHECK IN */}
-      {pendingConfirmAction && scannedPass && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+      {pendingConfirmAction && scannedPass && createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-md w-full p-7 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-150">
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 border ${
               pendingConfirmAction === 'EXIT' 
@@ -889,7 +909,7 @@ export const GatePassScanner: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={handleConfirmMovementExecution}
+                onClick={() => handleConfirmMovementExecution()}
                 className={`flex-1 py-3 rounded-full text-white text-xs font-bold shadow-sm cursor-pointer transition-colors ${
                   pendingConfirmAction === 'EXIT'
                     ? 'bg-[#0B1437] hover:bg-[#111f54]'
@@ -900,7 +920,8 @@ export const GatePassScanner: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

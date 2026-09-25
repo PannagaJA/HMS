@@ -163,7 +163,7 @@ export const securityService = {
     }
 
     // Pick the best pass: preferentially an 'approved' pass, otherwise the most recent one
-    const activePass = passes.find((p: any) => p.status === 'approved') || passes[0];
+    const activePass = passes.find((p: any) => (p.status || '').toLowerCase() === 'approved') || passes[0];
 
     const studentName = activePass.student?.student_name || resolvedStudent?.student_name || 'Resident';
     const enrollmentNo = activePass.student?.enrollment_no || resolvedStudent?.enrollment_no || 'N/A';
@@ -174,7 +174,8 @@ export const securityService = {
       enrollment_no: enrollmentNo,
       hostel_name: activePass.hostel?.name || 'Aryabhata Bhavan',
       room_no: activePass.room?.no || '101',
-      floor: activePass.room?.floor !== undefined ? activePass.room?.floor : null
+      floor: activePass.room?.floor !== undefined ? activePass.room?.floor : null,
+      status: (activePass.status || 'approved').toLowerCase()
     };
 
     // Check if pass is expired: student never exited and curfew deadline has passed
@@ -196,11 +197,12 @@ export const securityService = {
       }
     }
 
-    if (activePass.status === 'pending') {
+    const currentStatus = (activePass.status || '').toLowerCase();
+    if (currentStatus === 'pending' || currentStatus === 'requested') {
       throw new Error(`Gate pass for student "${studentName}" (${enrollmentNo}) is currently PENDING Warden approval.`);
     }
 
-    if (activePass.status === 'rejected') {
+    if (currentStatus === 'rejected') {
       throw new Error(`Gate pass for student "${studentName}" (${enrollmentNo}) was REJECTED by Warden: ${activePass.action_note || 'Unauthorized departure'}.`);
     }
 
@@ -210,7 +212,7 @@ export const securityService = {
   /**
    * Log checkpoint movement (EXIT or ENTRY)
    */
-  async logMovement(passId: number, movementType: 'EXIT' | 'ENTRY') {
+  async logMovement(passId: number, movementType: 'EXIT' | 'ENTRY' | 'OUT' | 'IN') {
     // 1. Check current pass status first
     const { data: currentPass } = await supabase
       .from('gate_passes')
@@ -221,8 +223,8 @@ export const securityService = {
     const stName = currentPass?.student?.student_name || 'Resident';
     const enNo = currentPass?.student?.enrollment_no || 'N/A';
 
-    if (currentPass && currentPass.status !== 'approved') {
-      throw new Error(`Cannot stamp movement: Gate pass for ${stName} (${enNo}) is currently ${currentPass.status.toUpperCase()}. It must be approved by the Warden first.`);
+    if (currentPass && (currentPass.status || '').toLowerCase() !== 'approved') {
+      throw new Error(`Cannot stamp movement: Gate pass for ${stName} (${enNo}) is currently ${String(currentPass.status).toUpperCase()}. It must be approved by the Warden first.`);
     }
 
     // Check if exit is attempted after return deadline has passed
@@ -239,11 +241,12 @@ export const securityService = {
 
     let resultData: any = null;
     let rpcErrorMsg: string | null = null;
+    const rpcMovement = (movementType === 'EXIT' || movementType === 'OUT') ? 'OUT' : 'IN';
 
     try {
       const { data, error } = await supabase.rpc('log_gate_movement', {
         p_pass_id: passId,
-        p_movement_type: movementType
+        p_movement_type: rpcMovement
       });
       if (error) {
         rpcErrorMsg = error.message;
@@ -268,7 +271,7 @@ export const securityService = {
         security_guard_id: user.user?.id || null
       };
 
-      if (movementType === 'EXIT') {
+      if (movementType === 'EXIT' || movementType === 'OUT') {
         updatePayload.actual_exit_time = new Date().toISOString();
       } else {
         updatePayload.actual_entry_time = new Date().toISOString();
