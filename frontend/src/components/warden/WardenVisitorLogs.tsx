@@ -88,11 +88,13 @@ export const WardenVisitorLogs: React.FC = () => {
     }
   };
 
-  const fetchStudents = async () => {
-    if (students.length > 0) return;
+  const fetchStudents = async (hostelId?: string) => {
     try {
       setIsLoadingStudents(true);
-      const res = await apiClient.get<any[]>('/warden/visitor-students/');
+      const url = hostelId && hostelId !== 'ALL'
+        ? `/warden/visitor-students/?hostel_id=${hostelId}`
+        : '/warden/visitor-students/';
+      const res = await apiClient.get<any[]>(url);
       setStudents(res.data || []);
     } catch (err) {
       console.error('Failed to load students', err);
@@ -102,15 +104,13 @@ export const WardenVisitorLogs: React.FC = () => {
   };
 
   const handleOpenAddModal = () => {
-    if (selectedHostelId && selectedHostelId !== 'ALL') {
-      setModalHostelId(selectedHostelId);
-    } else if (hostels.length > 0 && !modalHostelId) {
-      setModalHostelId(String(hostels[0].id));
-    }
+    const initialHostel = (selectedHostelId && selectedHostelId !== 'ALL')
+      ? selectedHostelId
+      : (hostels.length > 0 ? String(hostels[0].id) : '');
+    setModalHostelId(initialHostel);
+    setFormData({ student: '', visitor_name: '', mobile_number: '', purpose: '' });
     setShowAddModal(true);
-    if (students.length === 0) {
-      fetchStudents();
-    }
+    fetchStudents(initialHostel);
   };
 
   const handleCreateLog = async (e: React.FormEvent) => {
@@ -126,6 +126,7 @@ export const WardenVisitorLogs: React.FC = () => {
         student_name: isEnquiry ? 'General / Campus Enquiry' : st?.student_name,
         enrollment_no: isEnquiry ? 'N/A' : st?.enrollment_no,
         student_room: isEnquiry ? 'Reception / Office' : ((st as any)?.room_no || (st as any)?.room_number),
+        room_id: (st as any)?.room_id || undefined,
         hostel: targetHostelId,
         hostel_id: targetHostelId,
         visitor_name: formData.visitor_name,
@@ -491,7 +492,11 @@ export const WardenVisitorLogs: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Select Hostel *</label>
                   <Select
                     value={modalHostelId}
-                    onValueChange={(val) => setModalHostelId(val)}
+                    onValueChange={(val) => {
+                      setModalHostelId(val);
+                      setFormData((prev) => ({ ...prev, student: '' }));
+                      fetchStudents(val);
+                    }}
                   >
                     <SelectTrigger className="w-full bg-slate-50 border-slate-200 font-semibold text-slate-800 text-xs">
                       <SelectValue placeholder="-- Select Hostel Block --" />
@@ -507,34 +512,40 @@ export const WardenVisitorLogs: React.FC = () => {
                 </div>
               )}
 
-              {/* Student Visit: select student */}
-              {checkInTab === 'STUDENT' && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visiting Student *</label>
-                  <Select 
-                    value={formData.student} 
-                    onValueChange={(val) => setFormData({ ...formData, student: val })}
-                    disabled={isLoadingStudents}
-                  >
-                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs">
-                      <SelectValue placeholder={isLoadingStudents ? "Loading resident students..." : "Select Resident Student"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isLoadingStudents ? (
-                        <div className="p-4 text-xs text-slate-500 text-center">Loading students...</div>
-                      ) : students.length === 0 ? (
-                        <div className="p-4 text-xs text-slate-500 text-center">No resident students found</div>
-                      ) : (
-                        students.map((st: any) => (
-                          <SelectItem key={st.id} value={String(st.id)}>
-                            {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor, st.room_no)}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Student Visit: select student (filtered strictly by modalHostelId) */}
+              {checkInTab === 'STUDENT' && (() => {
+                const filteredStudents = modalHostelId && modalHostelId !== 'ALL'
+                  ? students.filter((st: any) => String(st.hostel_id) === String(modalHostelId))
+                  : students;
+
+                return (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visiting Student *</label>
+                    <Select 
+                      value={formData.student} 
+                      onValueChange={(val) => setFormData({ ...formData, student: val })}
+                      disabled={isLoadingStudents}
+                    >
+                      <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-xs">
+                        <SelectValue placeholder={isLoadingStudents ? "Loading resident students..." : "Select Resident Student"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isLoadingStudents ? (
+                          <div className="p-4 text-xs text-slate-500 text-center">Loading students...</div>
+                        ) : filteredStudents.length === 0 ? (
+                          <div className="p-4 text-xs text-slate-500 text-center">No resident students found in this hostel block</div>
+                        ) : (
+                          filteredStudents.map((st: any) => (
+                            <SelectItem key={st.id} value={String(st.id)}>
+                              {st.student_name} ({st.enrollment_no}) - {formatFloorRoom(st.floor, st.room_no)}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

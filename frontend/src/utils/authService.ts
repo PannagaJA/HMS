@@ -851,6 +851,7 @@ export const apiClient = {
         student_name: body?.student_name,
         student_room: body?.student_room,
         hostel_id: body?.hostel || body?.hostel_id,
+        room_id: body?.room_id,
         visitor_name: body?.visitor_name,
         mobile_number: body?.mobile_number || body?.visitor_phone,
         relation: body?.relation,

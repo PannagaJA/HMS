@@ -386,6 +386,7 @@ export const securityService = {
    */
   async checkInVisitor(payload: {
     student_id?: number | string;
+    room_id?: number | string;
     enrollment_no?: string;
     student_name?: string;
     student_room?: string;
@@ -397,40 +398,172 @@ export const securityService = {
   }) {
     const isEnquiry = payload.relation === 'Enquiry' || (payload.student_name || '').includes('Enquiry');
     const orgId = getActiveOrgId();
+    const targetHostelId: number | null = payload.hostel_id ? Number(payload.hostel_id) : null;
 
-    // 1. Find an active allocated resident to satisfy DB trigger constraints
-    let activeAlloc: any = null;
-    try {
-      let allocQuery = supabase
-        .from('room_allocations')
-        .select('id, student_id, is_active, bed:beds(room:hostel_rooms(id, hostel_id))')
-        .eq('is_active', true);
+    let resolvedStudentId: number | null = payload.student_id ? Number(payload.student_id) : null;
+    let resolvedRoomId: number | null = payload.room_id ? Number(payload.room_id) : null;
+    let resolvedHostelId: number | null = targetHostelId;
 
-      if (orgId) {
-        allocQuery = allocQuery.eq('org_id', orgId);
+    // 1. If student_id is provided, try to find their active room allocation first via students query
+    if (resolvedStudentId) {
+      try {
+        const studentTable = supabase.from('students');
+        if (typeof studentTable?.select === 'function') {
+          let stQuery = studentTable
+            .select('id, student_name, allocations:room_allocations(is_active, bed:beds(room:hostel_rooms(id, hostel_id)))')
+            .eq('id', resolvedStudentId);
+          if (orgId) {
+            stQuery = stQuery.eq('org_id', orgId);
+          }
+          const { data: stData } = await stQuery.maybeSingle();
+          if (stData?.allocations && stData.allocations.length > 0) {
+            const alloc = stData.allocations.find((a: any) => a.is_active) || stData.allocations[0];
+            const bed = Array.isArray(alloc?.bed) ? alloc.bed[0] : alloc?.bed;
+            const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+            if (room?.id) {
+              resolvedRoomId = Number(room.id);
+              if (room.hostel_id) resolvedHostelId = Number(room.hostel_id);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query student allocations via students table:', err);
       }
 
-      const { data: allocs } = await allocQuery;
-
-      if (allocs && allocs.length > 0) {
-        if (payload.hostel_id) {
-          activeAlloc = allocs.find((a: any) => {
-            const hId = a.bed?.room?.hostel_id || (Array.isArray(a.bed) ? a.bed[0]?.room?.hostel_id : null);
-            return String(hId) === String(payload.hostel_id);
-          }) || allocs[0];
-        } else {
-          activeAlloc = allocs[0];
+      // If room not resolved yet via students, try direct room_allocations
+      if (!resolvedRoomId) {
+        try {
+          const allocTable = supabase.from('room_allocations');
+          if (typeof allocTable?.select === 'function') {
+            let studentAllocQuery = allocTable
+              .select('id, student_id, is_active, bed:beds(id, room:hostel_rooms(id, no, floor, hostel_id))')
+              .eq('student_id', resolvedStudentId)
+              .eq('is_active', true);
+            if (orgId) {
+              studentAllocQuery = studentAllocQuery.eq('org_id', orgId);
+            }
+            const { data: stAlloc } = await studentAllocQuery.maybeSingle();
+            if (stAlloc) {
+              const bed = Array.isArray(stAlloc.bed) ? stAlloc.bed[0] : stAlloc.bed;
+              const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+              if (room?.id) {
+                resolvedRoomId = Number(room.id);
+                if (room.hostel_id) resolvedHostelId = Number(room.hostel_id);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to query specific student allocation:', err);
         }
       }
-    } catch (allocErr) {
-      console.warn('Failed to query allocations for visitor log:', allocErr);
     }
 
-    const studentId = activeAlloc?.student_id || 1;
-    const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
-    const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
-    const roomId = room?.id || 1;
-    const hostelId = room?.hostel_id || payload.hostel_id || 1;
+    // 2. If no room resolved yet, query an active allocation matching the target hostel
+    if (!resolvedRoomId) {
+      try {
+        const allocTable = supabase.from('room_allocations');
+        if (typeof allocTable?.select === 'function') {
+          let allocQuery = allocTable
+            .select('id, student_id, is_active, bed:beds(id, room:hostel_rooms(id, no, floor, hostel_id))')
+            .eq('is_active', true);
+
+          if (orgId) {
+            allocQuery = allocQuery.eq('org_id', orgId);
+          }
+
+          const { data: allocs } = await allocQuery;
+          if (allocs && allocs.length > 0) {
+            const matchedAlloc = targetHostelId
+              ? allocs.find((a: any) => {
+                  const bed = Array.isArray(a.bed) ? a.bed[0] : a.bed;
+                  const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+                  return Number(room?.hostel_id) === targetHostelId;
+                }) || allocs[0]
+              : allocs[0];
+
+            if (matchedAlloc) {
+              const bed = Array.isArray(matchedAlloc.bed) ? matchedAlloc.bed[0] : matchedAlloc.bed;
+              const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+              if (room?.id) {
+                resolvedRoomId = Number(room.id);
+                if (room.hostel_id) resolvedHostelId = Number(room.hostel_id);
+              }
+              if (!resolvedStudentId && matchedAlloc.student_id) {
+                resolvedStudentId = Number(matchedAlloc.student_id);
+              }
+            }
+          }
+        }
+      } catch (allocErr) {
+        console.warn('Failed to query fallback allocations for visitor log:', allocErr);
+      }
+    }
+
+    // 3. If still no room resolved, query a real room directly from hostel_rooms table
+    if (!resolvedRoomId) {
+      try {
+        const roomsTable = supabase.from('hostel_rooms');
+        if (typeof roomsTable?.select === 'function') {
+          let roomQuery = roomsTable.select('id, hostel_id');
+
+          if (orgId) {
+            roomQuery = roomQuery.eq('org_id', orgId);
+          }
+          if (resolvedHostelId) {
+            roomQuery = roomQuery.eq('hostel_id', resolvedHostelId);
+          }
+
+          const { data: realRoom } = await roomQuery.limit(1).maybeSingle();
+          if (realRoom?.id) {
+            resolvedRoomId = Number(realRoom.id);
+            if (realRoom.hostel_id) resolvedHostelId = Number(realRoom.hostel_id);
+          } else {
+            // Fallback to any room in the database
+            const { data: anyRoom } = await supabase.from('hostel_rooms').select('id, hostel_id').limit(1).maybeSingle();
+            if (anyRoom?.id) {
+              resolvedRoomId = Number(anyRoom.id);
+              if (anyRoom.hostel_id) resolvedHostelId = Number(anyRoom.hostel_id);
+            }
+          }
+        }
+      } catch (roomErr) {
+        console.warn('Failed to query real room for visitor log:', roomErr);
+      }
+    }
+
+    // 4. Ensure we have a valid student_id and hostel_id from real DB rows
+    if (!resolvedStudentId) {
+      try {
+        const studentTable = supabase.from('students');
+        if (typeof studentTable?.select === 'function') {
+          let stQuery = studentTable.select('id, hostel_id');
+          if (orgId) stQuery = stQuery.eq('org_id', orgId);
+          if (resolvedHostelId) stQuery = stQuery.eq('hostel_id', resolvedHostelId);
+          const { data: defaultSt } = await stQuery.limit(1).maybeSingle();
+          if (defaultSt?.id) {
+            resolvedStudentId = Number(defaultSt.id);
+          } else {
+            const { data: anySt } = await supabase.from('students').select('id').limit(1).maybeSingle();
+            if (anySt?.id) resolvedStudentId = Number(anySt.id);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!resolvedHostelId) {
+      try {
+        const hostelTable = supabase.from('hostels');
+        if (typeof hostelTable?.select === 'function') {
+          const { data: defaultHostel } = await hostelTable.select('id').limit(1).maybeSingle();
+          if (defaultHostel?.id) resolvedHostelId = Number(defaultHostel.id);
+        }
+      } catch (_) {}
+    }
+
+    // Fallback defaults if all lookups failed
+    resolvedStudentId = resolvedStudentId || 1;
+    resolvedHostelId = resolvedHostelId || 1;
+    resolvedRoomId = resolvedRoomId || 1;
 
     // Pack complete metadata into purpose so all fields (relation, custom student name, room, purpose) persist with 100% fidelity
     const metaPayload = {
@@ -442,9 +575,9 @@ export const securityService = {
     };
 
     const insertPayload: any = {
-      student_id: studentId,
-      hostel_id: hostelId,
-      room_id: roomId,
+      student_id: resolvedStudentId,
+      hostel_id: resolvedHostelId,
+      room_id: resolvedRoomId,
       visitor_name: payload.visitor_name,
       mobile_number: payload.mobile_number,
       purpose: `__META__:${JSON.stringify(metaPayload)}`,
