@@ -183,24 +183,59 @@ export const diningService = {
     return promise;
   },
 
-  async getTodayMenu(): Promise<{ day_name: string; day_id: string; meals: Menu[] }> {
+  async getTodayMenu(hostelId?: number | string): Promise<{ day_name: string; day_id: string; meals: Menu[]; hostel_id?: number | null }> {
     const jsDay = new Date().getDay();
     const appDayId = String((jsDay + 6) % 7);
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const currentDayName = dayNames[(jsDay + 6) % 7];
 
+    let targetHostelId: number | null = hostelId ? Number(hostelId) : null;
+
+    // Auto-resolve hostel ID for logged in student if not explicitly provided
+    if (!targetHostelId) {
+      try {
+        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('hms_user') : null;
+        const userObj = stored ? JSON.parse(stored) : null;
+        const identifier = userObj?.email || userObj?.enrollment_no || userObj?.username || userObj?.id;
+        if (identifier) {
+          const { data: rpcData } = await supabase.rpc('get_student_profile', { p_identifier: identifier });
+          if (rpcData) {
+            if (rpcData.hostel_id) {
+              targetHostelId = Number(rpcData.hostel_id);
+            } else if (rpcData.allocations && rpcData.allocations.length > 0) {
+              const activeAlloc = rpcData.allocations.find((a: any) => a.is_active) || rpcData.allocations[0];
+              const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+              const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+              if (room?.hostel_id) targetHostelId = Number(room.hostel_id);
+              else if (room?.hostel?.id) targetHostelId = Number(room.hostel.id);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     // Try RPC first (SECURITY DEFINER, immune to client session RLS differences)
     try {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_today_menu', { p_day_of_week: appDayId });
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_today_menu', {
+        p_day_of_week: appDayId,
+        p_hostel_id: targetHostelId || null
+      });
       if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
-        const meals: Menu[] = rpcData.map((m: any) => ({
-          ...m,
-          meal_type: m.meal_type || m.meal_type_id,
-          meal_type_id: m.meal_type_id || m.meal_type?.id,
-          items: m.items || [],
-          items_detail: m.items || []
-        }));
-        return { day_name: currentDayName, day_id: appDayId, meals };
+        // If a specific hostel was requested, ensure we only return that hostel's meals
+        const filteredRpc = targetHostelId
+          ? rpcData.filter((m: any) => Number(m.hostel_id) === targetHostelId)
+          : rpcData;
+
+        if (filteredRpc.length > 0) {
+          const meals: Menu[] = filteredRpc.map((m: any) => ({
+            ...m,
+            meal_type: m.meal_type || m.meal_type_id,
+            meal_type_id: m.meal_type_id || m.meal_type?.id,
+            items: m.items || [],
+            items_detail: m.items || []
+          }));
+          return { day_name: currentDayName, day_id: appDayId, meals, hostel_id: targetHostelId };
+        }
       }
     } catch (_) {
       // RPC may not exist in some environments, continue to direct query
@@ -215,6 +250,9 @@ export const diningService = {
     if (orgId) {
       menuQuery = menuQuery.eq('org_id', orgId);
     }
+    if (targetHostelId) {
+      menuQuery = menuQuery.eq('hostel_id', targetHostelId);
+    }
 
     const { data, error } = await menuQuery;
 
@@ -223,7 +261,7 @@ export const diningService = {
     }
 
     const menuRows = data || [];
-    console.log(`[diningService.getTodayMenu] day=${currentDayName}(${appDayId}), rows=${menuRows.length}`);
+    console.log(`[diningService.getTodayMenu] day=${currentDayName}(${appDayId}), hostel=${targetHostelId}, rows=${menuRows.length}`);
 
     // Always attempt a direct fetch of menu_item_links as a fallback.
     // Nested joins are frequently blocked by RLS for student roles —
@@ -329,7 +367,8 @@ export const diningService = {
     return {
       day_name: currentDayName,
       day_id: appDayId,
-      meals
+      meals,
+      hostel_id: targetHostelId
     };
   },
 

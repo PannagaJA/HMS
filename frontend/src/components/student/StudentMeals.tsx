@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, CheckCircle2, RotateCcw, Utensils } from 'lucide-react';
-import type { Menu, MealType } from '../../types';
+import { Building2, Calendar, CheckCircle2, RotateCcw, Utensils } from 'lucide-react';
+import type { Menu, MealType, HostelStudent } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { formatTimeRange12 } from '../../lib/utils';
 import { useNotification } from '../../context/NotificationContext';
 
 export const StudentMeals: React.FC = () => {
   const { showSuccess, showError, confirm } = useNotification();
-  const [todayMenu, setTodayMenu] = useState<{ day_name: string; meals: Menu[] } | null>(null);
+  const [todayMenu, setTodayMenu] = useState<{ day_name: string; meals: Menu[]; hostel_id?: number | null } | null>(null);
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
   const [skippedMealIds, setSkippedMealIds] = useState<number[]>([]);
+  const [studentProfile, setStudentProfile] = useState<HostelStudent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -19,8 +20,32 @@ export const StudentMeals: React.FC = () => {
   const fetchDiningData = async () => {
     try {
       setIsLoading(true);
+
+      // 1. Fetch student profile first to get assigned hostel
+      let resolvedHostelId: number | string | undefined;
+      let profile: HostelStudent | null = null;
+      try {
+        const profileRes = await apiClient.get<{ profile: HostelStudent; roommates: HostelStudent[] }>('/student/students/my_profile/');
+        if (profileRes?.data?.profile) {
+          profile = profileRes.data.profile;
+          setStudentProfile(profile);
+
+          const activeAlloc = (profile.allocations || []).find((a: any) => a.is_active) || profile.allocations?.[0];
+          const bed = Array.isArray(activeAlloc?.bed) ? activeAlloc.bed[0] : activeAlloc?.bed;
+          const room = Array.isArray(bed?.room) ? bed.room[0] : bed?.room;
+          resolvedHostelId = room?.hostel_id || room?.hostel?.id || (profile as any).hostel_id;
+        }
+      } catch (err) {
+        console.warn('[StudentMeals] profile fetch failed, using fallback:', err);
+      }
+
+      // 2. Fetch today's menu scoped to the resolved hostel
+      const menuEndpoint = resolvedHostelId
+        ? `/hms/menus/today_menu/?hostel_id=${resolvedHostelId}`
+        : '/hms/menus/today_menu/';
+
       const [menuRes, mealTypesRes, skipsRes] = await Promise.allSettled([
-        apiClient.get('/hms/menus/today_menu/'),
+        apiClient.get(menuEndpoint),
         apiClient.get<MealType[]>('/hms/meal-types/'),
         apiClient.get<number[]>('/mess/skips/'),
       ]);
@@ -98,10 +123,18 @@ export const StudentMeals: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Hostel Mess & Dining</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">View today's recurring meal menu, dining timetable, and food schedule</p>
         </div>
-        <span className="w-fit self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-teal-950 font-bold text-xs border border-teal-200 shadow-2xs">
-          <Calendar className="w-4 h-4 text-teal-700 shrink-0" />
-          <span>Today: {todayMenu?.day_name || 'Daily Timetable'}</span>
-        </span>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {studentProfile?.hostel_name && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200/80 shadow-2xs">
+              <Building2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+              <span>{studentProfile.hostel_name}</span>
+            </span>
+          )}
+          <span className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-teal-950 font-bold text-xs border border-teal-200 shadow-2xs">
+            <Calendar className="w-4 h-4 text-teal-700 shrink-0" />
+            <span>Today: {todayMenu?.day_name || 'Daily Timetable'}</span>
+          </span>
+        </div>
       </div>
 
       <div className="bg-white p-7 rounded-3xl border border-slate-200/80 shadow-sm space-y-6">

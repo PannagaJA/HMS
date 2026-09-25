@@ -6,7 +6,10 @@
 -- The function is intentionally read-only and returns only public-facing
 -- dining schedule data — no PII or sensitive records.
 
-CREATE OR REPLACE FUNCTION public.get_today_menu(p_day_of_week TEXT DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.get_today_menu(
+  p_day_of_week TEXT DEFAULT NULL,
+  p_hostel_id BIGINT DEFAULT NULL
+)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -68,11 +71,12 @@ BEGIN
   INTO v_result
   FROM public.menus m
   JOIN public.meal_types mt ON mt.id = m.meal_type_id
-  WHERE m.day_of_week = v_day;
+  WHERE m.day_of_week = v_day
+    AND (p_hostel_id IS NULL OR m.hostel_id = p_hostel_id);
 
   RETURN COALESCE(v_result, '[]'::jsonb);
 END;
 $$;
 
 -- Allow any authenticated OR anonymous caller to invoke this function.
-GRANT EXECUTE ON FUNCTION public.get_today_menu(TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_today_menu(TEXT, BIGINT) TO anon, authenticated;

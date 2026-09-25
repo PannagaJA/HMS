@@ -521,7 +521,7 @@ export const studentService = {
   /**
    * Fetch today's meal schedule
    */
-  async getTodayMenu() {
-    return diningService.getTodayMenu();
+  async getTodayMenu(hostelId?: number | string) {
+    return diningService.getTodayMenu(hostelId);
   }
 };

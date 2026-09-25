@@ -401,7 +401,9 @@ export const apiClient = {
       return { data: data as T };
     }
     if (endpoint.includes('/today_menu/')) {
-      const today = await diningService.getTodayMenu();
+      const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+      const hostelId = urlParams.get('hostel') || urlParams.get('hostel_id') || undefined;
+      const today = await diningService.getTodayMenu(hostelId);
       return { data: today as T };
     }
     if (endpoint.includes('/meal-types/') || endpoint.includes('/meal_types/')) {
